@@ -5,6 +5,13 @@ import { useState } from 'react';
 import type { AuditLog } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { FormattedDate } from '@/components/formatted-date';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -53,6 +60,12 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
   const searchParams = useSearchParams();
   const [action, setAction] = useState(filters.action || 'all');
   const [entityId, setEntityId] = useState(filters.entity_id || '');
+  const [metadataDialogLog, setMetadataDialogLog] = useState<AuditLog | null>(null);
+
+  function handleCopyMetadata(metadata: Record<string, unknown>) {
+    const text = JSON.stringify(metadata, null, 2);
+    void navigator.clipboard.writeText(text);
+  }
 
   function applyFilters() {
     const params = new URLSearchParams();
@@ -145,8 +158,15 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
                     <TableCell className="text-xs text-muted-foreground">
                       {log.entity_type}: {log.entity_id.substring(0, 8)}...
                     </TableCell>
-                    <TableCell className="text-xs text-muted-foreground max-w-[300px] truncate">
-                      {JSON.stringify(log.metadata)}
+                    <TableCell className="text-xs text-muted-foreground max-w-[300px]">
+                      <button
+                        type="button"
+                        onClick={() => setMetadataDialogLog(log)}
+                        className="block w-full truncate text-left hover:underline focus:outline-none focus:underline"
+                        title="Click to view full metadata"
+                      >
+                        {JSON.stringify(log.metadata)}
+                      </button>
                     </TableCell>
                   </TableRow>
                 ))
@@ -155,6 +175,37 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
           </Table>
         </CardContent>
       </Card>
+
+      <Dialog open={!!metadataDialogLog} onOpenChange={(open) => !open && setMetadataDialogLog(null)}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Metadata</DialogTitle>
+            <DialogDescription>
+              {metadataDialogLog && (
+                <>
+                  {metadataDialogLog.action} — {metadataDialogLog.entity_type} (
+                  {metadataDialogLog.entity_id.substring(0, 8)}…)
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          {metadataDialogLog && (
+            <>
+              <pre className="flex-1 overflow-auto rounded-md border bg-muted/50 p-4 text-xs text-foreground">
+                {JSON.stringify(metadataDialogLog.metadata, null, 2)}
+              </pre>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleCopyMetadata(metadataDialogLog.metadata ?? {})}
+              >
+                Copy to clipboard
+              </Button>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between">

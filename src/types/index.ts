@@ -1,6 +1,6 @@
 export type UserRole = 'sales' | 'admin';
 
-export type RfqStatus = 'draft' | 'sent' | 'closed';
+export type RfqStatus = 'draft' | 'sent_to_supplier' | 'waiting_for_technical_drawing' | 'closed';
 
 export type AuditAction =
   | 'RFQ_CREATED'

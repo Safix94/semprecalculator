@@ -50,11 +50,15 @@ const initialFormData: MaterialFormData = {
   supplier_ids: [],
 };
 
+const MATERIALS_PER_PAGE = 5;
+
 export function MaterialManagement({ materials: initialMaterials, suppliers }: MaterialManagementProps) {
   const [materials, setMaterials] = useState(initialMaterials);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialWithSuppliers | null>(null);
   const [editingMaterial, setEditingMaterial] = useState<MaterialWithSuppliers | null>(null);
   const [formData, setFormData] = useState<MaterialFormData>(initialFormData);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -197,6 +201,30 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     ? suppliers.filter(s => !selectedMaterial.suppliers?.some(ms => ms.id === s.id))
     : [];
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
+  const filteredMaterials = materials.filter((material) => {
+    if (!normalizedQuery) {
+      return true;
+    }
+
+    const supplierNames = (material.suppliers ?? []).map((supplier) => supplier.name).join(' ');
+    const searchableText = `${material.name} ${material.finish_options.join(' ')} ${supplierNames}`.toLowerCase();
+    return searchableText.includes(normalizedQuery);
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filteredMaterials.length / MATERIALS_PER_PAGE));
+  const effectiveCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedMaterials = filteredMaterials.slice(
+    (effectiveCurrentPage - 1) * MATERIALS_PER_PAGE,
+    effectiveCurrentPage * MATERIALS_PER_PAGE
+  );
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  };
+
   return (
     <div className="space-y-6">
       {error && (
@@ -213,6 +241,14 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
         </Button>
       </div>
 
+      <div className="max-w-sm">
+        <Input
+          value={searchQuery}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="Search by material, finish, or supplier"
+        />
+      </div>
+
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -225,35 +261,39 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               </TableRow>
             </TableHeader>
             <TableBody>
-              {materials.map((material) => (
+              {paginatedMaterials.map((material) => (
                 <TableRow key={material.id}>
                   <TableCell className="font-medium">{material.name}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {material.finish_options.join(', ')}
+                    {material.finish_options.length > 0 ? material.finish_options.join(', ') : 'No finishes'}
                   </TableCell>
                   <TableCell>
-                    <div className="space-y-1">
-                      {material.suppliers?.map((supplier) => (
-                        <div key={supplier.id} className="flex items-center gap-2">
-                          <span className="text-sm">{supplier.name}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-6 w-6 p-0"
-                            onClick={() => handleUnlinkSupplier(material.id, supplier.id)}
-                            disabled={loading}
+                    {material.suppliers && material.suppliers.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {material.suppliers.map((supplier) => (
+                          <div
+                            key={supplier.id}
+                            className="inline-flex items-center gap-1 rounded-md border px-2 py-1"
                           >
-                            <Unlink className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      ))}
-                      {(!material.suppliers || material.suppliers.length === 0) && (
-                        <span className="text-muted-foreground text-sm">No suppliers</span>
-                      )}
-                    </div>
+                            <span className="text-xs">{supplier.name}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              className="h-5 w-5"
+                              onClick={() => handleUnlinkSupplier(material.id, supplier.id)}
+                              disabled={loading}
+                            >
+                              <Unlink className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">No suppliers</span>
+                    )}
                   </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
+                  <TableCell className="whitespace-nowrap w-[140px]">
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="outline"
                         size="sm"
@@ -282,15 +322,43 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
                   </TableCell>
                 </TableRow>
               ))}
-              {materials.length === 0 && (
+              {filteredMaterials.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                    No materials created yet.
+                    {materials.length === 0 ? 'No materials created yet.' : 'No materials match your search.'}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+
+          {filteredMaterials.length > 0 && (
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <span className="text-sm text-muted-foreground">
+                Page {effectiveCurrentPage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={effectiveCurrentPage === 1}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={effectiveCurrentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -225,7 +225,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       setSelectedMaterial(null);
 
       if (result.data) {
-        router.push(`/dashboard/rfqs/${result.data.id}`);
+        router.push(`/dashboard?rfq=${result.data.id}`);
       }
     } catch (error) {
       console.error('Failed to create RFQ:', error);

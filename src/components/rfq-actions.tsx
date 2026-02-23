@@ -4,10 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendRfq, closeRfq } from '@/actions/rfq';
 import { Button } from '@/components/ui/button';
+import type { RfqStatus } from '@/types';
 
 interface RfqActionsProps {
   rfqId: string;
-  status: string;
+  status: RfqStatus;
 }
 
 export function RfqActions({ rfqId, status }: RfqActionsProps) {
@@ -61,10 +62,10 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
     <div className="flex items-center gap-2">
       {status === 'draft' && (
         <Button onClick={handleSend} disabled={loading}>
-          {loading ? 'Loading...' : 'Send'}
+          {loading ? 'Loading...' : 'Send to supplier'}
         </Button>
       )}
-      {status === 'sent' && (
+      {status === 'sent_to_supplier' && (
         <Button onClick={handleClose} disabled={loading} variant="secondary">
           {loading ? 'Loading...' : 'Close'}
         </Button>

@@ -50,7 +50,7 @@ export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
         ref={inputRef}
         type="file"
         className="hidden"
-        accept=".pdf,.jpg,.jpeg,.png,.dwg"
+        accept=".skp,.pdf,.jpg,.jpeg,.png,.dwg"
         onChange={handleUpload}
         disabled={loading}
       />

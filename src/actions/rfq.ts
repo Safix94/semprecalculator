@@ -8,6 +8,7 @@ import { generateToken, hashToken } from '@/lib/tokens';
 import { sendSupplierInviteEmail } from '@/lib/mailer';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput } from '@/lib/validation';
+import type { Rfq, RfqAttachment, RfqInvite, RfqQuote, Supplier } from '@/types';
 
 export async function createRfq(input: CreateRfqInput) {
   const user = await requireAuth();
@@ -115,6 +116,73 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
   return { data: rfq };
 }
 
+interface RfqDetailData {
+  rfq: Rfq;
+  attachments: RfqAttachment[];
+  invites: (RfqInvite & { supplier: Supplier | null })[];
+  quotes: (RfqQuote & { supplier: Supplier | null })[];
+}
+
+export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData } | { error: string }> {
+  await requireAuth();
+  const supabase = await createClient();
+
+  try {
+    const { data: rfq, error: rfqError } = await supabase
+      .from('rfqs')
+      .select('*')
+      .eq('id', rfqId)
+      .single();
+
+    if (rfqError || !rfq) {
+      return { error: 'RFQ not found.' };
+    }
+
+    const [
+      { data: attachments, error: attachmentsError },
+      { data: invites, error: invitesError },
+      { data: quotes, error: quotesError },
+    ] = await Promise.all([
+      supabase
+        .from('rfq_attachments')
+        .select('*')
+        .eq('rfq_id', rfqId)
+        .order('created_at'),
+      supabase
+        .from('rfq_invites')
+        .select('*, supplier:suppliers(*)')
+        .eq('rfq_id', rfqId)
+        .order('created_at'),
+      supabase
+        .from('rfq_quotes')
+        .select('*, supplier:suppliers(*)')
+        .eq('rfq_id', rfqId)
+        .order('final_price_calculated', { ascending: true }),
+    ]);
+
+    if (attachmentsError || invitesError || quotesError) {
+      console.error('Failed to load RFQ detail data:', {
+        attachmentsError: attachmentsError?.message,
+        invitesError: invitesError?.message,
+        quotesError: quotesError?.message,
+      });
+      return { error: 'Could not load RFQ details.' };
+    }
+
+    return {
+      data: {
+        rfq: rfq as Rfq,
+        attachments: (attachments ?? []) as RfqAttachment[],
+        invites: (invites ?? []) as (RfqInvite & { supplier: Supplier | null })[],
+        quotes: (quotes ?? []) as (RfqQuote & { supplier: Supplier | null })[],
+      },
+    };
+  } catch (error) {
+    console.error('Unexpected error while loading RFQ detail:', error);
+    return { error: 'Could not load RFQ details.' };
+  }
+}
+
 export async function uploadAttachment(rfqId: string, formData: FormData) {
   await requireAuth();
   const supabase = await createClient();
@@ -124,18 +192,21 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
     return { error: 'No file selected' };
   }
 
-  const allowedTypes = [
+  const allowedTypes = new Set([
     'application/pdf',
     'image/jpeg',
     'image/png',
+    'application/vnd.sketchup.skp',
     'application/acad',
     'application/x-acad',
     'application/x-autocad',
     'image/vnd.dwg',
-  ];
+    'application/octet-stream',
+  ]);
+  const allowedExtensions = new Set(['skp', 'pdf', 'jpg', 'jpeg', 'png', 'dwg']);
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (!allowedTypes.includes(file.type) && ext !== 'dwg') {
-    return { error: 'Invalid file type. Allowed: PDF, JPG, PNG, DWG' };
+  if ((!file.type || !allowedTypes.has(file.type)) && (!ext || !allowedExtensions.has(ext))) {
+    return { error: 'Invalid file type. Allowed: SKP, PDF, JPG, PNG, DWG' };
   }
 
   const storagePath = `${rfqId}/${crypto.randomUUID()}-${file.name}`;
@@ -179,7 +250,7 @@ export async function sendRfq(rfqId: string) {
     .single();
 
   if (rfqError || !rfq) {
-    return { error: 'RFQ not found or already sent' };
+    return { error: 'RFQ not found or already sent to suppliers' };
   }
 
   // Get existing invites for this RFQ
@@ -259,10 +330,10 @@ export async function sendRfq(rfqId: string) {
     });
   }
 
-  // Update RFQ status to sent
+  // Update RFQ status to sent to supplier
   await supabase
     .from('rfqs')
-    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .update({ status: 'sent_to_supplier', sent_at: new Date().toISOString() })
     .eq('id', rfqId);
 
   await logAuditEvent({
@@ -287,7 +358,7 @@ export async function closeRfq(rfqId: string) {
     .from('rfqs')
     .update({ status: 'closed' })
     .eq('id', rfqId)
-    .eq('status', 'sent');
+    .eq('status', 'sent_to_supplier');
 
   if (error) {
     return { error: error.message };

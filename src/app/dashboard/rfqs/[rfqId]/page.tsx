@@ -4,16 +4,17 @@ import { createClient } from '@/lib/supabase/server';
 import { RfqActions } from '@/components/rfq-actions';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
-import type { Rfq, RfqAttachment, RfqQuote, Supplier, RfqInvite } from '@/types';
+import type { Rfq, RfqAttachment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface PageProps {
   params: Promise<{ rfqId: string }>;
 }
 
-const statusLabels: Record<string, { label: string; color: string }> = {
+const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
-  sent: { label: 'Sent', color: 'bg-primary/15 text-primary' },
+  sent_to_supplier: { label: 'Sent to supplier', color: 'bg-primary/15 text-primary' },
+  waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
@@ -53,7 +54,10 @@ export default async function RfqDetailPage({ params }: PageProps) {
   ]);
 
   const typedRfq = rfq as Rfq;
-  const status = statusLabels[typedRfq.status] || statusLabels.draft;
+  const status = statusLabels[typedRfq.status] ?? {
+    label: typedRfq.status,
+    color: 'bg-muted text-muted-foreground',
+  };
 
   return (
     <div className="space-y-6">
@@ -131,7 +135,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
           ) : (
             <p className="text-sm text-muted-foreground">No attachments.</p>
           )}
-          {typedRfq.status === 'draft' && (
+          {(typedRfq.status === 'draft' || typedRfq.status === 'waiting_for_technical_drawing') && (
             <div className="mt-4">
               <AttachmentUpload rfqId={rfqId} />
             </div>

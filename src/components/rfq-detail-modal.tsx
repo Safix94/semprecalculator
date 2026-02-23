@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getRfqDetail } from '@/actions/rfq';
 import { AttachmentUpload } from '@/components/attachment-upload';
+import { FormattedDate } from '@/components/formatted-date';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { RfqActions } from '@/components/rfq-actions';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -158,18 +159,22 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
               <div>
                 <p className="text-sm text-muted-foreground">
                   Created on{' '}
-                  {new Date(detail.rfq.created_at).toLocaleString('nl-NL', {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  })}
+                  <FormattedDate
+                    value={detail.rfq.created_at}
+                    locale="nl-NL"
+                    dateStyle="short"
+                    timeStyle="short"
+                  />
                   {detail.rfq.sent_at && (
                     <>
                       {' '}
                       | Sent on{' '}
-                      {new Date(detail.rfq.sent_at).toLocaleString('nl-NL', {
-                        dateStyle: 'short',
-                        timeStyle: 'short',
-                      })}
+                      <FormattedDate
+                        value={detail.rfq.sent_at}
+                        locale="nl-NL"
+                        dateStyle="short"
+                        timeStyle="short"
+                      />
                     </>
                   )}
                 </p>

@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { FormattedDate } from '@/components/formatted-date';
 import type { Rfq, RfqStatus } from '@/types';
 
 interface DashboardRfqTableProps {
@@ -120,10 +121,12 @@ export function DashboardRfqTable({
                   </span>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {new Date(rfq.created_at).toLocaleString('nl-NL', {
-                    dateStyle: 'short',
-                    timeStyle: 'short',
-                  })}
+                  <FormattedDate
+                    value={rfq.created_at}
+                    locale="nl-NL"
+                    dateStyle="short"
+                    timeStyle="short"
+                  />
                 </TableCell>
               </TableRow>
             );

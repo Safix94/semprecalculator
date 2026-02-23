@@ -1,5 +1,6 @@
 'use client';
 
+import { useSyncExternalStore } from 'react';
 import type { RfqInvite, RfqQuote, Supplier } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -16,6 +17,10 @@ interface QuoteComparisonProps {
   quotes: (RfqQuote & { supplier: Supplier })[];
 }
 
+function subscribe() {
+  return () => {};
+}
+
 function getInviteStatus(invite: RfqInvite, hasQuote: boolean): { label: string; color: string } {
   if (invite.revoked_at) return { label: 'Revoked', color: 'text-destructive' };
   if (hasQuote) return { label: 'Replied', color: 'text-chart-2' };
@@ -24,6 +29,8 @@ function getInviteStatus(invite: RfqInvite, hasQuote: boolean): { label: string;
 }
 
 export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
+  const mounted = useSyncExternalStore(subscribe, () => true, () => false);
+
   const lowestPrice = quotes.length > 0
     ? Math.min(...quotes.map((q) => q.final_price_calculated))
     : null;
@@ -55,7 +62,13 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
             <TableBody>
               {invites.map((invite) => {
                 const quote = quoteBySupplier.get(invite.supplier_id);
-                const status = getInviteStatus(invite, !!quote);
+                const status = mounted
+                  ? getInviteStatus(invite, !!quote)
+                  : invite.revoked_at
+                    ? { label: 'Revoked', color: 'text-destructive' }
+                    : quote
+                      ? { label: 'Replied', color: 'text-chart-2' }
+                      : { label: 'Pending', color: 'text-primary' };
                 const isLowest = quote && quote.final_price_calculated === lowestPrice;
 
                 return (

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import type { AuditLog } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { FormattedDate } from '@/components/formatted-date';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -130,7 +131,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
                 logs.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell className="text-xs text-muted-foreground">
-                      {new Date(log.created_at).toLocaleString('en-GB')}
+                      <FormattedDate value={log.created_at} locale="en-GB" />
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs font-medium">

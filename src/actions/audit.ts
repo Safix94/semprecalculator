@@ -16,20 +16,24 @@ export async function logAuditEvent(params: {
   ip?: string | null;
   userAgent?: string | null;
 }) {
-  const supabase = createServiceRoleClient();
+  try {
+    const supabase = createServiceRoleClient();
 
-  const { error } = await supabase.from('audit_logs').insert({
-    actor_type: params.actorType,
-    actor_id: params.actorId,
-    action: params.action,
-    entity_type: params.entityType,
-    entity_id: params.entityId,
-    metadata: params.metadata ?? {},
-    ip: params.ip ?? null,
-    user_agent: params.userAgent ?? null,
-  });
+    const { error } = await supabase.from('audit_logs').insert({
+      actor_type: params.actorType,
+      actor_id: params.actorId,
+      action: params.action,
+      entity_type: params.entityType,
+      entity_id: params.entityId,
+      metadata: params.metadata ?? {},
+      ip: params.ip ?? null,
+      user_agent: params.userAgent ?? null,
+    });
 
-  if (error) {
-    console.error('Failed to log audit event:', error.message);
+    if (error) {
+      console.error('Failed to log audit event:', error.message);
+    }
+  } catch (error) {
+    console.error('Failed to initialize audit logging:', error);
   }
 }

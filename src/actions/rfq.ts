@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/auth';
 import { createRfqSchema, updateRfqSchema } from '@/lib/validation';
 import { generateToken, hashToken } from '@/lib/tokens';
@@ -12,70 +12,74 @@ import type { CreateRfqInput } from '@/lib/validation';
 export async function createRfq(input: CreateRfqInput) {
   const user = await requireAuth();
   const supabase = await createClient();
-  const serviceClient = createServiceRoleClient();
 
   const parsed = createRfqSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  // Extract supplier_ids from the input (not stored in RFQ table)
-  const { supplier_ids, ...rfqData } = parsed.data;
+  try {
+    // Extract supplier_ids from the input (not stored in RFQ table)
+    const { supplier_ids, ...rfqData } = parsed.data;
 
-  const { data: rfq, error } = await supabase
-    .from('rfqs')
-    .insert({
-      ...rfqData,
-      created_by: user.id,
-      status: 'draft',
-    })
-    .select()
-    .single();
+    const { data: rfq, error } = await supabase
+      .from('rfqs')
+      .insert({
+        ...rfqData,
+        created_by: user.id,
+        status: 'draft',
+      })
+      .select()
+      .single();
 
-  if (error) {
-    return { error: { _form: [error.message] } };
-  }
+    if (error) {
+      return { error: { _form: [error.message] } };
+    }
 
-  // If specific suppliers were selected, create invites immediately (but don't send emails yet)
-  if (supplier_ids && supplier_ids.length > 0) {
-    const inviteInserts = supplier_ids.map(supplierId => {
-      const token = generateToken();
-      const tokenHash = hashToken(token);
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      
-      return {
-        rfq_id: rfq.id,
-        supplier_id: supplierId,
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-      };
+    // If specific suppliers were selected, create invites immediately (but don't send emails yet)
+    if (supplier_ids && supplier_ids.length > 0) {
+      const inviteInserts = supplier_ids.map(supplierId => {
+        const token = generateToken();
+        const tokenHash = hashToken(token);
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        
+        return {
+          rfq_id: rfq.id,
+          supplier_id: supplierId,
+          token_hash: tokenHash,
+          expires_at: expiresAt,
+        };
+      });
+
+      const { error: inviteError } = await supabase
+        .from('rfq_invites')
+        .insert(inviteInserts);
+
+      if (inviteError) {
+        console.error('Failed to create invites:', inviteError);
+        // Don't fail the RFQ creation, just log the error
+      }
+    }
+
+    await logAuditEvent({
+      actorType: user.role,
+      actorId: user.id,
+      action: 'RFQ_CREATED',
+      entityType: 'rfq',
+      entityId: rfq.id,
+      metadata: { 
+        materialId: rfq.material_id, 
+        finish: rfq.finish,
+        supplierIds: supplier_ids 
+      },
     });
 
-    const { error: inviteError } = await serviceClient
-      .from('rfq_invites')
-      .insert(inviteInserts);
-
-    if (inviteError) {
-      console.error('Failed to create invites:', inviteError);
-      // Don't fail the RFQ creation, just log the error
-    }
+    revalidatePath('/dashboard');
+    return { data: rfq };
+  } catch (error) {
+    console.error('Unexpected error while creating RFQ:', error);
+    return { error: { _form: ['Failed to create RFQ. Please try again.'] } };
   }
-
-  await logAuditEvent({
-    actorType: user.role,
-    actorId: user.id,
-    action: 'RFQ_CREATED',
-    entityType: 'rfq',
-    entityId: rfq.id,
-    metadata: { 
-      materialId: rfq.material_id, 
-      finish: rfq.finish,
-      supplierIds: supplier_ids 
-    },
-  });
-
-  revalidatePath('/dashboard');
-  return { data: rfq };
 }
 
 export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
@@ -112,7 +116,7 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
 }
 
 export async function uploadAttachment(rfqId: string, formData: FormData) {
-  const user = await requireAuth();
+  await requireAuth();
   const supabase = await createClient();
 
   const file = formData.get('file') as File | null;
@@ -162,7 +166,6 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
 export async function sendRfq(rfqId: string) {
   const user = await requireAuth();
   const supabase = await createClient();
-  const serviceClient = createServiceRoleClient();
 
   // Fetch the RFQ with material details
   const { data: rfq, error: rfqError } = await supabase
@@ -210,7 +213,7 @@ export async function sendRfq(rfqId: string) {
     const tokenHash = hashToken(token);
 
     // Update the invite with new token if needed
-    await serviceClient
+    await supabase
       .from('rfq_invites')
       .update({ token_hash: tokenHash })
       .eq('id', invite.id);

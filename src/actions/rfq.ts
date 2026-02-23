@@ -462,11 +462,30 @@ export async function sendRfq(rfqId: string) {
     });
   }
 
+  const sentCount = results.filter((r) => r.success).length;
+  const totalCount = results.length;
+
+  if (sentCount === 0) {
+    return {
+      error:
+        'Geen enkele e-mail kon worden verzonden. Controleer BREVO_API_KEY, afzender-instellingen en audit logs.',
+    };
+  }
+
   // Update RFQ status to sent to supplier
-  await supabase
+  const { error: statusUpdateError } = await supabase
     .from('rfqs')
     .update({ status: 'sent_to_supplier', sent_at: new Date().toISOString() })
-    .eq('id', rfqId);
+    .eq('id', rfqId)
+    .eq('status', 'draft')
+    .select('id')
+    .single();
+
+  if (statusUpdateError) {
+    return {
+      error: `E-mails zijn verstuurd naar ${sentCount}/${totalCount} leveranciers, maar de RFQ-status kon niet worden bijgewerkt: ${statusUpdateError.message}`,
+    };
+  }
 
   await logAuditEvent({
     actorType: user.role,
@@ -479,7 +498,7 @@ export async function sendRfq(rfqId: string) {
 
   revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
-  return { data: { sent: results.filter((r) => r.success).length, total: results.length, results } };
+  return { data: { sent: sentCount, total: totalCount, results } };
 }
 
 export async function closeRfq(rfqId: string) {

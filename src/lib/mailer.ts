@@ -15,6 +15,10 @@ interface SendEmailParams {
 }
 
 async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  if (!BREVO_API_KEY) {
+    return { success: false, error: 'BREVO_API_KEY is not configured' };
+  }
+
   try {
     const response = await fetch('https://api.brevo.com/v3/smtp/email', {
       method: 'POST',

@@ -54,7 +54,7 @@ export function DashboardRfqTable({
 
   const setProductTypeFilter = (value: string) => {
     const params = new URLSearchParams(searchParamsString);
-    if (value) {
+    if (value && value !== 'all') {
       params.set('product_type', value);
       params.set('page', '1');
     } else {
@@ -165,14 +165,14 @@ export function DashboardRfqTable({
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Filter op soort</span>
             <Select
-              value={productTypeFilter ?? ''}
+              value={productTypeFilter ?? 'all'}
               onValueChange={setProductTypeFilter}
             >
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="Alle soorten" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Alle soorten</SelectItem>
+                <SelectItem value="all">Alle soorten</SelectItem>
                 {PRODUCT_TYPES.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}

@@ -79,6 +79,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
 
   const router = useRouter();
+  const availableFinishOptions = (selectedMaterial?.finish_options ?? [])
+    .map((finish) => finish.trim())
+    .filter((finish) => finish.length > 0);
 
   const loadMaterials = useCallback(async () => {
     setMaterialsLoading(true);
@@ -132,10 +135,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const handleMaterialChange = (materialId: string) => {
     const material = materials.find((item) => item.id === materialId);
     if (!material) return;
+    const materialFinishOptions = material.finish_options
+      .map((finish) => finish.trim())
+      .filter((finish) => finish.length > 0);
 
     updateData('material_id', materialId);
     updateData('material_name', material.name);
-    updateData('finish', material.finish_options.length === 0 ? 'N.v.t.' : '');
+    updateData('finish', materialFinishOptions.length === 0 ? 'N.v.t.' : '');
     updateData('supplier_ids', []);
     setSelectedMaterial(material);
     setSuppliers([]);
@@ -155,7 +161,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       if (!data.material_id) {
         stepErrors.material_id = ['Material is required'];
       }
-      if (selectedMaterial?.finish_options.length && !data.finish) {
+      if (availableFinishOptions.length > 0 && !data.finish) {
         stepErrors.finish = ['Finish is required'];
       }
     } else if (currentStep === 1) {
@@ -343,7 +349,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 {errors.material_id && <p className="text-destructive text-xs">{errors.material_id[0]}</p>}
               </div>
 
-              {selectedMaterial && selectedMaterial.finish_options.length > 0 && (
+              {selectedMaterial && availableFinishOptions.length > 0 && (
                 <div className="space-y-1.5">
                   <Label htmlFor="finish">Finish *</Label>
                   <Select value={data.finish} onValueChange={(value) => updateData('finish', value)}>
@@ -351,7 +357,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                       <SelectValue placeholder="Select a finish" />
                     </SelectTrigger>
                     <SelectContent className="z-[70]">
-                      {selectedMaterial.finish_options.map((finish) => (
+                      {availableFinishOptions.map((finish) => (
                         <SelectItem key={finish} value={finish}>
                           {finish}
                         </SelectItem>
@@ -362,7 +368,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 </div>
               )}
 
-              {selectedMaterial && selectedMaterial.finish_options.length === 0 && (
+              {selectedMaterial && availableFinishOptions.length === 0 && (
                 <p className="text-muted-foreground text-xs">
                   No finishes are configured for this material.
                 </p>

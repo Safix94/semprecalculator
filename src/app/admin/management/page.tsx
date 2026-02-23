@@ -29,7 +29,7 @@ export default async function ManagementPage() {
           <MaterialManagement materials={materials} suppliers={suppliers} />
         </TabsContent>
         <TabsContent value="suppliers">
-          <SupplierManagement suppliers={suppliers} />
+          <SupplierManagement suppliers={suppliers} materials={materials} />
         </TabsContent>
       </Tabs>
     </>

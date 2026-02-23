@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Link, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -18,18 +18,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
@@ -68,7 +59,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
   const [dialogOpen, setDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
-  const updateFormData = (field: keyof MaterialFormData, value: any) => {
+  const updateFormData = <K extends keyof MaterialFormData>(field: K, value: MaterialFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -108,12 +99,6 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
       .map(s => s.trim())
       .filter(s => s.length > 0);
 
-    if (finishOptions.length === 0) {
-      setError('Add at least one finish option');
-      setLoading(false);
-      return;
-    }
-
     const input = {
       name: formData.name,
       finish_options: finishOptions,
@@ -125,6 +110,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
       result = await updateMaterial(editingMaterial.id, {
         name: input.name,
         finish_options: input.finish_options,
+        supplier_ids: input.supplier_ids,
       });
     } else {
       result = await createMaterial(input);
@@ -330,14 +316,13 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
 
             <div className="space-y-1.5">
               <Label htmlFor="finish-options">
-                Finish options * <span className="text-xs text-muted-foreground">(comma-separated)</span>
+                Finish options (comma-separated) (optional)
               </Label>
               <Input
                 id="finish-options"
                 value={formData.finish_options}
                 onChange={(e) => updateFormData('finish_options', e.target.value)}
                 placeholder="e.g. Polished, Matte, Frosted"
-                required
               />
             </div>
 
@@ -350,7 +335,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
                       id={`supplier-${supplier.id}`}
                       checked={formData.supplier_ids.includes(supplier.id)}
                       onCheckedChange={(checked) => 
-                        handleSupplierToggle(supplier.id, checked as boolean)
+                        handleSupplierToggle(supplier.id, checked === true)
                       }
                     />
                     <Label htmlFor={`supplier-${supplier.id}`} className="text-sm">

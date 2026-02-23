@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Only use our semantic theme colors; disable Tailwind default palette (blue, gray, etc.) */
+@theme {
+  --disable-default-colors: true;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
@@ -181,5 +186,18 @@
   body {
     @apply bg-background text-foreground antialiased;
     letter-spacing: var(--tracking-normal);
+  }
+
+  /* Links and buttons use theme colors only (no browser default blue) */
+  a {
+    color: var(--foreground);
+  }
+
+  a[href]:hover {
+    color: var(--primary);
+  }
+
+  button {
+    color: inherit;
   }
 }

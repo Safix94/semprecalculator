@@ -16,6 +16,7 @@ export interface UpdateMaterialInput {
   name?: string;
   finish_options?: string[];
   is_active?: boolean;
+  supplier_ids?: string[];
 }
 
 /**
@@ -183,16 +184,82 @@ export async function createMaterial(input: CreateMaterialInput) {
 export async function updateMaterial(materialId: string, input: UpdateMaterialInput) {
   const user = await requireRole('admin');
   const supabase = await createClient();
+  const { supplier_ids, ...materialFields } = input;
+  const hasMaterialFieldUpdates = Object.keys(materialFields).length > 0;
+  let material: Material | null = null;
 
-  const { data: material, error } = await supabase
-    .from('materials')
-    .update(input)
-    .eq('id', materialId)
-    .select()
-    .single();
+  if (hasMaterialFieldUpdates) {
+    const { data: updatedMaterial, error } = await supabase
+      .from('materials')
+      .update(materialFields)
+      .eq('id', materialId)
+      .select()
+      .single();
 
-  if (error) {
-    return { error: { _form: [error.message] } };
+    if (error) {
+      return { error: { _form: [error.message] } };
+    }
+
+    material = updatedMaterial as Material;
+  }
+
+  if (supplier_ids !== undefined) {
+    const { data: existingLinks, error: fetchLinksError } = await supabase
+      .from('material_suppliers')
+      .select('supplier_id')
+      .eq('material_id', materialId);
+
+    if (fetchLinksError) {
+      return { error: { _form: [fetchLinksError.message] } };
+    }
+
+    const requestedSupplierIds = [...new Set(supplier_ids)];
+    const existingSupplierIdSet = new Set((existingLinks ?? []).map((link) => link.supplier_id));
+    const requestedSupplierIdSet = new Set(requestedSupplierIds);
+
+    const toAdd = requestedSupplierIds.filter((supplierId) => !existingSupplierIdSet.has(supplierId));
+    const toRemove = [...existingSupplierIdSet].filter((supplierId) => !requestedSupplierIdSet.has(supplierId));
+
+    if (toAdd.length > 0) {
+      const rowsToInsert = toAdd.map((supplierId) => ({
+        material_id: materialId,
+        supplier_id: supplierId,
+      }));
+
+      const { error: addError } = await supabase
+        .from('material_suppliers')
+        .insert(rowsToInsert);
+
+      if (addError) {
+        return { error: { _form: [addError.message] } };
+      }
+    }
+
+    if (toRemove.length > 0) {
+      const { error: removeError } = await supabase
+        .from('material_suppliers')
+        .delete()
+        .eq('material_id', materialId)
+        .in('supplier_id', toRemove);
+
+      if (removeError) {
+        return { error: { _form: [removeError.message] } };
+      }
+    }
+  }
+
+  if (!material) {
+    const { data: currentMaterial, error: fetchMaterialError } = await supabase
+      .from('materials')
+      .select('*')
+      .eq('id', materialId)
+      .single();
+
+    if (fetchMaterialError) {
+      return { error: { _form: [fetchMaterialError.message] } };
+    }
+
+    material = currentMaterial as Material;
   }
 
   await logAuditEvent({
@@ -201,7 +268,9 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
     action: 'MATERIAL_UPDATED',
     entityType: 'material',
     entityId: materialId,
-    metadata: { changes: input }
+    metadata: supplier_ids === undefined
+      ? { changes: materialFields }
+      : { changes: materialFields, supplierIds: supplier_ids }
   });
 
   revalidatePath('/admin/management');

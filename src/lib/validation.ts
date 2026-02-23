@@ -1,7 +1,13 @@
 import { z } from 'zod';
+import { PRODUCT_TYPES, isProductType } from '@/lib/product-types';
 
 export const createRfqSchema = z.object({
   customer_name: z.string().optional().nullable(),
+  product_type: z
+    .string()
+    .optional()
+    .nullable()
+    .refine((v) => !v || isProductType(v), 'Invalid product type'),
   material: z.string().min(1, 'Material is required'),
   material_id: z.string().uuid('Invalid material ID').optional().nullable(),
   finish: z.string().min(1, 'Finish is required'),

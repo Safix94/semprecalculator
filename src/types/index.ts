@@ -44,6 +44,7 @@ export interface Rfq {
   id: string;
   created_by: string;
   customer_name: string | null;
+  product_type: string | null;
   material: string;
   material_id: string | null;
   finish: string | null;

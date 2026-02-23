@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { PRODUCT_TYPES } from '@/lib/product-types';
 import type { Material, Supplier } from '@/types';
 
 interface RfqCreateWizardProps {
@@ -34,6 +35,7 @@ interface RfqCreateWizardProps {
 
 interface WizardData {
   customer_name: string;
+  product_type: string;
   material_id: string;
   material_name: string;
   finish: string;
@@ -48,6 +50,7 @@ interface WizardData {
 
 const initialData: WizardData = {
   customer_name: '',
+  product_type: '',
   material_id: '',
   material_name: '',
   finish: '',
@@ -199,6 +202,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
     const input = {
       customer_name: data.customer_name || null,
+      product_type: data.product_type || null,
       material: data.material_name,
       material_id: data.material_id,
       finish: data.finish,
@@ -283,6 +287,25 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   value={data.customer_name}
                   onChange={(e) => updateData('customer_name', e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="product_type">Soort</Label>
+                <Select
+                  value={data.product_type || undefined}
+                  onValueChange={(value) => updateData('product_type', value)}
+                >
+                  <SelectTrigger id="product_type" className="w-full">
+                    <SelectValue placeholder="Selecteer soort (optioneel)" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[70]">
+                    {PRODUCT_TYPES.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">

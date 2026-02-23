@@ -4,6 +4,13 @@ import { useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -12,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { FormattedDate } from '@/components/formatted-date';
+import { PRODUCT_TYPES } from '@/lib/product-types';
 import type { Rfq, RfqStatus } from '@/types';
 
 interface DashboardRfqTableProps {
@@ -20,6 +28,7 @@ interface DashboardRfqTableProps {
   currentPage: number;
   totalPages: number;
   selectedRfqId: string | null;
+  productTypeFilter: string | null;
 }
 
 const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
@@ -35,12 +44,27 @@ export function DashboardRfqTable({
   currentPage,
   totalPages,
   selectedRfqId,
+  productTypeFilter,
 }: DashboardRfqTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
+
+  const setProductTypeFilter = (value: string) => {
+    const params = new URLSearchParams(searchParamsString);
+    if (value) {
+      params.set('product_type', value);
+      params.set('page', '1');
+    } else {
+      params.delete('product_type');
+      params.delete('page');
+    }
+    if (selectedRfqId) params.set('rfq', selectedRfqId);
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  };
 
   const buildHref = (page: number, rfqId: string | null) => {
     const params = new URLSearchParams(searchParamsString);
@@ -74,6 +98,7 @@ export function DashboardRfqTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead>Soort</TableHead>
             <TableHead>Material</TableHead>
             <TableHead>Finish</TableHead>
             <TableHead>Shape</TableHead>
@@ -105,6 +130,7 @@ export function DashboardRfqTable({
                 role="button"
                 tabIndex={0}
               >
+                <TableCell className="text-muted-foreground">{rfq.product_type || '-'}</TableCell>
                 <TableCell className="font-medium text-primary">{rfq.material}</TableCell>
                 <TableCell className="text-muted-foreground">{rfq.finish || '-'}</TableCell>
                 <TableCell className="text-muted-foreground">{rfq.shape}</TableCell>
@@ -134,10 +160,31 @@ export function DashboardRfqTable({
         </TableBody>
       </Table>
 
-      <div className="flex items-center justify-between border-t px-4 py-3">
-        <span className="text-sm text-muted-foreground">
-          Page {currentPage} of {totalPages}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-t px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">Filter op soort</span>
+            <Select
+              value={productTypeFilter ?? ''}
+              onValueChange={setProductTypeFilter}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Alle soorten" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Alle soorten</SelectItem>
+                {PRODUCT_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <Button
             type="button"

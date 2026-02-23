@@ -197,6 +197,12 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
               </CardHeader>
               <CardContent>
                 <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                  {detail.rfq.product_type && (
+                    <div>
+                      <dt className="text-xs uppercase text-muted-foreground">Soort</dt>
+                      <dd className="mt-1 text-sm font-medium">{detail.rfq.product_type}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-xs uppercase text-muted-foreground">Material</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.material}</dd>

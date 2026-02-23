@@ -4,12 +4,14 @@ import { RfqCreateWizard } from '@/components/rfq-create-wizard';
 import { DashboardRfqTable } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
 import { Card, CardContent } from '@/components/ui/card';
+import { isProductType } from '@/lib/product-types';
 import type { Rfq } from '@/types';
 
 interface DashboardPageProps {
   searchParams?: Promise<{
     page?: string | string[];
     rfq?: string | string[];
+    product_type?: string | string[];
   }>;
 }
 
@@ -27,13 +29,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const params = searchParams ? await searchParams : {};
   const pageParam = getStringParam(params.page) ?? '1';
   const selectedRfqId = getStringParam(params.rfq) ?? null;
+  const productTypeParam = getStringParam(params.product_type) ?? null;
+  const productTypeFilter = productTypeParam && isProductType(productTypeParam) ? productTypeParam : null;
+
   const parsedPage = Number.parseInt(pageParam, 10);
   const requestedPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
   const supabase = await createClient();
 
-  const { count, error: countError } = await supabase
-    .from('rfqs')
-    .select('id', { count: 'exact', head: true });
+  let countQuery = supabase.from('rfqs').select('id', { count: 'exact', head: true });
+  if (productTypeFilter) {
+    countQuery = countQuery.eq('product_type', productTypeFilter);
+  }
+  const { count, error: countError } = await countQuery;
 
   if (countError) {
     console.error('Failed to count RFQs:', countError.message);
@@ -45,11 +52,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const from = (currentPage - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
 
-  const { data: rfqsData, error: rfqsError } = await supabase
+  let rfqsQuery = supabase
     .from('rfqs')
     .select('*')
     .order('created_at', { ascending: false })
     .range(from, to);
+  if (productTypeFilter) {
+    rfqsQuery = rfqsQuery.eq('product_type', productTypeFilter);
+  }
+  const { data: rfqsData, error: rfqsError } = await rfqsQuery;
 
   if (rfqsError) {
     console.error('Failed to fetch paginated RFQs:', rfqsError.message);
@@ -101,6 +112,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               currentPage={currentPage}
               totalPages={totalPages}
               selectedRfqId={selectedRfqId}
+              productTypeFilter={productTypeFilter}
             />
           </CardContent>
         </Card>

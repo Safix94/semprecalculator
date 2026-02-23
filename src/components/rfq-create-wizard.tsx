@@ -40,10 +40,12 @@ interface WizardData {
   material_name: string;
   finish: string;
   supplier_ids: string[];
+  diameter: string;
   length: string;
   width: string;
   height: string;
   thickness: string;
+  quantity: string;
   shape: string;
   notes: string;
 }
@@ -55,11 +57,13 @@ const initialData: WizardData = {
   material_name: '',
   finish: '',
   supplier_ids: [],
+  diameter: '',
   length: '',
   width: '',
   height: '',
   thickness: '',
-  shape: '',
+  quantity: '1',
+  shape: 'Rectangular',
   notes: '',
 };
 
@@ -154,6 +158,29 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('supplier_ids', updatedSupplierIds);
   };
 
+  const handleShapeChange = (shape: string) => {
+    updateData('shape', shape);
+
+    if (shape === 'Round') {
+      if (!data.diameter && (data.length || data.width)) {
+        updateData('diameter', data.length || data.width);
+      }
+      updateData('length', '');
+      updateData('width', '');
+      return;
+    }
+
+    if (data.diameter) {
+      if (!data.length) {
+        updateData('length', data.diameter);
+      }
+      if (!data.width) {
+        updateData('width', data.diameter);
+      }
+    }
+    updateData('diameter', '');
+  };
+
   const validateCurrentStep = (): boolean => {
     const stepErrors: Record<string, string[]> = {};
 
@@ -169,20 +196,40 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         stepErrors.supplier_ids = ['Select at least one supplier'];
       }
     } else if (currentStep === 2) {
-      if (!data.length || Number(data.length) <= 0) {
-        stepErrors.length = ['Length must be positive'];
-      }
-      if (!data.width || Number(data.width) <= 0) {
-        stepErrors.width = ['Width must be positive'];
-      }
-      if (!data.height || Number(data.height) <= 0) {
-        stepErrors.height = ['Height must be positive'];
-      }
-      if (!data.thickness || Number(data.thickness) <= 0) {
-        stepErrors.thickness = ['Thickness must be positive'];
-      }
-      if (!data.shape.trim()) {
+      const isRound = data.shape === 'Round';
+
+      if (!data.shape) {
         stepErrors.shape = ['Shape is required'];
+      }
+
+      if (isRound) {
+        if (!data.diameter || Number(data.diameter) <= 0) {
+          stepErrors.diameter = ['Diameter must be positive'];
+        }
+        if (!data.height || Number(data.height) <= 0) {
+          stepErrors.height = ['Height must be positive'];
+        }
+        if (data.thickness && Number(data.thickness) < 0) {
+          stepErrors.thickness = ['Thickness must be zero or positive'];
+        }
+      } else {
+        if (!data.length || Number(data.length) <= 0) {
+          stepErrors.length = ['Length must be positive'];
+        }
+        if (!data.width || Number(data.width) <= 0) {
+          stepErrors.width = ['Width must be positive'];
+        }
+        if (!data.height || Number(data.height) <= 0) {
+          stepErrors.height = ['Height must be positive'];
+        }
+        if (!data.thickness || Number(data.thickness) <= 0) {
+          stepErrors.thickness = ['Thickness must be positive'];
+        }
+      }
+
+      const quantityValue = Number(data.quantity);
+      if (!data.quantity || !Number.isInteger(quantityValue) || quantityValue < 1) {
+        stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
       }
     }
 
@@ -206,16 +253,21 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setLoading(true);
     setErrors({});
 
+    const isRound = data.shape === 'Round';
+    const diameter = Number(data.diameter);
+    const thicknessValue = data.thickness === '' ? 0 : Number(data.thickness);
+
     const input = {
       customer_name: data.customer_name || null,
       product_type: data.product_type || null,
       material: data.material_name,
       material_id: data.material_id,
       finish: data.finish,
-      length: Number(data.length),
-      width: Number(data.width),
+      length: isRound ? diameter : Number(data.length),
+      width: isRound ? diameter : Number(data.width),
       height: Number(data.height),
-      thickness: Number(data.thickness),
+      thickness: isRound ? thicknessValue : Number(data.thickness),
+      quantity: Number(data.quantity),
       shape: data.shape,
       notes: data.notes || null,
       supplier_ids: data.supplier_ids,
@@ -431,69 +483,153 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="shape">Shape *</Label>
-                <Input
-                  id="shape"
-                  value={data.shape}
-                  onChange={(e) => updateData('shape', e.target.value)}
-                  placeholder="e.g. plank, block"
-                  aria-invalid={Boolean(errors.shape)}
-                />
+                <Select value={data.shape} onValueChange={handleShapeChange}>
+                  <SelectTrigger id="shape" className="w-full" aria-invalid={Boolean(errors.shape)}>
+                    <SelectValue placeholder="Select a shape" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[70]">
+                    <SelectItem value="Rectangular">Rectangular</SelectItem>
+                    <SelectItem value="Round">Round</SelectItem>
+                  </SelectContent>
+                </Select>
                 {errors.shape && <p className="text-destructive text-xs">{errors.shape[0]}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="length">Length (mm) *</Label>
-                  <Input
-                    id="length"
-                    type="number"
-                    step="any"
-                    value={data.length}
-                    onChange={(e) => updateData('length', e.target.value)}
-                    aria-invalid={Boolean(errors.length)}
-                  />
-                  {errors.length && <p className="text-destructive text-xs">{errors.length[0]}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="width">Width (mm) *</Label>
-                  <Input
-                    id="width"
-                    type="number"
-                    step="any"
-                    value={data.width}
-                    onChange={(e) => updateData('width', e.target.value)}
-                    aria-invalid={Boolean(errors.width)}
-                  />
-                  {errors.width && <p className="text-destructive text-xs">{errors.width[0]}</p>}
-                </div>
-              </div>
+              {data.shape === 'Round' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="diameter">Diameter (cm) *</Label>
+                      <Input
+                        id="diameter"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.diameter}
+                        onChange={(e) => updateData('diameter', e.target.value)}
+                        aria-invalid={Boolean(errors.diameter)}
+                      />
+                      {errors.diameter && <p className="text-destructive text-xs">{errors.diameter[0]}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="height">Height (cm) *</Label>
+                      <Input
+                        id="height"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.height}
+                        onChange={(e) => updateData('height', e.target.value)}
+                        aria-invalid={Boolean(errors.height)}
+                      />
+                      {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label htmlFor="height">Height (mm) *</Label>
-                  <Input
-                    id="height"
-                    type="number"
-                    step="any"
-                    value={data.height}
-                    onChange={(e) => updateData('height', e.target.value)}
-                    aria-invalid={Boolean(errors.height)}
-                  />
-                  {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="thickness">Thickness (mm) *</Label>
-                  <Input
-                    id="thickness"
-                    type="number"
-                    step="any"
-                    value={data.thickness}
-                    onChange={(e) => updateData('thickness', e.target.value)}
-                    aria-invalid={Boolean(errors.thickness)}
-                  />
-                  {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="thickness">Thickness (cm) (optional)</Label>
+                      <Input
+                        id="thickness"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.thickness}
+                        onChange={(e) => updateData('thickness', e.target.value)}
+                        aria-invalid={Boolean(errors.thickness)}
+                      />
+                      {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="quantity">Aantal stuks *</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={data.quantity}
+                        onChange={(e) => updateData('quantity', e.target.value)}
+                        aria-invalid={Boolean(errors.quantity)}
+                      />
+                      {errors.quantity && <p className="text-destructive text-xs">{errors.quantity[0]}</p>}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="length">Length (cm) *</Label>
+                      <Input
+                        id="length"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.length}
+                        onChange={(e) => updateData('length', e.target.value)}
+                        aria-invalid={Boolean(errors.length)}
+                      />
+                      {errors.length && <p className="text-destructive text-xs">{errors.length[0]}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="width">Width (cm) *</Label>
+                      <Input
+                        id="width"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.width}
+                        onChange={(e) => updateData('width', e.target.value)}
+                        aria-invalid={Boolean(errors.width)}
+                      />
+                      {errors.width && <p className="text-destructive text-xs">{errors.width[0]}</p>}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="height">Height (cm) *</Label>
+                      <Input
+                        id="height"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.height}
+                        onChange={(e) => updateData('height', e.target.value)}
+                        aria-invalid={Boolean(errors.height)}
+                      />
+                      {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="thickness">Thickness (cm) *</Label>
+                      <Input
+                        id="thickness"
+                        type="number"
+                        step="any"
+                        min="0"
+                        value={data.thickness}
+                        onChange={(e) => updateData('thickness', e.target.value)}
+                        aria-invalid={Boolean(errors.thickness)}
+                      />
+                      {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quantity">Aantal stuks *</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      step="1"
+                      min="1"
+                      value={data.quantity}
+                      onChange={(e) => updateData('quantity', e.target.value)}
+                      aria-invalid={Boolean(errors.quantity)}
+                    />
+                    {errors.quantity && <p className="text-destructive text-xs">{errors.quantity[0]}</p>}
+                  </div>
+                </>
+              )}
 
               <div className="space-y-1.5">
                 <Label htmlFor="notes">Notes</Label>

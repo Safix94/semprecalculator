@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/table';
 import { FormattedDate } from '@/components/formatted-date';
 import { PRODUCT_TYPES } from '@/lib/product-types';
+import { formatRfqDimensions } from '@/lib/rfq-format';
 import type { Rfq, RfqStatus } from '@/types';
 
 interface DashboardRfqTableProps {
@@ -103,6 +104,7 @@ export function DashboardRfqTable({
             <TableHead>Finish</TableHead>
             <TableHead>Shape</TableHead>
             <TableHead>Dimensions</TableHead>
+            <TableHead>Quantity</TableHead>
             <TableHead>Customer</TableHead>
             <TableHead>Requested by</TableHead>
             <TableHead>Status</TableHead>
@@ -134,9 +136,8 @@ export function DashboardRfqTable({
                 <TableCell className="font-medium text-primary">{rfq.material}</TableCell>
                 <TableCell className="text-muted-foreground">{rfq.finish || '-'}</TableCell>
                 <TableCell className="text-muted-foreground">{rfq.shape}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {rfq.length}x{rfq.width}x{rfq.height} (d:{rfq.thickness})
-                </TableCell>
+                <TableCell className="text-muted-foreground">{formatRfqDimensions(rfq)}</TableCell>
+                <TableCell className="text-muted-foreground">{rfq.quantity}</TableCell>
                 <TableCell className="text-muted-foreground">{rfq.customer_name || '-'}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {creatorEmailById[rfq.created_by] ?? 'Unknown'}

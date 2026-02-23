@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/auth';
 import { createRfqSchema, updateRfqSchema } from '@/lib/validation';
 import {
@@ -11,9 +11,73 @@ import {
   isTokenHashingConfigError,
 } from '@/lib/tokens';
 import { sendSupplierInviteEmail } from '@/lib/mailer';
+import { formatRfqDimensionsWithOptions } from '@/lib/rfq-format';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqInvite, RfqQuote, Supplier } from '@/types';
+
+const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
+const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+type ReplaceRfqInvitesResult = { data: { created: number } } | { error: string };
+
+async function replaceRfqInvitesWithServiceRole(
+  rfqId: string,
+  supplierIds: string[]
+): Promise<ReplaceRfqInvitesResult> {
+  try {
+    const normalizedSupplierIds = [...new Set(supplierIds)];
+    if (normalizedSupplierIds.length === 0) {
+      return { error: 'Select at least one supplier' };
+    }
+
+    const supabase = createServiceRoleClient();
+
+    const { data: rfq, error: rfqError } = await supabase
+      .from('rfqs')
+      .select('id')
+      .eq('id', rfqId)
+      .eq('status', 'draft')
+      .single();
+
+    if (rfqError || !rfq) {
+      return { error: 'RFQ not found or not in draft status' };
+    }
+
+    const { error: deleteError } = await supabase
+      .from('rfq_invites')
+      .delete()
+      .eq('rfq_id', rfqId);
+
+    if (deleteError) {
+      return { error: `Failed to replace invites: ${deleteError.message}` };
+    }
+
+    const expiresAt = new Date(Date.now() + INVITE_EXPIRATION_MS).toISOString();
+    const inviteInserts = normalizedSupplierIds.map((supplierId) => ({
+      rfq_id: rfqId,
+      supplier_id: supplierId,
+      token_hash: hashToken(generateToken()),
+      expires_at: expiresAt,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('rfq_invites')
+      .insert(inviteInserts);
+
+    if (insertError) {
+      return { error: `Failed to replace invites: ${insertError.message}` };
+    }
+
+    return { data: { created: normalizedSupplierIds.length } };
+  } catch (error) {
+    if (isTokenHashingConfigError(error)) {
+      return { error: TOKEN_CONFIG_ERROR_MESSAGE };
+    }
+    const message = error instanceof Error ? error.message : 'Failed to replace invites';
+    return { error: message };
+  }
+}
 
 export async function createRfq(input: CreateRfqInput) {
   const user = await requireAuth();
@@ -31,7 +95,7 @@ export async function createRfq(input: CreateRfqInput) {
       console.error('RFQ token setup validation failed:', error);
       return {
         error: {
-          _form: ['RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.'],
+          _form: [TOKEN_CONFIG_ERROR_MESSAGE],
         },
       };
     }
@@ -55,43 +119,37 @@ export async function createRfq(input: CreateRfqInput) {
       return { error: { _form: [error.message] } };
     }
 
-    // If specific suppliers were selected, create invites immediately (but don't send emails yet)
-    if (supplier_ids && supplier_ids.length > 0) {
-      const inviteInserts = supplier_ids.map(supplierId => {
-        const token = generateToken();
-        const tokenHash = hashToken(token);
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-        
-        return {
-          rfq_id: rfq.id,
-          supplier_id: supplierId,
-          token_hash: tokenHash,
-          expires_at: expiresAt,
-        };
-      });
-
-      const { error: inviteError } = await supabase
-        .from('rfq_invites')
-        .insert(inviteInserts);
-
-      if (inviteError) {
-        console.error('Failed to create invites:', inviteError);
-        // Don't fail the RFQ creation, just log the error
-      }
-    }
-
     await logAuditEvent({
       actorType: user.role,
       actorId: user.id,
       action: 'RFQ_CREATED',
       entityType: 'rfq',
       entityId: rfq.id,
-      metadata: { 
-        materialId: rfq.material_id, 
+      metadata: {
+        materialId: rfq.material_id,
         finish: rfq.finish,
-        supplierIds: supplier_ids 
+        quantity: rfq.quantity,
+        supplierIds: supplier_ids,
       },
     });
+
+    // If suppliers were selected, force invite creation via service role.
+    if (supplier_ids && supplier_ids.length > 0) {
+      const inviteResult = await replaceRfqInvitesWithServiceRole(rfq.id, supplier_ids);
+      if ('error' in inviteResult) {
+        console.error('Failed to create supplier invites after RFQ creation:', {
+          rfqId: rfq.id,
+          inviteError: inviteResult.error,
+        });
+        revalidatePath('/dashboard');
+        revalidatePath(`/dashboard/rfqs/${rfq.id}`);
+        return {
+          error: {
+            _form: [`RFQ created but failed to create supplier invites: ${inviteResult.error}`],
+          },
+        };
+      }
+    }
 
     revalidatePath('/dashboard');
     return { data: rfq };
@@ -100,12 +158,41 @@ export async function createRfq(input: CreateRfqInput) {
     if (isTokenHashingConfigError(error)) {
       return {
         error: {
-          _form: ['RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.'],
+          _form: [TOKEN_CONFIG_ERROR_MESSAGE],
         },
       };
     }
     return { error: { _form: ['Failed to create RFQ. Please try again.'] } };
   }
+}
+
+export async function replaceRfqInvites(rfqId: string, supplierIds: string[]) {
+  const user = await requireAuth();
+
+  if (user.role !== 'sales' && user.role !== 'admin') {
+    return { error: 'Unauthorized' };
+  }
+
+  try {
+    assertTokenHashingConfigured();
+  } catch (error) {
+    console.error('RFQ token setup validation failed:', error);
+    return { error: TOKEN_CONFIG_ERROR_MESSAGE };
+  }
+
+  const normalizedSupplierIds = [...new Set(supplierIds)];
+  if (normalizedSupplierIds.length === 0) {
+    return { error: 'Select at least one supplier' };
+  }
+
+  const result = await replaceRfqInvitesWithServiceRole(rfqId, normalizedSupplierIds);
+  if ('error' in result) {
+    return result;
+  }
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return result;
 }
 
 export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
@@ -267,7 +354,7 @@ export async function sendRfq(rfqId: string) {
     assertTokenHashingConfigured();
   } catch (error) {
     console.error('RFQ token setup validation failed:', error);
-    return { error: 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.' };
+    return { error: TOKEN_CONFIG_ERROR_MESSAGE };
   }
 
   // Fetch the RFQ with material details
@@ -304,6 +391,17 @@ export async function sendRfq(rfqId: string) {
 
   // Send emails to all suppliers with invites
   const results: { supplier: string; success: boolean; error?: string }[] = [];
+  const dimensionsText = formatRfqDimensionsWithOptions(
+    {
+      shape: rfq.shape,
+      length: Number(rfq.length),
+      width: Number(rfq.width),
+      height: Number(rfq.height),
+      thickness: Number(rfq.thickness),
+    },
+    { includeThickness: true }
+  );
+  const quantity = Number(rfq.quantity ?? 1);
 
   for (const invite of invites) {
     if (!invite.supplier) {
@@ -340,6 +438,8 @@ export async function sendRfq(rfqId: string) {
       material: materialName,
       shape: rfq.shape,
       finish: rfq.finish,
+      dimensionsText,
+      quantity,
     });
 
     await logAuditEvent({

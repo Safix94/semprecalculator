@@ -57,9 +57,20 @@ export async function sendSupplierInviteEmail(params: {
   material: string;
   shape: string;
   finish?: string | null;
+  dimensionsText?: string;
+  quantity?: number;
 }) {
   const link = `${APP_URL}/supplier/rfq/${params.rfqId}?t=${params.token}`;
   const finishText = params.finish ? ` with finish "${params.finish}"` : '';
+  const detailLines = [
+    `<li><strong>Material:</strong> ${params.material}</li>`,
+    `<li><strong>Shape:</strong> ${params.shape}</li>`,
+    params.finish ? `<li><strong>Finish:</strong> ${params.finish}</li>` : null,
+    params.dimensionsText ? `<li><strong>Dimensions:</strong> ${params.dimensionsText}</li>` : null,
+    params.quantity !== undefined ? `<li><strong>Quantity:</strong> ${params.quantity}</li>` : null,
+  ]
+    .filter(Boolean)
+    .join('');
 
   return sendEmail({
     to: { email: params.supplierEmail, name: params.supplierName },
@@ -68,6 +79,7 @@ export async function sendSupplierInviteEmail(params: {
       <h2>New request for quotation</h2>
       <p>Dear ${params.supplierName},</p>
       <p>There is a new request for quotation for <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
+      <ul>${detailLines}</ul>
       <p>Click the link below to view the request and submit a quote:</p>
       <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Submit quote</a></p>
       <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>

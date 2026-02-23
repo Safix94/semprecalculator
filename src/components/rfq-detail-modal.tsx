@@ -7,6 +7,7 @@ import { AttachmentUpload } from '@/components/attachment-upload';
 import { FormattedDate } from '@/components/formatted-date';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { RfqActions } from '@/components/rfq-actions';
+import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -126,6 +127,8 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
       }
     : null;
 
+  const isRound = detail ? isRoundShape(detail.rfq.shape) : false;
+
   return (
     <Dialog
       open={open}
@@ -187,7 +190,11 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                     {status.label}
                   </span>
                 )}
-                <RfqActions rfqId={detail.rfq.id} status={detail.rfq.status} />
+                <RfqActions
+                  rfqId={detail.rfq.id}
+                  status={detail.rfq.status}
+                  materialId={detail.rfq.material_id}
+                />
               </div>
             </div>
 
@@ -216,15 +223,23 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.customer_name || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Dimensions (LxWxH)</dt>
+                    <dt className="text-xs uppercase text-muted-foreground">
+                      {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
+                    </dt>
                     <dd className="mt-1 text-sm font-medium">
-                      {detail.rfq.length} x {detail.rfq.width} x {detail.rfq.height} mm
+                      {formatRfqDimensionsWithOptions(detail.rfq, { includeThickness: false })}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
-                    <dd className="mt-1 text-sm font-medium">{detail.rfq.thickness} mm</dd>
+                    <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
+                    <dd className="mt-1 text-sm font-medium">{detail.rfq.quantity}</dd>
                   </div>
+                  {(!isRound || detail.rfq.thickness > 0) && (
+                    <div>
+                      <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
+                      <dd className="mt-1 text-sm font-medium">{detail.rfq.thickness} cm</dd>
+                    </div>
+                  )}
                   {detail.rfq.notes && (
                     <div className="col-span-2 md:col-span-3">
                       <dt className="text-xs uppercase text-muted-foreground">Notes</dt>

@@ -1,20 +1,103 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { sendRfq, closeRfq } from '@/actions/rfq';
+import { getSuppliersForMaterial } from '@/actions/materials';
+import { sendRfq, closeRfq, replaceRfqInvites } from '@/actions/rfq';
 import { Button } from '@/components/ui/button';
-import type { RfqStatus } from '@/types';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import type { RfqStatus, Supplier } from '@/types';
 
 interface RfqActionsProps {
   rfqId: string;
   status: RfqStatus;
+  materialId?: string | null;
 }
 
-export function RfqActions({ rfqId, status }: RfqActionsProps) {
+export function RfqActions({ rfqId, status, materialId = null }: RfqActionsProps) {
   const [loading, setLoading] = useState(false);
+  const [saveAndSendLoading, setSaveAndSendLoading] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [suppliersLoading, setSuppliersLoading] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
+  const [pickerError, setPickerError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      return;
+    }
+
+    setSelectedSupplierIds([]);
+    setPickerError(null);
+    setSuppliers([]);
+
+    if (!materialId) {
+      setSuppliersLoading(false);
+      setPickerError('RFQ heeft geen material_id; kan suppliers niet ophalen.');
+      return;
+    }
+
+    let active = true;
+
+    async function loadSuppliers() {
+      setSuppliersLoading(true);
+      try {
+        const supplierRows = await getSuppliersForMaterial(materialId);
+        if (!active) {
+          return;
+        }
+        setSuppliers(supplierRows);
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        console.error('Failed to load suppliers for send fallback:', error);
+        setSuppliers([]);
+        setPickerError('Could not load suppliers for this material.');
+      } finally {
+        if (active) {
+          setSuppliersLoading(false);
+        }
+      }
+    }
+
+    loadSuppliers();
+
+    return () => {
+      active = false;
+    };
+  }, [materialId, pickerOpen]);
+
+  const canSaveAndSend = useMemo(() => {
+    if (!materialId || suppliersLoading || saveAndSendLoading) {
+      return false;
+    }
+    if (suppliers.length === 0) {
+      return false;
+    }
+    return selectedSupplierIds.length > 0;
+  }, [materialId, saveAndSendLoading, selectedSupplierIds.length, suppliers.length, suppliersLoading]);
+
+  const formatActionError = (error: unknown) =>
+    typeof error === 'string' ? error : JSON.stringify(error);
+
+  function handleSupplierToggle(supplierId: string, checked: boolean) {
+    setSelectedSupplierIds((current) =>
+      checked ? [...current, supplierId] : current.filter((id) => id !== supplierId)
+    );
+  }
 
   async function handleSend() {
     if (!confirm('Are you sure you want to send this request to suppliers?')) return;
@@ -25,17 +108,58 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
       const res = await sendRfq(rfqId);
 
       if ('error' in res) {
-        setResult(`Error: ${typeof res.error === 'string' ? res.error : JSON.stringify(res.error)}`);
+        const errorMessage = formatActionError(res.error);
+        if (errorMessage === 'No suppliers selected for this RFQ') {
+          setPickerOpen(true);
+        } else {
+          setResult(`Error: ${errorMessage}`);
+        }
       } else if ('data' in res) {
         setResult(`Sent to ${res.data.sent}/${res.data.total} suppliers`);
+        router.refresh();
       }
-
-      router.refresh();
     } catch (error) {
       console.error('Failed to send RFQ:', error);
       setResult('Error: Failed to send RFQ');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSaveAndSend() {
+    if (selectedSupplierIds.length === 0) {
+      setPickerError('Select at least one supplier');
+      return;
+    }
+
+    setSaveAndSendLoading(true);
+    setPickerError(null);
+    setResult(null);
+
+    try {
+      const inviteResult = await replaceRfqInvites(rfqId, selectedSupplierIds);
+      if ('error' in inviteResult) {
+        setPickerError(formatActionError(inviteResult.error));
+        return;
+      }
+
+      const sendResult = await sendRfq(rfqId);
+      if ('error' in sendResult) {
+        const errorMessage = formatActionError(sendResult.error);
+        setResult(`Error: ${errorMessage}`);
+        setPickerError(errorMessage);
+        return;
+      }
+
+      setResult(`Sent to ${sendResult.data.sent}/${sendResult.data.total} suppliers`);
+      setPickerOpen(false);
+      setSelectedSupplierIds([]);
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to save suppliers and send RFQ:', error);
+      setPickerError('Failed to save suppliers and send RFQ.');
+    } finally {
+      setSaveAndSendLoading(false);
     }
   }
 
@@ -59,18 +183,82 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
   }
 
   return (
-    <div className="flex items-center gap-2">
-      {status === 'draft' && (
-        <Button onClick={handleSend} disabled={loading}>
-          {loading ? 'Loading...' : 'Send to supplier'}
-        </Button>
-      )}
-      {status === 'sent_to_supplier' && (
-        <Button onClick={handleClose} disabled={loading} variant="secondary">
-          {loading ? 'Loading...' : 'Close'}
-        </Button>
-      )}
-      {result && <span className="text-sm text-muted-foreground">{result}</span>}
-    </div>
+    <>
+      <div className="flex items-center gap-2">
+        {status === 'draft' && (
+          <Button onClick={handleSend} disabled={loading || saveAndSendLoading}>
+            {loading ? 'Loading...' : 'Send to supplier'}
+          </Button>
+        )}
+        {status === 'sent_to_supplier' && (
+          <Button onClick={handleClose} disabled={loading || saveAndSendLoading} variant="secondary">
+            {loading ? 'Loading...' : 'Close'}
+          </Button>
+        )}
+        {result && <span className="text-sm text-muted-foreground">{result}</span>}
+      </div>
+
+      <Dialog
+        open={pickerOpen}
+        onOpenChange={(open) => {
+          if (!saveAndSendLoading) {
+            setPickerOpen(open);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Select suppliers</DialogTitle>
+            <DialogDescription>
+              This RFQ has no invites yet. Select one or more suppliers, then send again.
+            </DialogDescription>
+          </DialogHeader>
+
+          {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
+
+          {suppliersLoading ? (
+            <p className="text-sm text-muted-foreground">Loading suppliers...</p>
+          ) : suppliers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No suppliers available for this material.</p>
+          ) : (
+            <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+              {suppliers.map((supplier) => (
+                <div key={supplier.id} className="flex items-start gap-3 rounded-md border p-3">
+                  <Checkbox
+                    id={`fallback-supplier-${supplier.id}`}
+                    checked={selectedSupplierIds.includes(supplier.id)}
+                    onCheckedChange={(checked) => handleSupplierToggle(supplier.id, checked === true)}
+                    disabled={saveAndSendLoading}
+                  />
+                  <div className="grid gap-1">
+                    <Label
+                      htmlFor={`fallback-supplier-${supplier.id}`}
+                      className="cursor-pointer text-sm font-medium"
+                    >
+                      {supplier.name}
+                    </Label>
+                    <p className="text-xs text-muted-foreground">{supplier.email}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setPickerOpen(false)}
+              disabled={saveAndSendLoading}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={handleSaveAndSend} disabled={!canSaveAndSend}>
+              {saveAndSendLoading ? 'Saving...' : 'Save & Send'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

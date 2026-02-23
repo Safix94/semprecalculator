@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { RfqActions } from '@/components/rfq-actions';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
+import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
 import type { Rfq, RfqAttachment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -54,6 +55,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
   ]);
 
   const typedRfq = rfq as Rfq;
+  const isRound = isRoundShape(typedRfq.shape);
   const status = statusLabels[typedRfq.status] ?? {
     label: typedRfq.status,
     color: 'bg-muted text-muted-foreground',
@@ -66,16 +68,16 @@ export default async function RfqDetailPage({ params }: PageProps) {
           <h1 className="text-2xl font-bold tracking-tight">
             {typedRfq.material} - {typedRfq.shape}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground">
             Created on {new Date(typedRfq.created_at).toLocaleDateString('en-GB')}
             {typedRfq.sent_at && ` | Sent on ${new Date(typedRfq.sent_at).toLocaleDateString('en-GB')}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${status.color}`}>
+          <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${status.color}`}>
             {status.label}
           </span>
-          <RfqActions rfqId={rfqId} status={typedRfq.status} />
+          <RfqActions rfqId={rfqId} status={typedRfq.status} materialId={typedRfq.material_id} />
         </div>
       </div>
 
@@ -84,33 +86,41 @@ export default async function RfqDetailPage({ params }: PageProps) {
           <CardTitle>Details</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Material</dt>
-              <dd className="text-sm font-medium mt-1">{typedRfq.material}</dd>
+              <dt className="text-xs uppercase text-muted-foreground">Material</dt>
+              <dd className="mt-1 text-sm font-medium">{typedRfq.material}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Shape</dt>
-              <dd className="text-sm font-medium mt-1">{typedRfq.shape}</dd>
+              <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
+              <dd className="mt-1 text-sm font-medium">{typedRfq.shape}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Customer</dt>
-              <dd className="text-sm font-medium mt-1">{typedRfq.customer_name || '-'}</dd>
+              <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
+              <dd className="mt-1 text-sm font-medium">{typedRfq.customer_name || '-'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Dimensions (L×W×H)</dt>
-              <dd className="text-sm font-medium mt-1">
-                {typedRfq.length} x {typedRfq.width} x {typedRfq.height} mm
+              <dt className="text-xs uppercase text-muted-foreground">
+                {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
+              </dt>
+              <dd className="mt-1 text-sm font-medium">
+                {formatRfqDimensionsWithOptions(typedRfq, { includeThickness: false })}
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Thickness</dt>
-              <dd className="text-sm font-medium mt-1">{typedRfq.thickness} mm</dd>
+              <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
+              <dd className="mt-1 text-sm font-medium">{typedRfq.quantity}</dd>
             </div>
+            {(!isRound || typedRfq.thickness > 0) && (
+              <div>
+                <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
+                <dd className="mt-1 text-sm font-medium">{typedRfq.thickness} cm</dd>
+              </div>
+            )}
             {typedRfq.notes && (
               <div className="col-span-2 md:col-span-3">
-                <dt className="text-xs text-muted-foreground uppercase">Notes</dt>
-                <dd className="text-sm mt-1 whitespace-pre-wrap">{typedRfq.notes}</dd>
+                <dt className="text-xs uppercase text-muted-foreground">Notes</dt>
+                <dd className="mt-1 whitespace-pre-wrap text-sm">{typedRfq.notes}</dd>
               </div>
             )}
           </dl>
@@ -126,7 +136,6 @@ export default async function RfqDetailPage({ params }: PageProps) {
             <ul className="space-y-2">
               {(attachments as RfqAttachment[]).map((att) => (
                 <li key={att.id} className="flex items-center gap-2 text-sm">
-                  <span className="text-muted-foreground">📎</span>
                   <span>{att.file_name}</span>
                   <span className="text-xs text-muted-foreground">({att.mime_type})</span>
                 </li>

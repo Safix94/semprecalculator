@@ -52,6 +52,7 @@ export interface Rfq {
   width: number;
   height: number;
   thickness: number;
+  quantity: number;
   shape: string;
   notes: string | null;
   status: RfqStatus;
@@ -85,6 +86,7 @@ export interface RfqQuote {
   rfq_id: string;
   supplier_id: string;
   base_price: number;
+  area_m2?: number | null;
   volume_m3: number;
   shipping_cost_calculated: number;
   final_price_calculated: number;

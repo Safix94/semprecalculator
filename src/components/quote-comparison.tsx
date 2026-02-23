@@ -28,6 +28,19 @@ function getInviteStatus(invite: RfqInvite, hasQuote: boolean): { label: string;
   return { label: 'Pending', color: 'text-primary' };
 }
 
+function formatQuoteVolume(quote: RfqQuote | undefined) {
+  if (!quote) {
+    return '-';
+  }
+
+  const hasAreaM2 = quote.area_m2 !== null && quote.area_m2 !== undefined;
+  const value = hasAreaM2
+    ? Number(quote.area_m2).toFixed(3)
+    : Number(quote.volume_m3).toFixed(3);
+  const unit = hasAreaM2 ? 'm\u00b2' : 'm\u00b3';
+  return `${value} ${unit}`;
+}
+
 export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
 
@@ -52,7 +65,7 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                 <TableHead>Supplier</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Base price</TableHead>
-                <TableHead className="text-right">Volume (m³)</TableHead>
+                <TableHead className="text-right">Volume</TableHead>
                 <TableHead className="text-right">Shipping</TableHead>
                 <TableHead className="text-right">Final price</TableHead>
                 <TableHead className="text-right">Lead time</TableHead>
@@ -80,16 +93,18 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                     <TableCell>
                       <span className={`text-sm font-medium ${status.color}`}>{status.label}</span>
                     </TableCell>
-                    <TableCell className="text-right">{quote ? `€${Number(quote.base_price).toFixed(2)}` : '-'}</TableCell>
-                    <TableCell className="text-right">{quote ? Number(quote.volume_m3).toFixed(3) : '-'}</TableCell>
                     <TableCell className="text-right">
-                      {quote ? `€${Number(quote.shipping_cost_calculated).toFixed(3)}` : '-'}
+                      {quote ? `\u20ac${Number(quote.base_price).toFixed(2)}` : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">{formatQuoteVolume(quote)}</TableCell>
+                    <TableCell className="text-right">
+                      {quote ? `\u20ac${Number(quote.shipping_cost_calculated).toFixed(3)}` : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       {quote ? (
                         <span className={`font-semibold ${isLowest ? 'text-primary' : ''}`}>
-                          €{Number(quote.final_price_calculated).toFixed(2)}
-                          {isLowest && ' ★'}
+                          {`\u20ac${Number(quote.final_price_calculated).toFixed(2)}`}
+                          {isLowest && ' \u2605'}
                         </span>
                       ) : '-'}
                     </TableCell>

@@ -132,7 +132,21 @@ export async function submitQuote(
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { basePrice, volumeM3, leadTimeDays, comment } = parsed.data;
+  const { basePrice, areaM2, leadTimeDays, comment } = parsed.data;
+
+  // Fetch RFQ thickness (stored in cm) to derive volume in m3 from supplier area input (m2).
+  const { data: rfqForPricing, error: rfqForPricingError } = await supabase
+    .from('rfqs')
+    .select('thickness, created_by')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqForPricingError || !rfqForPricing) {
+    return { error: 'Request not found' };
+  }
+
+  const thicknessCm = Math.max(Number(rfqForPricing.thickness ?? 0), 0);
+  const volumeM3 = Math.round(areaM2 * (thicknessCm / 100) * 1000) / 1000;
 
   // Server-side pricing calculation
   const { shippingCostCalculated, finalPriceCalculated } =
@@ -145,6 +159,7 @@ export async function submitQuote(
       rfq_id: rfqId,
       supplier_id: invite.supplier_id,
       base_price: basePrice,
+      area_m2: areaM2,
       volume_m3: volumeM3,
       shipping_cost_calculated: shippingCostCalculated,
       final_price_calculated: finalPriceCalculated,
@@ -174,6 +189,7 @@ export async function submitQuote(
     metadata: {
       rfqId,
       basePrice,
+      areaM2,
       volumeM3,
       shippingCostCalculated,
       finalPriceCalculated,
@@ -181,14 +197,8 @@ export async function submitQuote(
   });
 
   // Notify sales user who created the RFQ
-  const { data: rfq } = await supabase
-    .from('rfqs')
-    .select('created_by')
-    .eq('id', rfqId)
-    .single();
-
-  if (rfq) {
-    const { data: salesUser } = await supabase.auth.admin.getUserById(rfq.created_by);
+  if (rfqForPricing.created_by) {
+    const { data: salesUser } = await supabase.auth.admin.getUserById(rfqForPricing.created_by);
     const { data: supplier } = await supabase
       .from('suppliers')
       .select('name')

@@ -48,13 +48,14 @@ export function RfqActions({ rfqId, status, materialId = null }: RfqActionsProps
       setPickerError('RFQ heeft geen material_id; kan suppliers niet ophalen.');
       return;
     }
+    const targetMaterialId = materialId;
 
     let active = true;
 
     async function loadSuppliers() {
       setSuppliersLoading(true);
       try {
-        const supplierRows = await getSuppliersForMaterial(materialId);
+        const supplierRows = await getSuppliersForMaterial(targetMaterialId);
         if (!active) {
           return;
         }

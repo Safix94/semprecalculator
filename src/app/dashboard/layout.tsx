@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { LogoutButton } from '@/components/logout-button';
@@ -17,8 +18,15 @@ export default async function DashboardLayout({
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 items-center">
             <div className="flex items-center gap-8">
-              <Link href="/dashboard" className="text-lg font-bold text-foreground">
-                Sempre
+              <Link href="/dashboard" className="flex items-center">
+                <Image
+                  src="/sempre-logo-word.svg"
+                  alt="Sempre"
+                  width={130}
+                  height={17}
+                  className="h-5 w-auto"
+                  priority
+                />
               </Link>
               <div className="flex gap-4">
                 <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors">

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -50,7 +51,16 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="space-y-2 text-center">
-          <CardTitle className="text-2xl">Sempre Calculator</CardTitle>
+          <div className="flex justify-center">
+            <Image
+              src="/sempre-logo-word.svg"
+              alt="Sempre"
+              width={180}
+              height={23}
+              className="h-7 w-auto"
+              priority
+            />
+          </div>
           <p className="text-muted-foreground text-sm">Log in om door te gaan</p>
         </CardHeader>
         <CardContent>

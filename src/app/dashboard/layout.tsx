@@ -35,10 +35,10 @@ export default async function DashboardLayout({
                 {user.role === 'admin' && (
                   <>
                     <Link
-                      href="/admin/materials"
+                      href="/admin/management"
                       className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Materials
+                      Management
                     </Link>
                     <Link
                       href="/admin/logs"

@@ -173,7 +173,7 @@ export async function createMaterial(input: CreateMaterialInput) {
     metadata: { materialName: material.name, supplierIds: input.supplier_ids }
   });
 
-  revalidatePath('/admin/materials');
+  revalidatePath('/admin/management');
   return { data: material };
 }
 
@@ -204,7 +204,7 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
     metadata: { changes: input }
   });
 
-  revalidatePath('/admin/materials');
+  revalidatePath('/admin/management');
   return { data: material };
 }
 
@@ -237,7 +237,7 @@ export async function linkSupplierToMaterial(materialId: string, supplierId: str
     metadata: { materialId, supplierId }
   });
 
-  revalidatePath('/admin/materials');
+  revalidatePath('/admin/management');
   return { data };
 }
 
@@ -269,7 +269,7 @@ export async function unlinkSupplierFromMaterial(materialId: string, supplierId:
     metadata: { materialId, supplierId }
   });
 
-  revalidatePath('/admin/materials');
+  revalidatePath('/admin/management');
   return { data };
 }
 
@@ -300,6 +300,6 @@ export async function deleteMaterial(materialId: string) {
     metadata: { materialName: material.name }
   });
 
-  revalidatePath('/admin/materials');
+  revalidatePath('/admin/management');
   return { data: material };
 }

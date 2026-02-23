@@ -50,7 +50,7 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
 
   return (
-    <div>
+    <>
       <h1 className="text-2xl font-bold mb-6">Audit Logs</h1>
       <AuditLogTable
         logs={(logs as AuditLog[]) ?? []}
@@ -58,6 +58,6 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
         totalPages={totalPages}
         filters={params}
       />
-    </div>
+    </>
   );
 }

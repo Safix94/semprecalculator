@@ -21,13 +21,22 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    let signInError: string | null = null;
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      signInError = error?.message ?? null;
+    } catch (error) {
+      console.error('Failed to initialize Supabase client:', error);
+      setError('Applicatieconfiguratie ontbreekt. Controleer de serveromgeving.');
+      setLoading(false);
+      return;
+    }
 
-    if (error) {
+    if (signInError) {
       setError('Ongeldige inloggegevens');
       setLoading(false);
       return;

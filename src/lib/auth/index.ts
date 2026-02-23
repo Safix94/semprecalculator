@@ -14,28 +14,33 @@ import type { AuthUser, UserRole } from '@/types';
  */
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
-  if (!user) return null;
+    if (!user) return null;
 
-  // Fetch role from user_roles table
-  const { data: roleData } = await supabase
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', user.id)
-    .single();
+    // Fetch role from user_roles table
+    const { data: roleData } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .single();
 
-  if (!roleData) return null;
+    if (!roleData) return null;
 
-  return {
-    id: user.id,
-    email: user.email ?? '',
-    role: roleData.role as UserRole,
-  };
+    return {
+      id: user.id,
+      email: user.email ?? '',
+      role: roleData.role as UserRole,
+    };
+  } catch (error) {
+    console.error('Failed to resolve current user:', error);
+    return null;
+  }
 }
 
 export async function requireAuth(): Promise<AuthUser> {

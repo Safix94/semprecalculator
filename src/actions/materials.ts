@@ -23,40 +23,60 @@ export interface UpdateMaterialInput {
  */
 export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
   await requireRole('sales'); // Both sales and admin can read
-  const supabase = await createClient();
+  try {
+    const supabase = await createClient();
 
-  const { data: materials, error } = await supabase
-    .from('materials')
-    .select(`
-      *,
-      material_suppliers!inner (
-        supplier:suppliers (
-          id,
-          name,
-          email,
-          is_active
+    const { data: materials, error } = await supabase
+      .from('materials')
+      .select(`
+        *,
+        material_suppliers (
+          supplier:suppliers (
+            id,
+            name,
+            email,
+            is_active
+          )
         )
-      )
-    `)
-    .eq('is_active', true)
-    .order('name');
+      `)
+      .eq('is_active', true)
+      .order('name');
 
-  if (error) {
-    throw new Error(`Failed to fetch materials: ${error.message}`);
+    if (error) {
+      console.error('Failed to fetch materials:', error.message);
+      return [];
+    }
+
+    type MaterialQueryRow = {
+      id: string;
+      name: string;
+      finish_options: string[];
+      is_active: boolean;
+      created_at: string;
+      updated_at: string;
+      material_suppliers?: Array<{ supplier: unknown }> | null;
+    };
+
+    // Transform the data to group suppliers under each material
+    const materialsWithSuppliers: MaterialWithSuppliers[] = ((materials ?? []) as MaterialQueryRow[]).map(
+      (material) => ({
+        id: material.id,
+        name: material.name,
+        finish_options: material.finish_options,
+        is_active: material.is_active,
+        created_at: material.created_at,
+        updated_at: material.updated_at,
+        suppliers: (material.material_suppliers ?? [])
+          .map((ms) => ms.supplier)
+          .filter((supplier): supplier is Supplier => Boolean(supplier)),
+      })
+    );
+
+    return materialsWithSuppliers;
+  } catch (error) {
+    console.error('Failed to fetch materials:', error);
+    return [];
   }
-
-  // Transform the data to group suppliers under each material
-  const materialsWithSuppliers: MaterialWithSuppliers[] = materials.map((material: any) => ({
-    id: material.id,
-    name: material.name,
-    finish_options: material.finish_options,
-    is_active: material.is_active,
-    created_at: material.created_at,
-    updated_at: material.updated_at,
-    suppliers: material.material_suppliers.map((ms: any) => ms.supplier)
-  }));
-
-  return materialsWithSuppliers;
 }
 
 /**

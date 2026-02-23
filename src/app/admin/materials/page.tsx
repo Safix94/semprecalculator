@@ -26,17 +26,23 @@ export default async function MaterialsPage() {
 }
 
 async function getSuppliers(): Promise<Supplier[]> {
-  const supabase = await createClient();
-  
-  const { data, error } = await supabase
-    .from('suppliers')
-    .select('*')
-    .eq('is_active', true)
-    .order('name');
+  try {
+    const supabase = await createClient();
+    
+    const { data, error } = await supabase
+      .from('suppliers')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
 
-  if (error) {
-    throw new Error(`Failed to fetch suppliers: ${error.message}`);
+    if (error) {
+      console.error('Failed to fetch suppliers:', error.message);
+      return [];
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Failed to fetch suppliers:', error);
+    return [];
   }
-
-  return data;
 }

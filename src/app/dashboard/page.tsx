@@ -14,9 +14,9 @@ import {
 } from '@/components/ui/table';
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Concept', color: 'bg-secondary text-secondary-foreground' },
-  sent: { label: 'Verzonden', color: 'bg-primary/15 text-primary' },
-  closed: { label: 'Gesloten', color: 'bg-accent text-accent-foreground' },
+  draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
+  sent: { label: 'Sent', color: 'bg-primary/15 text-primary' },
+  closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
 export default async function DashboardPage() {
@@ -31,15 +31,15 @@ export default async function DashboardPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Prijsaanvragen</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Requests for quotation</h1>
         <RfqCreateWizard />
       </div>
 
       {!rfqs || rfqs.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">Nog geen prijsaanvragen.</p>
-            <p className="text-muted-foreground/80 text-sm mt-1">Maak een nieuwe aanvraag aan om te beginnen.</p>
+            <p className="text-muted-foreground">No requests for quotation yet.</p>
+            <p className="text-muted-foreground/80 text-sm mt-1">Create a new request to get started.</p>
           </CardContent>
         </Card>
       ) : (
@@ -48,13 +48,13 @@ export default async function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead>Materiaal</TableHead>
-                  <TableHead>Afwerking</TableHead>
-                  <TableHead>Vorm</TableHead>
-                  <TableHead>Afmetingen</TableHead>
-                  <TableHead>Klant</TableHead>
+                  <TableHead>Material</TableHead>
+                  <TableHead>Finish</TableHead>
+                  <TableHead>Shape</TableHead>
+                  <TableHead>Dimensions</TableHead>
+                  <TableHead>Customer</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Datum</TableHead>
+                  <TableHead>Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -79,7 +79,7 @@ export default async function DashboardPage() {
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {new Date(rfq.created_at).toLocaleDateString('nl-NL')}
+                        {new Date(rfq.created_at).toLocaleDateString('en-GB')}
                       </TableCell>
                     </TableRow>
                   );

@@ -16,16 +16,16 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
   const router = useRouter();
 
   async function handleSend() {
-    if (!confirm('Weet je zeker dat je deze aanvraag wilt verzenden naar leveranciers?')) return;
+    if (!confirm('Are you sure you want to send this request to suppliers?')) return;
     setLoading(true);
     setResult(null);
 
     const res = await sendRfq(rfqId);
 
     if ('error' in res) {
-      setResult(`Fout: ${typeof res.error === 'string' ? res.error : JSON.stringify(res.error)}`);
+      setResult(`Error: ${typeof res.error === 'string' ? res.error : JSON.stringify(res.error)}`);
     } else if ('data' in res) {
-      setResult(`Verzonden naar ${res.data.sent}/${res.data.total} leveranciers`);
+      setResult(`Sent to ${res.data.sent}/${res.data.total} suppliers`);
     }
 
     setLoading(false);
@@ -33,12 +33,12 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
   }
 
   async function handleClose() {
-    if (!confirm('Weet je zeker dat je deze aanvraag wilt sluiten?')) return;
+    if (!confirm('Are you sure you want to close this request?')) return;
     setLoading(true);
 
     const res = await closeRfq(rfqId);
     if (res.error) {
-      setResult(`Fout: ${res.error}`);
+      setResult(`Error: ${res.error}`);
     }
 
     setLoading(false);
@@ -49,12 +49,12 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
     <div className="flex items-center gap-2">
       {status === 'draft' && (
         <Button onClick={handleSend} disabled={loading}>
-          {loading ? 'Bezig...' : 'Verzenden'}
+          {loading ? 'Loading...' : 'Send'}
         </Button>
       )}
       {status === 'sent' && (
         <Button onClick={handleClose} disabled={loading} variant="secondary">
-          {loading ? 'Bezig...' : 'Sluiten'}
+          {loading ? 'Loading...' : 'Close'}
         </Button>
       )}
       {result && <span className="text-sm text-muted-foreground">{result}</span>}

@@ -117,7 +117,7 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
 
   const file = formData.get('file') as File | null;
   if (!file) {
-    return { error: 'Geen bestand geselecteerd' };
+    return { error: 'No file selected' };
   }
 
   const allowedTypes = [
@@ -131,7 +131,7 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
   ];
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (!allowedTypes.includes(file.type) && ext !== 'dwg') {
-    return { error: 'Ongeldig bestandstype. Toegestaan: PDF, JPG, PNG, DWG' };
+    return { error: 'Invalid file type. Allowed: PDF, JPG, PNG, DWG' };
   }
 
   const storagePath = `${rfqId}/${crypto.randomUUID()}-${file.name}`;
@@ -141,7 +141,7 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
     .upload(storagePath, file);
 
   if (uploadError) {
-    return { error: `Upload mislukt: ${uploadError.message}` };
+    return { error: `Upload failed: ${uploadError.message}` };
   }
 
   const { error: dbError } = await supabase.from('rfq_attachments').insert({
@@ -152,7 +152,7 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
   });
 
   if (dbError) {
-    return { error: `Opslaan mislukt: ${dbError.message}` };
+    return { error: `Save failed: ${dbError.message}` };
   }
 
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
@@ -176,7 +176,7 @@ export async function sendRfq(rfqId: string) {
     .single();
 
   if (rfqError || !rfq) {
-    return { error: 'RFQ niet gevonden of al verzonden' };
+    return { error: 'RFQ not found or already sent' };
   }
 
   // Get existing invites for this RFQ
@@ -189,11 +189,11 @@ export async function sendRfq(rfqId: string) {
     .eq('rfq_id', rfqId);
 
   if (inviteError) {
-    return { error: `Uitnodigingen ophalen mislukt: ${inviteError.message}` };
+    return { error: `Failed to fetch invites: ${inviteError.message}` };
   }
 
   if (!invites || invites.length === 0) {
-    return { error: 'Geen leveranciers geselecteerd voor deze RFQ' };
+    return { error: 'No suppliers selected for this RFQ' };
   }
 
   // Send emails to all suppliers with invites
@@ -201,7 +201,7 @@ export async function sendRfq(rfqId: string) {
 
   for (const invite of invites) {
     if (!invite.supplier) {
-      results.push({ supplier: 'Unknown', success: false, error: 'Leverancier niet gevonden' });
+      results.push({ supplier: 'Unknown', success: false, error: 'Supplier not found' });
       continue;
     }
 

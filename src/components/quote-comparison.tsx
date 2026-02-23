@@ -17,10 +17,10 @@ interface QuoteComparisonProps {
 }
 
 function getInviteStatus(invite: RfqInvite, hasQuote: boolean): { label: string; color: string } {
-  if (invite.revoked_at) return { label: 'Ingetrokken', color: 'text-destructive' };
-  if (hasQuote) return { label: 'Beantwoord', color: 'text-chart-2' };
-  if (new Date(invite.expires_at) < new Date()) return { label: 'Verlopen', color: 'text-chart-4' };
-  return { label: 'In afwachting', color: 'text-primary' };
+  if (invite.revoked_at) return { label: 'Revoked', color: 'text-destructive' };
+  if (hasQuote) return { label: 'Replied', color: 'text-chart-2' };
+  if (new Date(invite.expires_at) < new Date()) return { label: 'Expired', color: 'text-chart-4' };
+  return { label: 'Pending', color: 'text-primary' };
 }
 
 export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
@@ -33,23 +33,23 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Offertevergelijking</CardTitle>
+        <CardTitle>Quote comparison</CardTitle>
       </CardHeader>
       <CardContent>
         {invites.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Geen leveranciers uitgenodigd.</p>
+          <p className="text-sm text-muted-foreground">No suppliers invited.</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Leverancier</TableHead>
+                <TableHead>Supplier</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Basisprijs</TableHead>
-                <TableHead className="text-right">Volume (m3)</TableHead>
-                <TableHead className="text-right">Verzendkosten</TableHead>
-                <TableHead className="text-right">Eindprijs</TableHead>
-                <TableHead className="text-right">Levertijd</TableHead>
-                <TableHead>Opmerking</TableHead>
+                <TableHead className="text-right">Base price</TableHead>
+                <TableHead className="text-right">Volume (m³)</TableHead>
+                <TableHead className="text-right">Shipping</TableHead>
+                <TableHead className="text-right">Final price</TableHead>
+                <TableHead className="text-right">Lead time</TableHead>
+                <TableHead>Comment</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -63,7 +63,7 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                     key={invite.id}
                     className={isLowest ? 'bg-accent/40 hover:bg-accent/50' : undefined}
                   >
-                    <TableCell className="font-medium">{invite.supplier?.name ?? 'Onbekend'}</TableCell>
+                    <TableCell className="font-medium">{invite.supplier?.name ?? 'Unknown'}</TableCell>
                     <TableCell>
                       <span className={`text-sm font-medium ${status.color}`}>{status.label}</span>
                     </TableCell>
@@ -81,7 +81,7 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                       ) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
-                      {quote?.lead_time_days ? `${quote.lead_time_days} dagen` : '-'}
+                      {quote?.lead_time_days ? `${quote.lead_time_days} days` : '-'}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {quote?.comment || '-'}

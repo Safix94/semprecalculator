@@ -74,14 +74,14 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
           <div className="flex flex-wrap items-end gap-4">
             <div className="space-y-1.5">
               <Label htmlFor="action-filter" className="text-xs text-muted-foreground">
-                Actie
+                Action
               </Label>
               <Select value={action} onValueChange={setAction}>
                 <SelectTrigger id="action-filter" className="w-[220px]">
-                  <SelectValue placeholder="Alle" />
+                  <SelectValue placeholder="All" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Alle</SelectItem>
+                  <SelectItem value="all">All</SelectItem>
                   {ACTIONS.map((item) => (
                     <SelectItem key={item} value={item}>
                       {item}
@@ -99,10 +99,10 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
                 type="text"
                 value={entityId}
                 onChange={(e) => setEntityId(e.target.value)}
-                placeholder="RFQ of Supplier ID"
+                placeholder="RFQ or supplier ID"
               />
             </div>
-            <Button onClick={applyFilters}>Filteren</Button>
+            <Button onClick={applyFilters}>Filter</Button>
           </div>
         </CardContent>
       </Card>
@@ -112,8 +112,8 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Datum</TableHead>
-                <TableHead>Actie</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Action</TableHead>
                 <TableHead>Actor</TableHead>
                 <TableHead>Entity</TableHead>
                 <TableHead>Metadata</TableHead>
@@ -123,14 +123,14 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
               {logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Geen logs gevonden.
+                    No logs found.
                   </TableCell>
                 </TableRow>
               ) : (
                 logs.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell className="text-xs text-muted-foreground">
-                      {new Date(log.created_at).toLocaleString('nl-NL')}
+                      {new Date(log.created_at).toLocaleString('en-GB')}
                     </TableCell>
                     <TableCell>
                       <span className="inline-flex px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs font-medium">
@@ -158,7 +158,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            Pagina {currentPage} van {totalPages}
+            Page {currentPage} of {totalPages}
           </p>
           <div className="flex gap-2">
             <Button
@@ -167,7 +167,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
               variant="outline"
               size="sm"
             >
-              Vorige
+              Previous
             </Button>
             <Button
               onClick={() => goToPage(currentPage + 1)}
@@ -175,7 +175,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
               variant="outline"
               size="sm"
             >
-              Volgende
+              Next
             </Button>
           </div>
         </div>

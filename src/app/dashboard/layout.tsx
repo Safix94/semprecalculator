@@ -38,7 +38,7 @@ export default async function DashboardLayout({
                       href="/admin/materials"
                       className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      Materialen
+                      Materials
                     </Link>
                     <Link
                       href="/admin/logs"

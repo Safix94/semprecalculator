@@ -109,7 +109,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
       .filter(s => s.length > 0);
 
     if (finishOptions.length === 0) {
-      setError('Voeg minimaal één afwerkingsoptie toe');
+      setError('Add at least one finish option');
       setLoading(false);
       return;
     }
@@ -131,7 +131,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     }
 
     if (result.error) {
-      setError(result.error._form?.[0] || 'Er is een fout opgetreden');
+      setError(result.error._form?.[0] || 'An error occurred');
     } else {
       // Refresh materials list
       window.location.reload();
@@ -141,7 +141,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
   };
 
   const handleDelete = async (materialId: string) => {
-    if (!confirm('Weet je zeker dat je dit materiaal wilt verwijderen?')) {
+    if (!confirm('Are you sure you want to delete this material?')) {
       return;
     }
 
@@ -149,7 +149,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     const result = await deleteMaterial(materialId);
     
     if (result.error) {
-      setError(result.error._form?.[0] || 'Er is een fout opgetreden');
+      setError(result.error._form?.[0] || 'An error occurred');
     } else {
       // Remove from local state
       setMaterials(prev => prev.filter(m => m.id !== materialId));
@@ -172,7 +172,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     const result = await linkSupplierToMaterial(selectedMaterial.id, supplierId);
     
     if (result.error) {
-      setError(result.error._form?.[0] || 'Er is een fout opgetreden');
+      setError(result.error._form?.[0] || 'An error occurred');
     } else {
       // Refresh the page to show updated data
       window.location.reload();
@@ -182,7 +182,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
   };
 
   const handleUnlinkSupplier = async (materialId: string, supplierId: string) => {
-    if (!confirm('Weet je zeker dat je deze leverancier wilt ontkoppelen?')) {
+    if (!confirm('Are you sure you want to unlink this supplier?')) {
       return;
     }
 
@@ -190,7 +190,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     const result = await unlinkSupplierFromMaterial(materialId, supplierId);
     
     if (result.error) {
-      setError(result.error._form?.[0] || 'Er is een fout opgetreden');
+      setError(result.error._form?.[0] || 'An error occurred');
     } else {
       // Update local state
       setMaterials(prev => prev.map(material => 
@@ -219,10 +219,10 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
       )}
 
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Materialen</h2>
+        <h2 className="text-xl font-semibold">Materials</h2>
         <Button onClick={openCreateDialog}>
           <Plus className="w-4 h-4 mr-2" />
-          Nieuw materiaal
+          New material
         </Button>
       </div>
 
@@ -231,10 +231,10 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Naam</TableHead>
-                <TableHead>Afwerkingsopties</TableHead>
-                <TableHead>Leveranciers</TableHead>
-                <TableHead>Acties</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Finish options</TableHead>
+                <TableHead>Suppliers</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -261,7 +261,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
                         </div>
                       ))}
                       {(!material.suppliers || material.suppliers.length === 0) && (
-                        <span className="text-muted-foreground text-sm">Geen leveranciers</span>
+                        <span className="text-muted-foreground text-sm">No suppliers</span>
                       )}
                     </div>
                   </TableCell>
@@ -298,7 +298,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               {materials.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
-                    Nog geen materialen aangemaakt.
+                    No materials created yet.
                   </TableCell>
                 </TableRow>
               )}
@@ -312,37 +312,37 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingMaterial ? 'Materiaal bewerken' : 'Nieuw materiaal'}
+              {editingMaterial ? 'Edit material' : 'New material'}
             </DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="material-name">Naam *</Label>
+              <Label htmlFor="material-name">Name *</Label>
               <Input
                 id="material-name"
                 value={formData.name}
                 onChange={(e) => updateFormData('name', e.target.value)}
-                placeholder="bijv. Glass, Teak"
+                placeholder="e.g. Glass, Teak"
                 required
               />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="finish-options">
-                Afwerkingsopties * <span className="text-xs text-muted-foreground">(gescheiden door komma's)</span>
+                Finish options * <span className="text-xs text-muted-foreground">(comma-separated)</span>
               </Label>
               <Input
                 id="finish-options"
                 value={formData.finish_options}
                 onChange={(e) => updateFormData('finish_options', e.target.value)}
-                placeholder="bijv. Polished, Matte, Frosted"
+                placeholder="e.g. Polished, Matte, Frosted"
                 required
               />
             </div>
 
             <div className="space-y-3">
-              <Label>Leveranciers koppelen (optioneel)</Label>
+              <Label>Link suppliers (optional)</Label>
               <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
                 {suppliers.map((supplier) => (
                   <div key={supplier.id} className="flex items-center space-x-2">
@@ -363,10 +363,10 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
 
             <DialogFooter>
               <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>
-                Annuleren
+                Cancel
               </Button>
               <Button type="submit" disabled={loading}>
-                {loading ? 'Bezig...' : (editingMaterial ? 'Bijwerken' : 'Aanmaken')}
+                {loading ? 'Loading...' : (editingMaterial ? 'Update' : 'Create')}
               </Button>
             </DialogFooter>
           </form>
@@ -378,18 +378,18 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Leverancier koppelen aan {selectedMaterial?.name}
+              Link supplier to {selectedMaterial?.name}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3">
             {availableSuppliers.length === 0 ? (
               <p className="text-muted-foreground text-sm">
-                Alle leveranciers zijn al gekoppeld aan dit materiaal.
+                All suppliers are already linked to this material.
               </p>
             ) : (
               <>
-                <Label>Beschikbare leveranciers</Label>
+                <Label>Available suppliers</Label>
                 <div className="space-y-2">
                   {availableSuppliers.map((supplier) => (
                     <div key={supplier.id} className="flex items-center justify-between p-2 border rounded">
@@ -404,7 +404,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
                         disabled={loading}
                       >
                         <Link className="w-4 h-4 mr-1" />
-                        Koppelen
+                        Link
                       </Button>
                     </div>
                   ))}
@@ -415,7 +415,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
 
           <DialogFooter>
             <Button variant="secondary" onClick={() => setLinkDialogOpen(false)}>
-              Sluiten
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

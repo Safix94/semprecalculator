@@ -9,7 +9,7 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: "Sempre Calculator - RFQ Platform",
-  description: "Prijsaanvraag platform voor Sempre",
+  description: "Request for quotation platform for Sempre",
 };
 
 export default function RootLayout({
@@ -18,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="nl">
+    <html lang="en">
       <body className={outfit.variable}>{children}</body>
     </html>
   );

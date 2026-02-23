@@ -59,18 +59,18 @@ export async function sendSupplierInviteEmail(params: {
   finish?: string | null;
 }) {
   const link = `${APP_URL}/supplier/rfq/${params.rfqId}?t=${params.token}`;
-  const finishText = params.finish ? ` met afwerking "${params.finish}"` : '';
+  const finishText = params.finish ? ` with finish "${params.finish}"` : '';
 
   return sendEmail({
     to: { email: params.supplierEmail, name: params.supplierName },
-    subject: `Prijsaanvraag: ${params.material} - ${params.shape}${params.finish ? ` (${params.finish})` : ''}`,
+    subject: `Request for quotation: ${params.material} - ${params.shape}${params.finish ? ` (${params.finish})` : ''}`,
     htmlContent: `
-      <h2>Nieuwe prijsaanvraag</h2>
-      <p>Beste ${params.supplierName},</p>
-      <p>Er is een nieuwe prijsaanvraag voor <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
-      <p>Klik op de onderstaande link om de aanvraag te bekijken en een offerte in te dienen:</p>
-      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Offerte indienen</a></p>
-      <p style="color:#666;font-size:12px;">Deze link is 30 dagen geldig.</p>
+      <h2>New request for quotation</h2>
+      <p>Dear ${params.supplierName},</p>
+      <p>There is a new request for quotation for <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
+      <p>Click the link below to view the request and submit a quote:</p>
+      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Submit quote</a></p>
+      <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
     `,
   });
 }
@@ -88,12 +88,12 @@ export async function sendSalesQuoteReceivedEmail(params: {
 
   return sendEmail({
     to: { email: params.salesEmail },
-    subject: `Offerte ontvangen van ${params.supplierName}`,
+    subject: `Quote received from ${params.supplierName}`,
     htmlContent: `
-      <h2>Nieuwe offerte ontvangen</h2>
-      <p>Leverancier <strong>${params.supplierName}</strong> heeft een offerte ingediend.</p>
-      <p>Berekende eindprijs: <strong>€${params.finalPrice.toFixed(2)}</strong></p>
-      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Bekijk offertes</a></p>
+      <h2>New quote received</h2>
+      <p>Supplier <strong>${params.supplierName}</strong> has submitted a quote.</p>
+      <p>Calculated final price: <strong>€${params.finalPrice.toFixed(2)}</strong></p>
+      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">View quotes</a></p>
     `,
   });
 }

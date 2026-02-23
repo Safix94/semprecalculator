@@ -9,9 +9,9 @@ export function SupplierQuoteReadOnly({ quote }: SupplierQuoteReadOnlyProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Uw ingediende offerte</CardTitle>
+        <CardTitle>Your submitted quote</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Ingediend op {new Date(quote.submitted_at).toLocaleDateString('nl-NL', {
+          Submitted on {new Date(quote.submitted_at).toLocaleDateString('en-GB', {
             day: 'numeric',
             month: 'long',
             year: 'numeric',
@@ -23,7 +23,7 @@ export function SupplierQuoteReadOnly({ quote }: SupplierQuoteReadOnlyProps) {
       <CardContent>
         <dl className="grid grid-cols-2 gap-4">
           <div>
-            <dt className="text-xs text-muted-foreground uppercase">Basisprijs</dt>
+            <dt className="text-xs text-muted-foreground uppercase">Base price</dt>
             <dd className="text-sm font-medium mt-1">€{Number(quote.base_price).toFixed(2)}</dd>
           </div>
           <div>
@@ -32,13 +32,13 @@ export function SupplierQuoteReadOnly({ quote }: SupplierQuoteReadOnlyProps) {
           </div>
           {quote.lead_time_days && (
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Levertijd</dt>
-              <dd className="text-sm font-medium mt-1">{quote.lead_time_days} dagen</dd>
+              <dt className="text-xs text-muted-foreground uppercase">Lead time</dt>
+              <dd className="text-sm font-medium mt-1">{quote.lead_time_days} days</dd>
             </div>
           )}
           {quote.comment && (
             <div className="col-span-2">
-              <dt className="text-xs text-muted-foreground uppercase">Opmerking</dt>
+              <dt className="text-xs text-muted-foreground uppercase">Comment</dt>
               <dd className="text-sm mt-1 whitespace-pre-wrap">{quote.comment}</dd>
             </div>
           )}

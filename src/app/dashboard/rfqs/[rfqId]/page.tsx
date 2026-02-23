@@ -12,9 +12,9 @@ interface PageProps {
 }
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Concept', color: 'bg-secondary text-secondary-foreground' },
-  sent: { label: 'Verzonden', color: 'bg-primary/15 text-primary' },
-  closed: { label: 'Gesloten', color: 'bg-accent text-accent-foreground' },
+  draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
+  sent: { label: 'Sent', color: 'bg-primary/15 text-primary' },
+  closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
 export default async function RfqDetailPage({ params }: PageProps) {
@@ -63,8 +63,8 @@ export default async function RfqDetailPage({ params }: PageProps) {
             {typedRfq.material} - {typedRfq.shape}
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Aangemaakt op {new Date(typedRfq.created_at).toLocaleDateString('nl-NL')}
-            {typedRfq.sent_at && ` | Verzonden op ${new Date(typedRfq.sent_at).toLocaleDateString('nl-NL')}`}
+            Created on {new Date(typedRfq.created_at).toLocaleDateString('en-GB')}
+            {typedRfq.sent_at && ` | Sent on ${new Date(typedRfq.sent_at).toLocaleDateString('en-GB')}`}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -82,30 +82,30 @@ export default async function RfqDetailPage({ params }: PageProps) {
         <CardContent>
           <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Materiaal</dt>
+              <dt className="text-xs text-muted-foreground uppercase">Material</dt>
               <dd className="text-sm font-medium mt-1">{typedRfq.material}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Vorm</dt>
+              <dt className="text-xs text-muted-foreground uppercase">Shape</dt>
               <dd className="text-sm font-medium mt-1">{typedRfq.shape}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Klant</dt>
+              <dt className="text-xs text-muted-foreground uppercase">Customer</dt>
               <dd className="text-sm font-medium mt-1">{typedRfq.customer_name || '-'}</dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Afmetingen (LxBxH)</dt>
+              <dt className="text-xs text-muted-foreground uppercase">Dimensions (L×W×H)</dt>
               <dd className="text-sm font-medium mt-1">
                 {typedRfq.length} x {typedRfq.width} x {typedRfq.height} mm
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground uppercase">Dikte</dt>
+              <dt className="text-xs text-muted-foreground uppercase">Thickness</dt>
               <dd className="text-sm font-medium mt-1">{typedRfq.thickness} mm</dd>
             </div>
             {typedRfq.notes && (
               <div className="col-span-2 md:col-span-3">
-                <dt className="text-xs text-muted-foreground uppercase">Opmerkingen</dt>
+                <dt className="text-xs text-muted-foreground uppercase">Notes</dt>
                 <dd className="text-sm mt-1 whitespace-pre-wrap">{typedRfq.notes}</dd>
               </div>
             )}
@@ -115,7 +115,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Bijlagen</CardTitle>
+          <CardTitle>Attachments</CardTitle>
         </CardHeader>
         <CardContent>
           {attachments && attachments.length > 0 ? (
@@ -129,7 +129,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm text-muted-foreground">Geen bijlagen.</p>
+            <p className="text-sm text-muted-foreground">No attachments.</p>
           )}
           {typedRfq.status === 'draft' && (
             <div className="mt-4">

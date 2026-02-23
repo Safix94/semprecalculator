@@ -29,7 +29,7 @@ export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
     const result = await uploadAttachment(rfqId, formData);
 
     if (result.error) {
-      setError(typeof result.error === 'string' ? result.error : 'Upload mislukt');
+      setError(typeof result.error === 'string' ? result.error : 'Upload failed');
     }
 
     setLoading(false);
@@ -54,7 +54,7 @@ export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
         disabled={loading}
         onClick={() => inputRef.current?.click()}
       >
-        {loading ? 'Uploaden...' : 'Bijlage toevoegen'}
+        {loading ? 'Uploading...' : 'Add attachment'}
       </Button>
       {error && <p className="text-destructive text-xs">{error}</p>}
     </div>

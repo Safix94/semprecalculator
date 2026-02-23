@@ -16,8 +16,8 @@ export default async function MaterialsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Materiaalbeheer</h1>
-        <p className="text-muted-foreground">Beheer materialen en koppel ze aan leveranciers.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Material management</h1>
+        <p className="text-muted-foreground">Manage materials and link them to suppliers.</p>
       </div>
 
       <MaterialManagement materials={materials} suppliers={suppliers} />

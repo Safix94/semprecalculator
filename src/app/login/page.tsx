@@ -32,13 +32,13 @@ export default function LoginPage() {
       signInError = error?.message ?? null;
     } catch (error) {
       console.error('Failed to initialize Supabase client:', error);
-      setError('Applicatieconfiguratie ontbreekt. Controleer de serveromgeving.');
+      setError('Application configuration missing. Check the server environment.');
       setLoading(false);
       return;
     }
 
     if (signInError) {
-      setError('Ongeldige inloggegevens');
+      setError('Invalid login credentials');
       setLoading(false);
       return;
     }
@@ -61,24 +61,24 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <p className="text-muted-foreground text-sm">Log in om door te gaan</p>
+          <p className="text-muted-foreground text-sm">Log in to continue</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="naam@bedrijf.nl"
+                placeholder="name@company.com"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password">Wachtwoord</Label>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -95,7 +95,7 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" disabled={loading} className="w-full">
-              {loading ? 'Bezig...' : 'Inloggen'}
+              {loading ? 'Loading...' : 'Log in'}
             </Button>
           </form>
         </CardContent>

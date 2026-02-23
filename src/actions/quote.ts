@@ -26,12 +26,12 @@ export async function validateSupplierToken(rfqId: string, token: string) {
     .single();
 
   if (error || !invite) {
-    return { error: 'Ongeldige of verlopen link' };
+    return { error: 'Invalid or expired link' };
   }
 
   // Check expiry
   if (new Date(invite.expires_at) < new Date()) {
-    return { error: 'Deze link is verlopen' };
+    return { error: 'This link has expired' };
   }
 
   // Fetch RFQ
@@ -42,7 +42,7 @@ export async function validateSupplierToken(rfqId: string, token: string) {
     .single();
 
   if (rfqError || !rfq) {
-    return { error: 'Aanvraag niet gevonden' };
+    return { error: 'Request not found' };
   }
 
   // Check if already submitted
@@ -100,15 +100,15 @@ export async function submitQuote(
     .single();
 
   if (inviteError || !invite) {
-    return { error: 'Ongeldige of verlopen link' };
+    return { error: 'Invalid or expired link' };
   }
 
   if (new Date(invite.expires_at) < new Date()) {
-    return { error: 'Deze link is verlopen' };
+    return { error: 'This link has expired' };
   }
 
   if (invite.used_at) {
-    return { error: 'Er is al een offerte ingediend via deze link' };
+    return { error: 'A quote has already been submitted via this link' };
   }
 
   // Validate input
@@ -140,7 +140,7 @@ export async function submitQuote(
     .single();
 
   if (quoteError) {
-    return { error: `Offerte opslaan mislukt: ${quoteError.message}` };
+    return { error: `Failed to save quote: ${quoteError.message}` };
   }
 
   // Mark invite as used
@@ -223,7 +223,7 @@ export async function getAttachmentUrl(rfqId: string, token: string, storagePath
     .single();
 
   if (!invite) {
-    return { error: 'Geen toegang' };
+    return { error: 'Access denied' };
   }
 
   // Verify attachment belongs to this RFQ
@@ -235,7 +235,7 @@ export async function getAttachmentUrl(rfqId: string, token: string, storagePath
     .single();
 
   if (!attachment) {
-    return { error: 'Bijlage niet gevonden' };
+    return { error: 'Attachment not found' };
   }
 
   const { data } = await supabase.storage
@@ -243,7 +243,7 @@ export async function getAttachmentUrl(rfqId: string, token: string, storagePath
     .createSignedUrl(storagePath, 3600); // 1 hour
 
   if (!data?.signedUrl) {
-    return { error: 'URL genereren mislukt' };
+    return { error: 'Failed to generate URL' };
   }
 
   return { url: data.signedUrl };

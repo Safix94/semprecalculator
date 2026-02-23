@@ -49,8 +49,8 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
       <Card className="border-chart-2/50">
         <CardContent className="py-8 text-center">
           <div className="text-chart-2 text-4xl mb-4">✓</div>
-          <h2 className="text-lg font-semibold text-chart-2 mb-2">Offerte ingediend</h2>
-          <p className="text-muted-foreground">Bedankt voor uw offerte. U kunt deze pagina sluiten.</p>
+          <h2 className="text-lg font-semibold text-chart-2 mb-2">Quote submitted</h2>
+          <p className="text-muted-foreground">Thank you for your quote. You can close this page.</p>
         </CardContent>
       </Card>
     );
@@ -66,13 +66,13 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Offerte indienen</CardTitle>
+        <CardTitle>Submit quote</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="basePrice">Basisprijs (EUR) *</Label>
+              <Label htmlFor="basePrice">Base price (EUR) *</Label>
               <Input
                 id="basePrice"
                 name="basePrice"
@@ -106,12 +106,12 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="leadTimeDays">Levertijd (dagen, optioneel)</Label>
+            <Label htmlFor="leadTimeDays">Lead time (days, optional)</Label>
             <Input id="leadTimeDays" name="leadTimeDays" type="number" min="1" />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="comment">Opmerking (optioneel)</Label>
+            <Label htmlFor="comment">Comment (optional)</Label>
             <Textarea id="comment" name="comment" rows={3} maxLength={2000} />
           </div>
 
@@ -122,7 +122,7 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
           )}
 
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Bezig met indienen...' : 'Offerte indienen'}
+            {loading ? 'Submitting...' : 'Submit quote'}
           </Button>
         </form>
       </CardContent>

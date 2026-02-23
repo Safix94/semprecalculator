@@ -3,6 +3,25 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import type { AuditLog } from '@/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 interface AuditLogTableProps {
   logs: AuditLog[];
@@ -31,12 +50,12 @@ const ACTIONS = [
 export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditLogTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [action, setAction] = useState(filters.action || '');
+  const [action, setAction] = useState(filters.action || 'all');
   const [entityId, setEntityId] = useState(filters.entity_id || '');
 
   function applyFilters() {
     const params = new URLSearchParams();
-    if (action) params.set('action', action);
+    if (action && action !== 'all') params.set('action', action);
     if (entityId) params.set('entity_id', entityId);
     params.set('page', '1');
     router.push(`/admin/logs?${params.toString()}`);
@@ -50,109 +69,114 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
 
   return (
     <div className="space-y-4">
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="flex items-end gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Actie</label>
-            <select
-              value={action}
-              onChange={(e) => setAction(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">Alle</option>
-              {ACTIONS.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
+      <Card>
+        <CardContent className="pt-6">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="action-filter" className="text-xs text-muted-foreground">
+                Actie
+              </Label>
+              <Select value={action} onValueChange={setAction}>
+                <SelectTrigger id="action-filter" className="w-[220px]">
+                  <SelectValue placeholder="Alle" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alle</SelectItem>
+                  {ACTIONS.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="entity-filter" className="text-xs text-muted-foreground">
+                Entity ID
+              </Label>
+              <Input
+                id="entity-filter"
+                type="text"
+                value={entityId}
+                onChange={(e) => setEntityId(e.target.value)}
+                placeholder="RFQ of Supplier ID"
+              />
+            </div>
+            <Button onClick={applyFilters}>Filteren</Button>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Entity ID</label>
-            <input
-              type="text"
-              value={entityId}
-              onChange={(e) => setEntityId(e.target.value)}
-              placeholder="RFQ of Supplier ID"
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <button
-            onClick={applyFilters}
-            className="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Filteren
-          </button>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Datum</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Actie</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Actor</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Entity</th>
-              <th className="text-left text-xs font-medium text-gray-500 uppercase px-4 py-3">Metadata</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {logs.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500 text-sm">
-                  Geen logs gevonden.
-                </td>
-              </tr>
-            ) : (
-              logs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
-                    {new Date(log.created_at).toLocaleString('nl-NL')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-600">
-                    <span className="text-gray-400">{log.actor_type}:</span>{' '}
-                    {log.actor_id.substring(0, 8)}...
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-600">
-                    {log.entity_type}: {log.entity_id.substring(0, 8)}...
-                  </td>
-                  <td className="px-4 py-3 text-xs text-gray-500 max-w-[300px] truncate">
-                    {JSON.stringify(log.metadata)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead>Datum</TableHead>
+                <TableHead>Actie</TableHead>
+                <TableHead>Actor</TableHead>
+                <TableHead>Entity</TableHead>
+                <TableHead>Metadata</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                    Geen logs gevonden.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                logs.map((log) => (
+                  <TableRow key={log.id}>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(log.created_at).toLocaleString('nl-NL')}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs font-medium">
+                        {log.action}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      <span className="text-muted-foreground/70">{log.actor_type}:</span>{' '}
+                      {log.actor_id.substring(0, 8)}...
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {log.entity_type}: {log.entity_id.substring(0, 8)}...
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[300px] truncate">
+                      {JSON.stringify(log.metadata)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             Pagina {currentPage} van {totalPages}
           </p>
           <div className="flex gap-2">
-            <button
+            <Button
               onClick={() => goToPage(currentPage - 1)}
               disabled={currentPage <= 1}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50 transition-colors"
+              variant="outline"
+              size="sm"
             >
               Vorige
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => goToPage(currentPage + 1)}
               disabled={currentPage >= totalPages}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 hover:bg-gray-50 transition-colors"
+              variant="outline"
+              size="sm"
             >
               Volgende
-            </button>
+            </Button>
           </div>
         </div>
       )}

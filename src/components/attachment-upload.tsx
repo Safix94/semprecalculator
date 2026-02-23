@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { uploadAttachment } from '@/actions/rfq';
+import { Button } from '@/components/ui/button';
 
 interface AttachmentUploadProps {
   rfqId: string;
@@ -11,6 +13,7 @@ interface AttachmentUploadProps {
 export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -35,18 +38,25 @@ export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
   }
 
   return (
-    <div>
-      <label className="inline-flex items-center gap-2 px-3 py-2 text-sm text-blue-600 border border-blue-300 rounded-md cursor-pointer hover:bg-blue-50 transition-colors">
+    <div className="space-y-1.5">
+      <input
+        ref={inputRef}
+        type="file"
+        className="hidden"
+        accept=".pdf,.jpg,.jpeg,.png,.dwg"
+        onChange={handleUpload}
+        disabled={loading}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={loading}
+        onClick={() => inputRef.current?.click()}
+      >
         {loading ? 'Uploaden...' : 'Bijlage toevoegen'}
-        <input
-          type="file"
-          className="hidden"
-          accept=".pdf,.jpg,.jpeg,.png,.dwg"
-          onChange={handleUpload}
-          disabled={loading}
-        />
-      </label>
-      {error && <p className="text-red-600 text-xs mt-1">{error}</p>}
+      </Button>
+      {error && <p className="text-destructive text-xs">{error}</p>}
     </div>
   );
 }

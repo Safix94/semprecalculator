@@ -5,15 +5,16 @@ import { RfqActions } from '@/components/rfq-actions';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
 import type { Rfq, RfqAttachment, RfqQuote, Supplier, RfqInvite } from '@/types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface PageProps {
   params: Promise<{ rfqId: string }>;
 }
 
 const statusLabels: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Concept', color: 'bg-gray-100 text-gray-700' },
-  sent: { label: 'Verzonden', color: 'bg-blue-100 text-blue-700' },
-  closed: { label: 'Gesloten', color: 'bg-green-100 text-green-700' },
+  draft: { label: 'Concept', color: 'bg-secondary text-secondary-foreground' },
+  sent: { label: 'Verzonden', color: 'bg-primary/15 text-primary' },
+  closed: { label: 'Gesloten', color: 'bg-accent text-accent-foreground' },
 };
 
 export default async function RfqDetailPage({ params }: PageProps) {
@@ -56,11 +57,12 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">{typedRfq.material} - {typedRfq.shape}</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {typedRfq.material} - {typedRfq.shape}
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Aangemaakt op {new Date(typedRfq.created_at).toLocaleDateString('nl-NL')}
             {typedRfq.sent_at && ` | Verzonden op ${new Date(typedRfq.sent_at).toLocaleDateString('nl-NL')}`}
           </p>
@@ -73,65 +75,70 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      {/* RFQ Details */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold mb-4">Details</h2>
-        <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <dt className="text-xs text-gray-500 uppercase">Materiaal</dt>
-            <dd className="text-sm font-medium mt-1">{typedRfq.material}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-gray-500 uppercase">Vorm</dt>
-            <dd className="text-sm font-medium mt-1">{typedRfq.shape}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-gray-500 uppercase">Klant</dt>
-            <dd className="text-sm font-medium mt-1">{typedRfq.customer_name || '-'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-gray-500 uppercase">Afmetingen (LxBxH)</dt>
-            <dd className="text-sm font-medium mt-1">
-              {typedRfq.length} x {typedRfq.width} x {typedRfq.height} mm
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-gray-500 uppercase">Dikte</dt>
-            <dd className="text-sm font-medium mt-1">{typedRfq.thickness} mm</dd>
-          </div>
-          {typedRfq.notes && (
-            <div className="col-span-2 md:col-span-3">
-              <dt className="text-xs text-gray-500 uppercase">Opmerkingen</dt>
-              <dd className="text-sm mt-1 whitespace-pre-wrap">{typedRfq.notes}</dd>
+      <Card>
+        <CardHeader>
+          <CardTitle>Details</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <dl className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <dt className="text-xs text-muted-foreground uppercase">Materiaal</dt>
+              <dd className="text-sm font-medium mt-1">{typedRfq.material}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground uppercase">Vorm</dt>
+              <dd className="text-sm font-medium mt-1">{typedRfq.shape}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground uppercase">Klant</dt>
+              <dd className="text-sm font-medium mt-1">{typedRfq.customer_name || '-'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground uppercase">Afmetingen (LxBxH)</dt>
+              <dd className="text-sm font-medium mt-1">
+                {typedRfq.length} x {typedRfq.width} x {typedRfq.height} mm
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground uppercase">Dikte</dt>
+              <dd className="text-sm font-medium mt-1">{typedRfq.thickness} mm</dd>
+            </div>
+            {typedRfq.notes && (
+              <div className="col-span-2 md:col-span-3">
+                <dt className="text-xs text-muted-foreground uppercase">Opmerkingen</dt>
+                <dd className="text-sm mt-1 whitespace-pre-wrap">{typedRfq.notes}</dd>
+              </div>
+            )}
+          </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Bijlagen</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {attachments && attachments.length > 0 ? (
+            <ul className="space-y-2">
+              {(attachments as RfqAttachment[]).map((att) => (
+                <li key={att.id} className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">📎</span>
+                  <span>{att.file_name}</span>
+                  <span className="text-xs text-muted-foreground">({att.mime_type})</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">Geen bijlagen.</p>
+          )}
+          {typedRfq.status === 'draft' && (
+            <div className="mt-4">
+              <AttachmentUpload rfqId={rfqId} />
             </div>
           )}
-        </dl>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Attachments */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold mb-4">Bijlagen</h2>
-        {attachments && attachments.length > 0 ? (
-          <ul className="space-y-2">
-            {(attachments as RfqAttachment[]).map((att) => (
-              <li key={att.id} className="flex items-center gap-2 text-sm">
-                <span className="text-gray-400">📎</span>
-                <span>{att.file_name}</span>
-                <span className="text-xs text-gray-400">({att.mime_type})</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-gray-500">Geen bijlagen.</p>
-        )}
-        {typedRfq.status === 'draft' && (
-          <div className="mt-4">
-            <AttachmentUpload rfqId={rfqId} />
-          </div>
-        )}
-      </div>
-
-      {/* Quote Comparison */}
       {typedRfq.status !== 'draft' && (
         <QuoteComparison
           invites={(invites as (RfqInvite & { supplier: Supplier })[]) ?? []}

@@ -12,33 +12,38 @@ export default async function DashboardLayout({
   if (!user) redirect('/login');
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200">
+    <div className="min-h-screen bg-background">
+      <nav className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 items-center">
             <div className="flex items-center gap-8">
-              <Link href="/dashboard" className="text-lg font-bold text-gray-900">
+              <Link href="/dashboard" className="text-lg font-bold text-foreground">
                 Sempre
               </Link>
               <div className="flex gap-4">
-                <Link
-                  href="/dashboard"
-                  className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                >
+                <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
                   RFQs
                 </Link>
                 {user.role === 'admin' && (
-                  <Link
-                    href="/admin/logs"
-                    className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
-                  >
-                    Audit Logs
-                  </Link>
+                  <>
+                    <Link
+                      href="/admin/materials"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Materialen
+                    </Link>
+                    <Link
+                      href="/admin/logs"
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Audit Logs
+                    </Link>
+                  </>
                 )}
               </div>
             </div>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-muted-foreground">
                 {user.email} ({user.role})
               </span>
               <LogoutButton />
@@ -46,9 +51,7 @@ export default async function DashboardLayout({
           </div>
         </div>
       </nav>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">{children}</main>
     </div>
   );
 }

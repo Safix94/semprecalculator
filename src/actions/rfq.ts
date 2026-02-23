@@ -12,16 +12,20 @@ import type { CreateRfqInput } from '@/lib/validation';
 export async function createRfq(input: CreateRfqInput) {
   const user = await requireAuth();
   const supabase = await createClient();
+  const serviceClient = createServiceRoleClient();
 
   const parsed = createRfqSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  // Extract supplier_ids from the input (not stored in RFQ table)
+  const { supplier_ids, ...rfqData } = parsed.data;
+
   const { data: rfq, error } = await supabase
     .from('rfqs')
     .insert({
-      ...parsed.data,
+      ...rfqData,
       created_by: user.id,
       status: 'draft',
     })
@@ -32,12 +36,42 @@ export async function createRfq(input: CreateRfqInput) {
     return { error: { _form: [error.message] } };
   }
 
+  // If specific suppliers were selected, create invites immediately (but don't send emails yet)
+  if (supplier_ids && supplier_ids.length > 0) {
+    const inviteInserts = supplier_ids.map(supplierId => {
+      const token = generateToken();
+      const tokenHash = hashToken(token);
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      
+      return {
+        rfq_id: rfq.id,
+        supplier_id: supplierId,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+      };
+    });
+
+    const { error: inviteError } = await serviceClient
+      .from('rfq_invites')
+      .insert(inviteInserts);
+
+    if (inviteError) {
+      console.error('Failed to create invites:', inviteError);
+      // Don't fail the RFQ creation, just log the error
+    }
+  }
+
   await logAuditEvent({
     actorType: user.role,
     actorId: user.id,
     action: 'RFQ_CREATED',
     entityType: 'rfq',
     entityId: rfq.id,
+    metadata: { 
+      materialId: rfq.material_id, 
+      finish: rfq.finish,
+      supplierIds: supplier_ids 
+    },
   });
 
   revalidatePath('/dashboard');
@@ -130,10 +164,13 @@ export async function sendRfq(rfqId: string) {
   const supabase = await createClient();
   const serviceClient = createServiceRoleClient();
 
-  // Fetch the RFQ
+  // Fetch the RFQ with material details
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
-    .select('*')
+    .select(`
+      *,
+      material_details:materials(name)
+    `)
     .eq('id', rfqId)
     .eq('status', 'draft')
     .single();
@@ -142,45 +179,41 @@ export async function sendRfq(rfqId: string) {
     return { error: 'RFQ niet gevonden of al verzonden' };
   }
 
-  // Find matching suppliers by material
-  const { data: suppliers, error: suppError } = await supabase
-    .from('suppliers')
-    .select('*')
-    .contains('materials', [rfq.material])
-    .eq('is_active', true);
+  // Get existing invites for this RFQ
+  const { data: invites, error: inviteError } = await supabase
+    .from('rfq_invites')
+    .select(`
+      *,
+      supplier:suppliers(*)
+    `)
+    .eq('rfq_id', rfqId);
 
-  if (suppError) {
-    return { error: `Leveranciers ophalen mislukt: ${suppError.message}` };
+  if (inviteError) {
+    return { error: `Uitnodigingen ophalen mislukt: ${inviteError.message}` };
   }
 
-  if (!suppliers || suppliers.length === 0) {
-    return { error: 'Geen leveranciers gevonden voor dit materiaal' };
+  if (!invites || invites.length === 0) {
+    return { error: 'Geen leveranciers geselecteerd voor deze RFQ' };
   }
 
-  // Create invites and send emails
+  // Send emails to all suppliers with invites
   const results: { supplier: string; success: boolean; error?: string }[] = [];
 
-  for (const supplier of suppliers) {
-    const token = generateToken();
-    const tokenHash = hashToken(token);
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-
-    // Insert invite using service role (to ensure it works even if RLS is strict)
-    const { data: invite, error: inviteError } = await serviceClient
-      .from('rfq_invites')
-      .insert({
-        rfq_id: rfqId,
-        supplier_id: supplier.id,
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-      })
-      .select()
-      .single();
-
-    if (inviteError) {
-      results.push({ supplier: supplier.name, success: false, error: inviteError.message });
+  for (const invite of invites) {
+    if (!invite.supplier) {
+      results.push({ supplier: 'Unknown', success: false, error: 'Leverancier niet gevonden' });
       continue;
     }
+
+    // Generate new token for sending (if needed)
+    const token = generateToken();
+    const tokenHash = hashToken(token);
+
+    // Update the invite with new token if needed
+    await serviceClient
+      .from('rfq_invites')
+      .update({ token_hash: tokenHash })
+      .eq('id', invite.id);
 
     await logAuditEvent({
       actorType: user.role,
@@ -188,17 +221,19 @@ export async function sendRfq(rfqId: string) {
       action: 'INVITE_CREATED',
       entityType: 'rfq_invite',
       entityId: invite.id,
-      metadata: { rfqId, supplierId: supplier.id },
+      metadata: { rfqId, supplierId: invite.supplier.id },
     });
 
     // Send email
+    const materialName = rfq.material_details?.name || rfq.material;
     const emailResult = await sendSupplierInviteEmail({
-      supplierEmail: supplier.email,
-      supplierName: supplier.name,
+      supplierEmail: invite.supplier.email,
+      supplierName: invite.supplier.name,
       rfqId,
       token,
-      material: rfq.material,
+      material: materialName,
       shape: rfq.shape,
+      finish: rfq.finish,
     });
 
     await logAuditEvent({
@@ -210,12 +245,12 @@ export async function sendRfq(rfqId: string) {
       metadata: {
         success: emailResult.success,
         error: emailResult.error,
-        supplierEmail: supplier.email,
+        supplierEmail: invite.supplier.email,
       },
     });
 
     results.push({
-      supplier: supplier.name,
+      supplier: invite.supplier.name,
       success: emailResult.success,
       error: emailResult.error,
     });
@@ -233,7 +268,7 @@ export async function sendRfq(rfqId: string) {
     action: 'RFQ_SENT',
     entityType: 'rfq',
     entityId: rfqId,
-    metadata: { supplierCount: suppliers.length, results },
+    metadata: { supplierCount: invites.length, results },
   });
 
   revalidatePath('/dashboard');

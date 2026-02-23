@@ -56,16 +56,18 @@ export async function sendSupplierInviteEmail(params: {
   token: string;
   material: string;
   shape: string;
+  finish?: string | null;
 }) {
   const link = `${APP_URL}/supplier/rfq/${params.rfqId}?t=${params.token}`;
+  const finishText = params.finish ? ` met afwerking "${params.finish}"` : '';
 
   return sendEmail({
     to: { email: params.supplierEmail, name: params.supplierName },
-    subject: `Prijsaanvraag: ${params.material} - ${params.shape}`,
+    subject: `Prijsaanvraag: ${params.material} - ${params.shape}${params.finish ? ` (${params.finish})` : ''}`,
     htmlContent: `
       <h2>Nieuwe prijsaanvraag</h2>
       <p>Beste ${params.supplierName},</p>
-      <p>Er is een nieuwe prijsaanvraag voor <strong>${params.material}</strong> (${params.shape}).</p>
+      <p>Er is een nieuwe prijsaanvraag voor <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
       <p>Klik op de onderstaande link om de aanvraag te bekijken en een offerte in te dienen:</p>
       <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Offerte indienen</a></p>
       <p style="color:#666;font-size:12px;">Deze link is 30 dagen geldig.</p>

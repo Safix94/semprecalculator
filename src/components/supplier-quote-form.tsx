@@ -2,6 +2,12 @@
 
 import { useState } from 'react';
 import { submitQuote } from '@/actions/quote';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface SupplierQuoteFormProps {
   rfqId: string;
@@ -40,13 +46,13 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
 
   if (success) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-green-200 p-8 text-center">
-        <div className="text-green-600 text-4xl mb-4">✓</div>
-        <h2 className="text-lg font-bold text-green-700 mb-2">Offerte ingediend</h2>
-        <p className="text-gray-600">
-          Bedankt voor uw offerte. U kunt deze pagina sluiten.
-        </p>
-      </div>
+      <Card className="border-chart-2/50">
+        <CardContent className="py-8 text-center">
+          <div className="text-chart-2 text-4xl mb-4">✓</div>
+          <h2 className="text-lg font-semibold text-chart-2 mb-2">Offerte ingediend</h2>
+          <p className="text-muted-foreground">Bedankt voor uw offerte. U kunt deze pagina sluiten.</p>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -58,83 +64,68 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
         : null;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h2 className="text-lg font-semibold mb-4">Offerte indienen</h2>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Basisprijs (EUR) *
-            </label>
-            <input
-              name="basePrice"
-              type="number"
-              step="0.01"
-              min="0.01"
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="0.00"
-            />
-            {typeof errors === 'object' && errors?.basePrice && (
-              <p className="text-red-600 text-xs mt-1">{errors.basePrice[0]}</p>
-            )}
+    <Card>
+      <CardHeader>
+        <CardTitle>Offerte indienen</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="basePrice">Basisprijs (EUR) *</Label>
+              <Input
+                id="basePrice"
+                name="basePrice"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.basePrice)}
+              />
+              {typeof errors === 'object' && errors?.basePrice && (
+                <p className="text-destructive text-xs">{errors.basePrice[0]}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="volumeM3">Volume (m³) *</Label>
+              <Input
+                id="volumeM3"
+                name="volumeM3"
+                type="number"
+                step="0.001"
+                min="0.001"
+                required
+                placeholder="0.000"
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.volumeM3)}
+              />
+              {typeof errors === 'object' && errors?.volumeM3 && (
+                <p className="text-destructive text-xs">{errors.volumeM3[0]}</p>
+              )}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Volume (m³) *
-            </label>
-            <input
-              name="volumeM3"
-              type="number"
-              step="0.001"
-              min="0.001"
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="0.000"
-            />
-            {typeof errors === 'object' && errors?.volumeM3 && (
-              <p className="text-red-600 text-xs mt-1">{errors.volumeM3[0]}</p>
-            )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="leadTimeDays">Levertijd (dagen, optioneel)</Label>
+            <Input id="leadTimeDays" name="leadTimeDays" type="number" min="1" />
           </div>
-        </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Levertijd (dagen, optioneel)
-          </label>
-          <input
-            name="leadTimeDays"
-            type="number"
-            min="1"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="comment">Opmerking (optioneel)</Label>
+            <Textarea id="comment" name="comment" rows={3} maxLength={2000} />
+          </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Opmerking (optioneel)
-          </label>
-          <textarea
-            name="comment"
-            rows={3}
-            maxLength={2000}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
+          {errorMessage && (
+            <Alert variant="destructive">
+              <AlertDescription>{errorMessage}</AlertDescription>
+            </Alert>
+          )}
 
-        {errorMessage && (
-          <p className="text-red-600 text-sm">{errorMessage}</p>
-        )}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {loading ? 'Bezig met indienen...' : 'Offerte indienen'}
-        </button>
-      </form>
-    </div>
+          <Button type="submit" disabled={loading} className="w-full">
+            {loading ? 'Bezig met indienen...' : 'Offerte indienen'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

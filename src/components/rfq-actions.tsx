@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { sendRfq, closeRfq } from '@/actions/rfq';
+import { Button } from '@/components/ui/button';
 
 interface RfqActionsProps {
   rfqId: string;
@@ -47,26 +48,16 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
   return (
     <div className="flex items-center gap-2">
       {status === 'draft' && (
-        <button
-          onClick={handleSend}
-          disabled={loading}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
+        <Button onClick={handleSend} disabled={loading}>
           {loading ? 'Bezig...' : 'Verzenden'}
-        </button>
+        </Button>
       )}
       {status === 'sent' && (
-        <button
-          onClick={handleClose}
-          disabled={loading}
-          className="px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 disabled:opacity-50 transition-colors"
-        >
+        <Button onClick={handleClose} disabled={loading} variant="secondary">
           {loading ? 'Bezig...' : 'Sluiten'}
-        </button>
+        </Button>
       )}
-      {result && (
-        <span className="text-sm text-gray-600">{result}</span>
-      )}
+      {result && <span className="text-sm text-muted-foreground">{result}</span>}
     </div>
   );
 }

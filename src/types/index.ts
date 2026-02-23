@@ -24,11 +24,29 @@ export interface Supplier {
   created_at: string;
 }
 
+export interface Material {
+  id: string;
+  name: string;
+  finish_options: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MaterialSupplier {
+  id: string;
+  material_id: string;
+  supplier_id: string;
+  created_at: string;
+}
+
 export interface Rfq {
   id: string;
   created_by: string;
   customer_name: string | null;
   material: string;
+  material_id: string | null;
+  finish: string | null;
   length: number;
   width: number;
   height: number;
@@ -89,10 +107,19 @@ export interface AuditLog {
 }
 
 // Extended types for UI
+export interface MaterialWithSuppliers extends Material {
+  suppliers?: Supplier[];
+}
+
+export interface SupplierWithMaterials extends Supplier {
+  available_materials?: Material[];
+}
+
 export interface RfqWithRelations extends Rfq {
   attachments?: RfqAttachment[];
   invites?: (RfqInvite & { supplier?: Supplier })[];
   quotes?: (RfqQuote & { supplier?: Supplier })[];
+  material_details?: Material;
 }
 
 export interface InviteWithSupplier extends RfqInvite {

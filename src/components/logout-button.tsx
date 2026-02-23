@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
 
 export function LogoutButton() {
   const router = useRouter();
@@ -14,11 +15,8 @@ export function LogoutButton() {
   }
 
   return (
-    <button
-      onClick={handleLogout}
-      className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-    >
+    <Button onClick={handleLogout} variant="ghost" size="sm">
       Uitloggen
-    </button>
+    </Button>
   );
 }

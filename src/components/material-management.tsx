@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -300,6 +301,9 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
             <DialogTitle>
               {editingMaterial ? 'Edit material' : 'New material'}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create or edit a material, its finish options, and linked suppliers.
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -365,6 +369,9 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
             <DialogTitle>
               Link supplier to {selectedMaterial?.name}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Link an additional supplier to the selected material.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -210,24 +211,28 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       supplier_ids: data.supplier_ids,
     };
 
-    const result = await createRfq(input);
+    try {
+      const result = await createRfq(input);
 
-    if (result.error) {
-      setErrors(result.error as Record<string, string[]>);
+      if (result.error) {
+        setErrors(result.error as Record<string, string[]>);
+        return;
+      }
+
+      setOpen(false);
+      setCurrentStep(0);
+      setData(initialData);
+      setSelectedMaterial(null);
+
+      if (result.data) {
+        router.push(`/dashboard/rfqs/${result.data.id}`);
+      }
+    } catch (error) {
+      console.error('Failed to create RFQ:', error);
+      setErrors({ _form: ['Could not create request. Please try again.'] });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setOpen(false);
-    setCurrentStep(0);
-    setData(initialData);
-    setSelectedMaterial(null);
-    setLoading(false);
-
-    if (result.data) {
-      router.push(`/dashboard/rfqs/${result.data.id}`);
-    }
-    router.refresh();
   };
 
   const resetDialog = () => {
@@ -255,6 +260,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>New request for quotation - {stepTitles[currentStep]}</DialogTitle>
+          <DialogDescription className="sr-only">
+            Complete the steps to create a new request for quotation.
+          </DialogDescription>
           <div className="mt-2 flex items-center space-x-2">
             {stepTitles.map((_, index) => (
               <div

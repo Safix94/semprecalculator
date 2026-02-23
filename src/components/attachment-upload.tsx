@@ -26,15 +26,22 @@ export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const result = await uploadAttachment(rfqId, formData);
+    try {
+      const result = await uploadAttachment(rfqId, formData);
 
-    if (result.error) {
-      setError(typeof result.error === 'string' ? result.error : 'Upload failed');
+      if (result.error) {
+        setError(typeof result.error === 'string' ? result.error : 'Upload failed');
+        return;
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error('Attachment upload failed:', error);
+      setError('Upload failed');
+    } finally {
+      setLoading(false);
+      e.target.value = '';
     }
-
-    setLoading(false);
-    e.target.value = '';
-    router.refresh();
   }
 
   return (

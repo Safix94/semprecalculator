@@ -15,6 +15,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -212,6 +213,9 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
             <DialogTitle>
               {editingSupplier ? 'Edit supplier' : 'New supplier'}
             </DialogTitle>
+            <DialogDescription className="sr-only">
+              Create or edit a supplier and optionally link materials.
+            </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-4">

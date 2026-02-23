@@ -20,29 +20,41 @@ export function RfqActions({ rfqId, status }: RfqActionsProps) {
     setLoading(true);
     setResult(null);
 
-    const res = await sendRfq(rfqId);
+    try {
+      const res = await sendRfq(rfqId);
 
-    if ('error' in res) {
-      setResult(`Error: ${typeof res.error === 'string' ? res.error : JSON.stringify(res.error)}`);
-    } else if ('data' in res) {
-      setResult(`Sent to ${res.data.sent}/${res.data.total} suppliers`);
+      if ('error' in res) {
+        setResult(`Error: ${typeof res.error === 'string' ? res.error : JSON.stringify(res.error)}`);
+      } else if ('data' in res) {
+        setResult(`Sent to ${res.data.sent}/${res.data.total} suppliers`);
+      }
+
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to send RFQ:', error);
+      setResult('Error: Failed to send RFQ');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
-    router.refresh();
   }
 
   async function handleClose() {
     if (!confirm('Are you sure you want to close this request?')) return;
     setLoading(true);
 
-    const res = await closeRfq(rfqId);
-    if (res.error) {
-      setResult(`Error: ${res.error}`);
-    }
+    try {
+      const res = await closeRfq(rfqId);
+      if (res.error) {
+        setResult(`Error: ${res.error}`);
+      }
 
-    setLoading(false);
-    router.refresh();
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to close RFQ:', error);
+      setResult('Error: Failed to close RFQ');
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

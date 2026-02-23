@@ -4,7 +4,12 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireAuth } from '@/lib/auth';
 import { createRfqSchema, updateRfqSchema } from '@/lib/validation';
-import { generateToken, hashToken } from '@/lib/tokens';
+import {
+  assertTokenHashingConfigured,
+  generateToken,
+  hashToken,
+  isTokenHashingConfigError,
+} from '@/lib/tokens';
 import { sendSupplierInviteEmail } from '@/lib/mailer';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput } from '@/lib/validation';
@@ -17,6 +22,19 @@ export async function createRfq(input: CreateRfqInput) {
   const parsed = createRfqSchema.safeParse(input);
   if (!parsed.success) {
     return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  if (parsed.data.supplier_ids && parsed.data.supplier_ids.length > 0) {
+    try {
+      assertTokenHashingConfigured();
+    } catch (error) {
+      console.error('RFQ token setup validation failed:', error);
+      return {
+        error: {
+          _form: ['RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.'],
+        },
+      };
+    }
   }
 
   try {
@@ -79,6 +97,13 @@ export async function createRfq(input: CreateRfqInput) {
     return { data: rfq };
   } catch (error) {
     console.error('Unexpected error while creating RFQ:', error);
+    if (isTokenHashingConfigError(error)) {
+      return {
+        error: {
+          _form: ['RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.'],
+        },
+      };
+    }
     return { error: { _form: ['Failed to create RFQ. Please try again.'] } };
   }
 }
@@ -237,6 +262,13 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
 export async function sendRfq(rfqId: string) {
   const user = await requireAuth();
   const supabase = await createClient();
+
+  try {
+    assertTokenHashingConfigured();
+  } catch (error) {
+    console.error('RFQ token setup validation failed:', error);
+    return { error: 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.' };
+  }
 
   // Fetch the RFQ with material details
   const { data: rfq, error: rfqError } = await supabase

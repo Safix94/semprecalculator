@@ -1,19 +1,10 @@
-import Link from 'next/link';
 import { requireAuth } from '@/lib/auth';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { RfqCreateWizard } from '@/components/rfq-create-wizard';
+import { DashboardRfqTable } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import type { Rfq, RfqStatus } from '@/types';
+import type { Rfq } from '@/types';
 
 interface DashboardPageProps {
   searchParams?: Promise<{
@@ -24,31 +15,11 @@ interface DashboardPageProps {
 
 const PAGE_SIZE = 20;
 
-const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
-  draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
-  sent_to_supplier: { label: 'Sent to supplier', color: 'bg-primary/15 text-primary' },
-  waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
-  closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
-};
-
 function getStringParam(value?: string | string[]) {
   if (Array.isArray(value)) {
     return value[0];
   }
   return value;
-}
-
-function buildDashboardHref(page: number, rfqId?: string | null) {
-  const params = new URLSearchParams();
-  if (page > 1) {
-    params.set('page', String(page));
-  }
-  if (rfqId) {
-    params.set('rfq', rfqId);
-  }
-
-  const query = params.toString();
-  return query ? `/dashboard?${query}` : '/dashboard';
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
@@ -124,92 +95,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       ) : (
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead>Material</TableHead>
-                  <TableHead>Finish</TableHead>
-                  <TableHead>Shape</TableHead>
-                  <TableHead>Dimensions</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Requested by</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Date & time</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rfqs.map((rfq) => {
-                  const status = statusLabels[rfq.status] ?? {
-                    label: rfq.status,
-                    color: 'bg-muted text-muted-foreground',
-                  };
-                  return (
-                    <TableRow
-                      key={rfq.id}
-                      className={selectedRfqId === rfq.id ? 'bg-accent/30 hover:bg-accent/40' : undefined}
-                    >
-                      <TableCell>
-                        <Link
-                          href={buildDashboardHref(currentPage, rfq.id)}
-                          className="font-medium text-primary hover:underline"
-                        >
-                          {rfq.material}
-                        </Link>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{rfq.finish || '-'}</TableCell>
-                      <TableCell className="text-muted-foreground">{rfq.shape}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {rfq.length}x{rfq.width}x{rfq.height} (d:{rfq.thickness})
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{rfq.customer_name || '-'}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {creatorEmailById[rfq.created_by] ?? 'Unknown'}
-                      </TableCell>
-                      <TableCell>
-                        <span
-                          className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${status.color}`}
-                        >
-                          {status.label}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {new Date(rfq.created_at).toLocaleString('nl-NL', {
-                          dateStyle: 'short',
-                          timeStyle: 'short',
-                        })}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            <div className="flex items-center justify-between border-t px-4 py-3">
-              <span className="text-sm text-muted-foreground">
-                Page {currentPage} of {totalPages}
-              </span>
-              <div className="flex items-center gap-2">
-                {currentPage === 1 ? (
-                  <Button type="button" variant="outline" size="sm" disabled>
-                    Previous
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={buildDashboardHref(currentPage - 1, selectedRfqId)}>Previous</Link>
-                  </Button>
-                )}
-
-                {currentPage === totalPages ? (
-                  <Button type="button" variant="outline" size="sm" disabled>
-                    Next
-                  </Button>
-                ) : (
-                  <Button asChild variant="outline" size="sm">
-                    <Link href={buildDashboardHref(currentPage + 1, selectedRfqId)}>Next</Link>
-                  </Button>
-                )}
-              </div>
-            </div>
+            <DashboardRfqTable
+              rfqs={rfqs}
+              creatorEmailById={creatorEmailById}
+              currentPage={currentPage}
+              totalPages={totalPages}
+              selectedRfqId={selectedRfqId}
+            />
           </CardContent>
         </Card>
       )}

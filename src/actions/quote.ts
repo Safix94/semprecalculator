@@ -2,7 +2,7 @@
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { submitQuoteSchema } from '@/lib/validation';
-import { hashToken } from '@/lib/tokens';
+import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
 import { calculateAllPricing } from '@/lib/pricing';
 import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
 import { logAuditEvent } from './audit';
@@ -14,6 +14,14 @@ import type { SubmitQuoteInput } from '@/lib/validation';
  */
 export async function validateSupplierToken(rfqId: string, token: string) {
   const supabase = createServiceRoleClient();
+
+  try {
+    assertTokenHashingConfigured();
+  } catch (error) {
+    console.error('Supplier token validation failed due to token setup:', error);
+    return { error: 'Supplier links are not configured. Please contact support.' };
+  }
+
   const tokenHash = hashToken(token);
 
   // Find invite by token hash and rfq
@@ -87,6 +95,13 @@ export async function submitQuote(
   input: SubmitQuoteInput
 ) {
   const supabase = createServiceRoleClient();
+
+  try {
+    assertTokenHashingConfigured();
+  } catch (error) {
+    console.error('Quote submission failed due to token setup:', error);
+    return { error: 'Supplier links are not configured. Please contact support.' };
+  }
 
   // Validate token first
   const tokenHash = hashToken(token);
@@ -211,6 +226,14 @@ export async function submitQuote(
  */
 export async function getAttachmentUrl(rfqId: string, token: string, storagePath: string) {
   const supabase = createServiceRoleClient();
+
+  try {
+    assertTokenHashingConfigured();
+  } catch (error) {
+    console.error('Attachment access failed due to token setup:', error);
+    return { error: 'Supplier links are not configured. Please contact support.' };
+  }
+
   const tokenHash = hashToken(token);
 
   // Validate token

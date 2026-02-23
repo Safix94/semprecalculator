@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
-import type { Material, MaterialWithSuppliers } from '@/types';
+import type { Material, MaterialWithSuppliers, Supplier } from '@/types';
 
 export interface CreateMaterialInput {
   name: string;
@@ -64,36 +64,48 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
  */
 export async function getActiveMaterials(): Promise<Material[]> {
   await requireRole('sales');
-  const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('materials')
-    .select('*')
-    .eq('is_active', true)
-    .order('name');
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('materials')
+      .select('*')
+      .eq('is_active', true)
+      .order('name');
 
-  if (error) {
-    throw new Error(`Failed to fetch active materials: ${error.message}`);
+    if (error) {
+      console.error('Failed to fetch active materials:', error.message);
+      return [];
+    }
+
+    return data ?? [];
+  } catch (error) {
+    console.error('Failed to fetch active materials:', error);
+    return [];
   }
-
-  return data;
 }
 
 /**
  * Get suppliers for a specific material
  */
-export async function getSuppliersForMaterial(materialId: string) {
+export async function getSuppliersForMaterial(materialId: string): Promise<Supplier[]> {
   await requireRole('sales');
-  const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .rpc('get_suppliers_for_material', { material_uuid: materialId });
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .rpc('get_suppliers_for_material', { material_uuid: materialId });
 
-  if (error) {
-    throw new Error(`Failed to fetch suppliers for material: ${error.message}`);
+    if (error) {
+      console.error('Failed to fetch suppliers for material:', error.message);
+      return [];
+    }
+
+    return (data ?? []) as Supplier[];
+  } catch (error) {
+    console.error('Failed to fetch suppliers for material:', error);
+    return [];
   }
-
-  return data;
 }
 
 /**

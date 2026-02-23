@@ -92,7 +92,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Requests for quotation</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Prijs request</h1>
         <RfqCreateWizard />
       </div>
 

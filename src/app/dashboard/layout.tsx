@@ -30,7 +30,7 @@ export default async function DashboardLayout({
               </Link>
               <div className="flex gap-4">
                 <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  RFQs
+                  Prijs request
                 </Link>
                 {user.role === 'admin' && (
                   <>

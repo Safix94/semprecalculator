@@ -232,6 +232,16 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
             </Button>
           </>
         )}
+        {(status === 'sent_to_pricing' && (
+          <Button
+            key="send-to-supplier"
+            onClick={handleSend}
+            disabled={loading || pricingLoading || saveAndSendLoading}
+            className="shrink-0"
+          >
+            {loading ? 'Loading...' : 'Send to supplier'}
+          </Button>
+        ))}
         {(status === 'sent_to_supplier' || status === 'quotes_received') && (
           <Button onClick={handleClose} disabled={loading || pricingLoading || saveAndSendLoading} variant="secondary">
             {loading ? 'Loading...' : 'Close'}

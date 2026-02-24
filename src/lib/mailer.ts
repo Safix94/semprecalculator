@@ -8,6 +8,10 @@ const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'noreply@sempre.com
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Sempre';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
+/** Button style matching app primary (oklch(0.5251 0.0369 140.9133) → hex for email clients). */
+const EMAIL_BUTTON_STYLE =
+  'display:inline-block;padding:12px 24px;background:#4d5d50;color:#fff;text-decoration:none;border-radius:6px;';
+
 interface SendEmailParams {
   to: { email: string; name?: string };
   subject: string;
@@ -87,7 +91,7 @@ export async function sendSupplierInviteEmail(params: {
       <p>There is a new request for quotation for <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
       <ul>${detailLines}</ul>
       <p>Click the link below to view the request and submit a quote:</p>
-      <p><a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Submit quote</a></p>
+      <p><a href="${inviteLink}" style="${EMAIL_BUTTON_STYLE}">Submit quote</a></p>
       <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
     `,
   });
@@ -111,7 +115,7 @@ export async function sendSalesQuoteReceivedEmail(params: {
       <h2>New quote received</h2>
       <p>Supplier <strong>${params.supplierName}</strong> has submitted a quote.</p>
       <p>Calculated final price: <strong>€${params.finalPrice.toFixed(2)}</strong></p>
-      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">View quotes</a></p>
+      <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">View quotes</a></p>
     `,
   });
 }
@@ -135,7 +139,7 @@ export async function sendPricingTeamRfqNotification(params: {
           <h2>New price request ready for review</h2>
           <p>A new draft request is available for pricing review.</p>
           <p><strong>Summary:</strong> ${params.rfqSummary}</p>
-          <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Open request</a></p>
+          <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open request</a></p>
         `,
       });
 

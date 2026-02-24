@@ -2,6 +2,7 @@ export type UserRole = 'sales' | 'admin';
 
 export type RfqStatus =
   | 'draft'
+  | 'sent_to_pricing'
   | 'sent_to_supplier'
   | 'waiting_for_technical_drawing'
   | 'quotes_received'

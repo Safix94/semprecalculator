@@ -371,7 +371,7 @@ export async function sendRfq(rfqId: string) {
       material_details:materials(name)
     `)
     .eq('id', rfqId)
-    .eq('status', 'draft')
+    .in('status', ['draft', 'sent_to_pricing'])
     .single();
 
   if (rfqError || !rfq) {
@@ -584,6 +584,16 @@ export async function sendToPricingTeam(rfqId: string) {
     };
   }
 
+  const { error: updateError } = await supabase
+    .from('rfqs')
+    .update({ status: 'sent_to_pricing' })
+    .eq('id', rfqId);
+
+  if (updateError) {
+    console.error('Failed to update RFQ status to sent_to_pricing:', updateError);
+    return { error: 'Pricing team notified but status could not be updated' };
+  }
+
   await logAuditEvent({
     actorType: user.role,
     actorId: user.id,
@@ -611,7 +621,7 @@ export async function closeRfq(rfqId: string) {
     .from('rfqs')
     .update({ status: 'closed' })
     .eq('id', rfqId)
-    .in('status', ['sent_to_supplier', 'quotes_received']);
+    .in('status', ['sent_to_pricing', 'sent_to_supplier', 'quotes_received']);
 
   if (error) {
     return { error: error.message };

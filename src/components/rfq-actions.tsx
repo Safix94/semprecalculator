@@ -20,62 +20,95 @@ import type { RfqStatus, Supplier } from '@/types';
 interface RfqActionsProps {
   rfqId: string;
   status: RfqStatus;
+  productType?: string | null;
   materialId?: string | null;
+  materialIdTableTop?: string | null;
+  materialIdTableFoot?: string | null;
   /** When true, only "Send to supplier" is shown for draft (e.g. when modal has its own "Send to pricing team" button). */
   hidePricingTeamButton?: boolean;
 }
 
-export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamButton = false }: RfqActionsProps) {
+export function RfqActions({
+  rfqId,
+  status,
+  productType = null,
+  materialId = null,
+  materialIdTableTop = null,
+  materialIdTableFoot = null,
+  hidePricingTeamButton = false,
+}: RfqActionsProps) {
   const [loading, setLoading] = useState(false);
   const [pricingLoading, setPricingLoading] = useState(false);
   const [saveAndSendLoading, setSaveAndSendLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
   const [suppliersLoading, setSuppliersLoading] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierIds, setSelectedSupplierIds] = useState<string[]>([]);
-  const [pickerError, setPickerError] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
+
+  const [tableTopSuppliersLoading, setTableTopSuppliersLoading] = useState(false);
+  const [tableTopSuppliersError, setTableTopSuppliersError] = useState<string | null>(null);
+  const [tableTopSuppliers, setTableTopSuppliers] = useState<Supplier[]>([]);
+  const [selectedTableTopSupplierIds, setSelectedTableTopSupplierIds] = useState<string[]>([]);
+
+  const [tableFootSuppliersLoading, setTableFootSuppliersLoading] = useState(false);
+  const [tableFootSuppliersError, setTableFootSuppliersError] = useState<string | null>(null);
+  const [tableFootSuppliers, setTableFootSuppliers] = useState<Supplier[]>([]);
+  const [selectedTableFootSupplierIds, setSelectedTableFootSupplierIds] = useState<string[]>([]);
+
   const router = useRouter();
+  const isTablesType = productType?.trim().toLowerCase() === 'tables';
 
   useEffect(() => {
     if (!pickerOpen) {
       return;
     }
 
-    setSelectedSupplierIds([]);
     setPickerError(null);
     setSuppliers([]);
+    setSelectedSupplierIds([]);
+    setSuppliersLoading(false);
 
-    if (!materialId) {
-      setSuppliersLoading(false);
-      setPickerError('RFQ has no material; cannot load suppliers.');
-      return;
-    }
-    const targetMaterialId = materialId;
+    setTableTopSuppliers([]);
+    setTableTopSuppliersError(null);
+    setTableTopSuppliersLoading(false);
+    setSelectedTableTopSupplierIds([]);
+
+    setTableFootSuppliers([]);
+    setTableFootSuppliersError(null);
+    setTableFootSuppliersLoading(false);
+    setSelectedTableFootSupplierIds([]);
 
     let active = true;
 
-    async function loadSuppliers() {
+    async function loadSuppliersForMaterial(materialId: string) {
+      const supplierResult = await getSuppliersForMaterial(materialId);
+      if ('error' in supplierResult) {
+        return { data: [] as Supplier[], error: supplierResult.error };
+      }
+      return { data: supplierResult.data, error: null as string | null };
+    }
+
+    async function loadNonTablesSuppliers() {
+      if (!materialId) {
+        setPickerError('RFQ has no material; cannot load suppliers.');
+        return;
+      }
+
       setSuppliersLoading(true);
       try {
-        const supplierResult = await getSuppliersForMaterial(targetMaterialId);
-        if (!active) {
-          return;
-        }
-
-        if ('error' in supplierResult) {
-          setSuppliers([]);
-          setPickerError(supplierResult.error);
-          return;
-        }
+        const supplierResult = await loadSuppliersForMaterial(materialId);
+        if (!active) return;
 
         setSuppliers(supplierResult.data);
-      } catch (error) {
-        if (!active) {
-          return;
+        if (supplierResult.error) {
+          setPickerError(supplierResult.error);
         }
+      } catch (error) {
+        if (!active) return;
         console.error('Failed to load suppliers for send fallback:', error);
-        setSuppliers([]);
         setPickerError('Could not load suppliers for this material.');
       } finally {
         if (active) {
@@ -84,30 +117,105 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
       }
     }
 
-    loadSuppliers();
+    async function loadTablesSuppliers() {
+      if (!materialIdTableTop || !materialIdTableFoot) {
+        setPickerError('Tables RFQ is missing table top or table foot material.');
+        return;
+      }
+
+      setTableTopSuppliersLoading(true);
+      setTableFootSuppliersLoading(true);
+
+      try {
+        const [topResult, footResult] = await Promise.all([
+          loadSuppliersForMaterial(materialIdTableTop),
+          loadSuppliersForMaterial(materialIdTableFoot),
+        ]);
+        if (!active) return;
+
+        setTableTopSuppliers(topResult.data);
+        setTableTopSuppliersError(topResult.error);
+
+        setTableFootSuppliers(footResult.data);
+        setTableFootSuppliersError(footResult.error);
+      } catch (error) {
+        if (!active) return;
+        console.error('Failed to load table suppliers for send fallback:', error);
+        setPickerError('Could not load suppliers for the selected table materials.');
+      } finally {
+        if (active) {
+          setTableTopSuppliersLoading(false);
+          setTableFootSuppliersLoading(false);
+        }
+      }
+    }
+
+    if (isTablesType) {
+      void loadTablesSuppliers();
+    } else {
+      void loadNonTablesSuppliers();
+    }
 
     return () => {
       active = false;
     };
-  }, [materialId, pickerOpen]);
+  }, [isTablesType, materialId, materialIdTableFoot, materialIdTableTop, pickerOpen]);
 
   const canSaveAndSend = useMemo(() => {
-    if (!materialId || suppliersLoading || saveAndSendLoading || pricingLoading) {
+    if (saveAndSendLoading || pricingLoading) {
       return false;
     }
-    if (suppliers.length === 0) {
+
+    if (isTablesType) {
+      if (tableTopSuppliersLoading || tableFootSuppliersLoading) {
+        return false;
+      }
+      if (tableTopSuppliers.length === 0 || tableFootSuppliers.length === 0) {
+        return false;
+      }
+      return selectedTableTopSupplierIds.length > 0 && selectedTableFootSupplierIds.length > 0;
+    }
+
+    if (!materialId || suppliersLoading || suppliers.length === 0) {
       return false;
     }
     return selectedSupplierIds.length > 0;
-  }, [materialId, pricingLoading, saveAndSendLoading, selectedSupplierIds.length, suppliers.length, suppliersLoading]);
+  }, [
+    isTablesType,
+    materialId,
+    pricingLoading,
+    saveAndSendLoading,
+    selectedSupplierIds.length,
+    selectedTableFootSupplierIds.length,
+    selectedTableTopSupplierIds.length,
+    suppliers.length,
+    suppliersLoading,
+    tableFootSuppliers.length,
+    tableFootSuppliersLoading,
+    tableTopSuppliers.length,
+    tableTopSuppliersLoading,
+  ]);
 
   const formatActionError = (error: unknown) =>
     typeof error === 'string' ? error : JSON.stringify(error);
 
+  function toggleSupplierId(selectedIds: string[], supplierId: string, checked: boolean): string[] {
+    if (checked) {
+      return [...new Set([...selectedIds, supplierId])];
+    }
+    return selectedIds.filter((id) => id !== supplierId);
+  }
+
   function handleSupplierToggle(supplierId: string, checked: boolean) {
-    setSelectedSupplierIds((current) =>
-      checked ? [...current, supplierId] : current.filter((id) => id !== supplierId)
-    );
+    setSelectedSupplierIds((current) => toggleSupplierId(current, supplierId, checked));
+  }
+
+  function handleTableTopSupplierToggle(supplierId: string, checked: boolean) {
+    setSelectedTableTopSupplierIds((current) => toggleSupplierId(current, supplierId, checked));
+  }
+
+  function handleTableFootSupplierToggle(supplierId: string, checked: boolean) {
+    setSelectedTableFootSupplierIds((current) => toggleSupplierId(current, supplierId, checked));
   }
 
   async function handleSend() {
@@ -138,7 +246,16 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
   }
 
   async function handleSaveAndSend() {
-    if (selectedSupplierIds.length === 0) {
+    if (isTablesType) {
+      if (selectedTableTopSupplierIds.length === 0) {
+        setPickerError('Select at least one supplier for the table top');
+        return;
+      }
+      if (selectedTableFootSupplierIds.length === 0) {
+        setPickerError('Select at least one supplier for the table foot');
+        return;
+      }
+    } else if (selectedSupplierIds.length === 0) {
       setPickerError('Select at least one supplier');
       return;
     }
@@ -148,7 +265,13 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
     setResult(null);
 
     try {
-      const inviteResult = await replaceRfqInvites(rfqId, selectedSupplierIds);
+      const inviteResult = isTablesType
+        ? await replaceRfqInvites(rfqId, {
+            supplierIdsTableTop: selectedTableTopSupplierIds,
+            supplierIdsTableFoot: selectedTableFootSupplierIds,
+          })
+        : await replaceRfqInvites(rfqId, selectedSupplierIds);
+
       if ('error' in inviteResult) {
         setPickerError(formatActionError(inviteResult.error));
         return;
@@ -164,7 +287,6 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
 
       setResult(`Sent to ${sendResult.data.sent}/${sendResult.data.total} suppliers`);
       setPickerOpen(false);
-      setSelectedSupplierIds([]);
       router.refresh();
     } catch (error) {
       console.error('Failed to save suppliers and send RFQ:', error);
@@ -213,6 +335,51 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
     }
   }
 
+  function renderSupplierSelector(params: {
+    title: string;
+    loading: boolean;
+    error: string | null;
+    suppliers: Supplier[];
+    selectedSupplierIds: string[];
+    onToggle: (supplierId: string, checked: boolean) => void;
+    idPrefix: string;
+  }) {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm font-medium">{params.title}</p>
+        {params.loading ? (
+          <p className="text-sm text-muted-foreground">Loading suppliers...</p>
+        ) : params.error ? (
+          <p className="text-sm text-destructive">{params.error}</p>
+        ) : params.suppliers.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No suppliers available for this material.</p>
+        ) : (
+          <div className="max-h-52 space-y-3 overflow-y-auto pr-1">
+            {params.suppliers.map((supplier) => (
+              <div key={supplier.id} className="flex items-start gap-3 rounded-md border p-3">
+                <Checkbox
+                  id={`${params.idPrefix}-${supplier.id}`}
+                  checked={params.selectedSupplierIds.includes(supplier.id)}
+                  onCheckedChange={(checked) => params.onToggle(supplier.id, checked === true)}
+                  disabled={saveAndSendLoading}
+                />
+                <div className="grid gap-1">
+                  <Label
+                    htmlFor={`${params.idPrefix}-${supplier.id}`}
+                    className="cursor-pointer text-sm font-medium"
+                  >
+                    {supplier.name}
+                  </Label>
+                  <p className="text-xs text-muted-foreground">{supplier.email}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -239,7 +406,7 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
             </Button>
           </>
         )}
-        {(status === 'sent_to_pricing' && (
+        {status === 'sent_to_pricing' && (
           <Button
             key="send-to-supplier"
             onClick={handleSend}
@@ -248,7 +415,7 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
           >
             {loading ? 'Loading...' : 'Send to supplier'}
           </Button>
-        ))}
+        )}
         {(status === 'sent_to_supplier' || status === 'quotes_received') && (
           <Button onClick={handleClose} disabled={loading || pricingLoading || saveAndSendLoading} variant="secondary">
             {loading ? 'Loading...' : 'Close'}
@@ -269,13 +436,34 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
           <DialogHeader>
             <DialogTitle>Select suppliers</DialogTitle>
             <DialogDescription>
-              This RFQ has no invites yet. Select one or more suppliers, then send again.
+              This RFQ has no invites yet. Select suppliers, then send again.
             </DialogDescription>
           </DialogHeader>
 
           {pickerError && <p className="text-sm text-destructive">{pickerError}</p>}
 
-          {suppliersLoading ? (
+          {isTablesType ? (
+            <div className="space-y-4">
+              {renderSupplierSelector({
+                title: 'Suppliers for table top',
+                loading: tableTopSuppliersLoading,
+                error: tableTopSuppliersError,
+                suppliers: tableTopSuppliers,
+                selectedSupplierIds: selectedTableTopSupplierIds,
+                onToggle: handleTableTopSupplierToggle,
+                idPrefix: 'table-top-supplier',
+              })}
+              {renderSupplierSelector({
+                title: 'Suppliers for table foot',
+                loading: tableFootSuppliersLoading,
+                error: tableFootSuppliersError,
+                suppliers: tableFootSuppliers,
+                selectedSupplierIds: selectedTableFootSupplierIds,
+                onToggle: handleTableFootSupplierToggle,
+                idPrefix: 'table-foot-supplier',
+              })}
+            </div>
+          ) : suppliersLoading ? (
             <p className="text-sm text-muted-foreground">Loading suppliers...</p>
           ) : suppliers.length === 0 ? (
             <p className="text-sm text-muted-foreground">No suppliers available for this material.</p>

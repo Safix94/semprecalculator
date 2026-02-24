@@ -31,13 +31,13 @@ export async function getProductTypes(): Promise<{ data: ProductType[] } | { err
 
     if (error) {
       console.error('Failed to fetch product types:', error.message);
-      return { error: 'Soorten konden niet geladen worden.' };
+      return { error: 'Product types could not be loaded.' };
     }
 
     return { data: (data ?? []) as ProductType[] };
   } catch (error) {
     console.error('Failed to fetch product types:', error);
-    return { error: 'Soorten konden niet geladen worden.' };
+    return { error: 'Product types could not be loaded.' };
   }
 }
 
@@ -47,7 +47,7 @@ export async function createProductType(input: CreateProductTypeInput) {
 
   const name = input.name.trim();
   if (!name) {
-    return { error: { _form: ['Naam is verplicht.'] } };
+    return { error: { _form: ['Name is required.'] } };
   }
 
   const sortOrder = Number.isFinite(input.sort_order) ? Math.trunc(input.sort_order as number) : 0;

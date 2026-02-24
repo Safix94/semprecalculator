@@ -97,6 +97,7 @@ export interface RfqInvite {
   id: string;
   rfq_id: string;
   supplier_id: string;
+  invite_part?: 'default' | 'table_top' | 'table_foot' | 'table_both';
   token_hash: string;
   expires_at: string;
   used_at: string | null;

@@ -76,6 +76,10 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const commentResult = await listSupplierComments(rfqId, supplierToken);
   const initialComments = 'data' in commentResult ? commentResult.data : [];
   const isRound = isRoundShape(rfq.shape);
+  const isTablesType = rfq.product_type?.trim().toLowerCase() === 'tables';
+  const invitePart = invite.invite_part ?? 'default';
+  const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
+  const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
   const canSubmitOrUpdateQuote = !invite.used_at;
   const quoteInitialValues = existingQuote
     ? {
@@ -97,10 +101,30 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             </div>
 
             <dl className="grid grid-cols-2 gap-4">
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Material</dt>
-                <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
-              </div>
+              {!isTablesType && (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">Material</dt>
+                  <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
+                </div>
+              )}
+              {showTableTop && (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">Table top</dt>
+                  <dd className="mt-1 text-sm font-medium">
+                    {rfq.material_table_top || 'N/A'}
+                    {rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}
+                  </dd>
+                </div>
+              )}
+              {showTableFoot && (
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">Table foot</dt>
+                  <dd className="mt-1 text-sm font-medium">
+                    {rfq.material_table_foot || 'N/A'}
+                    {rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
                 <dd className="mt-1 text-sm font-medium">{rfq.shape}</dd>

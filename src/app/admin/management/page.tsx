@@ -31,7 +31,7 @@ export default async function ManagementPage() {
         <TabsList>
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-          <TabsTrigger value="product-types">Soorten</TabsTrigger>
+          <TabsTrigger value="product-types">Product types</TabsTrigger>
           <TabsTrigger value="users">Users</TabsTrigger>
         </TabsList>
         <TabsContent value="materials">

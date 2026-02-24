@@ -20,6 +20,8 @@ const rfqSchemaBase = z.object({
   shape: z.string().min(1, 'Shape is required'),
   notes: z.string().optional().nullable(),
   supplier_ids: z.array(z.string().uuid()).optional(),
+  supplier_ids_table_top: z.array(z.string().uuid()).optional(),
+  supplier_ids_table_foot: z.array(z.string().uuid()).optional(),
 });
 
 const validateShapeThickness = (
@@ -95,14 +97,55 @@ const validateTableMaterials = (
   }
 };
 
+const validateTableSuppliers = (
+  data: {
+    product_type?: string | null;
+    supplier_ids_table_top?: string[];
+    supplier_ids_table_foot?: string[];
+  },
+  ctx: z.RefinementCtx,
+  options?: { requireForCreate?: boolean }
+) => {
+  const isTablesType = data.product_type?.trim().toLowerCase() === 'tables';
+  if (!isTablesType) {
+    return;
+  }
+
+  const requireForCreate = options?.requireForCreate === true;
+  const topProvided = data.supplier_ids_table_top !== undefined;
+  const footProvided = data.supplier_ids_table_foot !== undefined;
+
+  if (!requireForCreate && !topProvided && !footProvided) {
+    return;
+  }
+
+  if (!data.supplier_ids_table_top || data.supplier_ids_table_top.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['supplier_ids_table_top'],
+      message: 'Select at least one supplier for the table top',
+    });
+  }
+
+  if (!data.supplier_ids_table_foot || data.supplier_ids_table_foot.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['supplier_ids_table_foot'],
+      message: 'Select at least one supplier for the table foot',
+    });
+  }
+};
+
 export const createRfqSchema = rfqSchemaBase.superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
   validateTableMaterials(data, ctx);
+  validateTableSuppliers(data, ctx, { requireForCreate: true });
 });
 
 export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
   validateTableMaterials(data, ctx);
+  validateTableSuppliers(data, ctx);
 });
 
 export const submitQuoteSchema = z.object({

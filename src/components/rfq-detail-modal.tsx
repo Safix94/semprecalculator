@@ -234,7 +234,10 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                   <RfqActions
                     rfqId={detail.rfq.id}
                     status={detail.rfq.status}
+                    productType={detail.rfq.product_type}
                     materialId={detail.rfq.material_id}
+                    materialIdTableTop={detail.rfq.material_id_table_top}
+                    materialIdTableFoot={detail.rfq.material_id_table_foot}
                     hidePricingTeamButton
                   />
                 </div>

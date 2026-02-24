@@ -87,31 +87,80 @@ export async function sendSupplierInviteEmail(params: {
   material: string;
   shape: string;
   finish?: string | null;
+  invitePart?: 'default' | 'table_top' | 'table_foot' | 'table_both';
+  materialTableTop?: string | null;
+  finishTableTop?: string | null;
+  materialTableFoot?: string | null;
+  finishTableFoot?: string | null;
   dimensionsText?: string;
   quantity?: number;
 }) {
   const link = new URL(`/supplier/rfq/${params.rfqId}`, APP_URL);
   link.searchParams.set('t', params.token);
   const inviteLink = link.toString();
-  const finishText = params.finish ? ` with finish "${params.finish}"` : '';
-  const detailLines = [
-    `<li><strong>Material:</strong> ${params.material}</li>`,
+  const invitePart = params.invitePart ?? 'default';
+  const topMaterial = params.materialTableTop || 'Table top';
+  const footMaterial = params.materialTableFoot || 'Table foot';
+  const topFinishText = params.finishTableTop ? ` (${params.finishTableTop})` : '';
+  const footFinishText = params.finishTableFoot ? ` (${params.finishTableFoot})` : '';
+
+  let subjectMaterial = `${params.material} - ${params.shape}${params.finish ? ` (${params.finish})` : ''}`;
+  let introText = `There is a new request for quotation for <strong>${params.material}</strong> (${params.shape}).`;
+  let detailLines: string[] = [
     `<li><strong>Shape:</strong> ${params.shape}</li>`,
-    params.finish ? `<li><strong>Finish:</strong> ${params.finish}</li>` : null,
-    params.dimensionsText ? `<li><strong>Dimensions:</strong> ${params.dimensionsText}</li>` : null,
-    params.quantity !== undefined ? `<li><strong>Quantity:</strong> ${params.quantity}</li>` : null,
-  ]
-    .filter(Boolean)
-    .join('');
+  ];
+
+  if (invitePart === 'table_top') {
+    subjectMaterial = `Table top - ${topMaterial}${topFinishText}`;
+    introText = `There is a new request for quotation for a <strong>table top</strong>.`;
+    detailLines = [
+      `<li><strong>Part:</strong> Table top</li>`,
+      `<li><strong>Material:</strong> ${topMaterial}</li>`,
+      params.finishTableTop ? `<li><strong>Finish:</strong> ${params.finishTableTop}</li>` : null,
+      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+    ].filter(Boolean) as string[];
+  } else if (invitePart === 'table_foot') {
+    subjectMaterial = `Table foot - ${footMaterial}${footFinishText}`;
+    introText = `There is a new request for quotation for a <strong>table foot</strong>.`;
+    detailLines = [
+      `<li><strong>Part:</strong> Table foot</li>`,
+      `<li><strong>Material:</strong> ${footMaterial}</li>`,
+      params.finishTableFoot ? `<li><strong>Finish:</strong> ${params.finishTableFoot}</li>` : null,
+      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+    ].filter(Boolean) as string[];
+  } else if (invitePart === 'table_both') {
+    subjectMaterial = `Table top + foot - ${params.shape}`;
+    introText = 'There is a new combined request for quotation for a <strong>table top and table foot</strong>.';
+    detailLines = [
+      `<li><strong>Part:</strong> Table top + table foot</li>`,
+      `<li><strong>Table top:</strong> ${topMaterial}${topFinishText}</li>`,
+      `<li><strong>Table foot:</strong> ${footMaterial}${footFinishText}</li>`,
+      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+    ];
+  } else {
+    detailLines = [
+      `<li><strong>Material:</strong> ${params.material}</li>`,
+      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+      params.finish ? `<li><strong>Finish:</strong> ${params.finish}</li>` : null,
+    ].filter(Boolean) as string[];
+  }
+
+  if (params.dimensionsText) {
+    detailLines.push(`<li><strong>Dimensions:</strong> ${params.dimensionsText}</li>`);
+  }
+
+  if (params.quantity !== undefined) {
+    detailLines.push(`<li><strong>Quantity:</strong> ${params.quantity}</li>`);
+  }
 
   return sendEmail({
     to: { email: params.supplierEmail, name: params.supplierName },
-    subject: `Request for quotation: ${params.material} - ${params.shape}${params.finish ? ` (${params.finish})` : ''}`,
+    subject: `Request for quotation: ${subjectMaterial}`,
     htmlContent: `
       <h2>New request for quotation</h2>
       <p>Dear ${params.supplierName},</p>
-      <p>There is a new request for quotation for <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
-      <ul>${detailLines}</ul>
+      <p>${introText}</p>
+      <ul>${detailLines.join('')}</ul>
       <p>Click the link below to view the request and submit a quote:</p>
       <p><a href="${inviteLink}" style="${EMAIL_BUTTON_STYLE}">Submit quote</a></p>
       <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>

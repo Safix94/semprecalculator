@@ -65,7 +65,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
     });
 
     if (result.error) {
-      setError(result.error._form?.[0] ?? 'Er ging iets mis.');
+      setError(result.error._form?.[0] ?? 'Something went wrong.');
       setLoading(false);
       return;
     }
@@ -76,7 +76,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
   };
 
   const handleDelete = async (productTypeId: string) => {
-    if (!confirm('Weet je zeker dat je deze soort wilt verwijderen?')) {
+    if (!confirm('Are you sure you want to delete this product type?')) {
       return;
     }
 
@@ -85,7 +85,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
 
     const result = await deleteProductType(productTypeId);
     if (result.error) {
-      setError(result.error._form?.[0] ?? 'Verwijderen mislukt.');
+      setError(result.error._form?.[0] ?? 'Delete failed.');
       setLoading(false);
       return;
     }
@@ -103,25 +103,25 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
       )}
 
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Soorten</h2>
+        <h2 className="text-xl font-semibold">Product types</h2>
       </div>
 
       <Card>
         <CardContent className="p-4">
           <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-[2fr_1fr_auto] md:items-end">
             <div className="space-y-1.5">
-              <Label htmlFor="product-type-name">Naam *</Label>
+              <Label htmlFor="product-type-name">Name *</Label>
               <Input
                 id="product-type-name"
                 value={formState.name}
                 onChange={(event) => updateFormState('name', event.target.value)}
-                placeholder="Bijv. Tables"
+                placeholder="e.g. Tables"
                 required
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="product-type-sort-order">Volgorde</Label>
+              <Label htmlFor="product-type-sort-order">Sort order</Label>
               <Input
                 id="product-type-sort-order"
                 type="number"
@@ -134,7 +134,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
 
             <Button type="submit" disabled={loading}>
               <Plus className="mr-2 h-4 w-4" />
-              {loading ? 'Opslaan...' : 'Toevoegen'}
+              {loading ? 'Saving...' : 'Add'}
             </Button>
           </form>
         </CardContent>
@@ -145,9 +145,9 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Naam</TableHead>
-                <TableHead>Volgorde</TableHead>
-                <TableHead>Acties</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Sort order</TableHead>
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -170,7 +170,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
               {sortedProductTypes.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
-                    Nog geen soorten gevonden.
+                    No product types yet.
                   </TableCell>
                 </TableRow>
               )}

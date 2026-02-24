@@ -88,7 +88,14 @@ export default async function RfqDetailPage({ params }: PageProps) {
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${status.color}`}>
             {status.label}
           </span>
-          <RfqActions rfqId={rfqId} status={typedRfq.status} materialId={typedRfq.material_id} />
+          <RfqActions
+            rfqId={rfqId}
+            status={typedRfq.status}
+            productType={typedRfq.product_type}
+            materialId={typedRfq.material_id}
+            materialIdTableTop={typedRfq.material_id_table_top}
+            materialIdTableFoot={typedRfq.material_id_table_foot}
+          />
         </div>
       </div>
 

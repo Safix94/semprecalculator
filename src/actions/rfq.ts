@@ -23,6 +23,13 @@ import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } fr
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
 const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+type InvitePart = 'default' | 'table_top' | 'table_foot' | 'table_both';
+
+interface InviteSelectionInput {
+  supplierIds?: string[];
+  supplierIdsTableTop?: string[];
+  supplierIdsTableFoot?: string[];
+}
 
 async function productTypeExists(
   supabase: SupabaseServerClient,
@@ -49,27 +56,97 @@ async function productTypeExists(
 
 type ReplaceRfqInvitesResult = { data: { created: number } } | { error: string };
 
-async function replaceRfqInvitesWithServiceRole(
-  rfqId: string,
-  supplierIds: string[]
-): Promise<ReplaceRfqInvitesResult> {
-  try {
-    const normalizedSupplierIds = [...new Set(supplierIds)];
-    if (normalizedSupplierIds.length === 0) {
-      return { error: 'Select at least one supplier' };
+function isTablesProductType(productType: string | null | undefined): boolean {
+  return productType?.trim().toLowerCase() === 'tables';
+}
+
+function normalizeSupplierIds(ids?: string[]): string[] {
+  return [...new Set((ids ?? []).map((id) => id.trim()).filter(Boolean))];
+}
+
+function normalizeInviteSelectionInput(input: InviteSelectionInput | string[]): InviteSelectionInput {
+  if (Array.isArray(input)) {
+    return { supplierIds: input };
+  }
+
+  return {
+    supplierIds: input.supplierIds ?? [],
+    supplierIdsTableTop: input.supplierIdsTableTop ?? [],
+    supplierIdsTableFoot: input.supplierIdsTableFoot ?? [],
+  };
+}
+
+function buildInviteSelectionsForRfq(
+  productType: string | null | undefined,
+  input: InviteSelectionInput
+): { rows: { supplier_id: string; invite_part: InvitePart }[] } | { error: string } {
+  if (isTablesProductType(productType)) {
+    const topSet = new Set(normalizeSupplierIds(input.supplierIdsTableTop));
+    const footSet = new Set(normalizeSupplierIds(input.supplierIdsTableFoot));
+
+    if (topSet.size === 0) {
+      return { error: 'Select at least one supplier for the table top' };
     }
 
+    if (footSet.size === 0) {
+      return { error: 'Select at least one supplier for the table foot' };
+    }
+
+    const supplierUnion = new Set([...topSet, ...footSet]);
+    const rows = [...supplierUnion].map((supplierId) => {
+      const inTop = topSet.has(supplierId);
+      const inFoot = footSet.has(supplierId);
+      let invitePart: InvitePart = 'table_both';
+
+      if (inTop && !inFoot) {
+        invitePart = 'table_top';
+      } else if (!inTop && inFoot) {
+        invitePart = 'table_foot';
+      }
+
+      return {
+        supplier_id: supplierId,
+        invite_part: invitePart,
+      };
+    });
+
+    return { rows };
+  }
+
+  const supplierIds = normalizeSupplierIds(input.supplierIds);
+  if (supplierIds.length === 0) {
+    return { error: 'Select at least one supplier' };
+  }
+
+  return {
+    rows: supplierIds.map((supplierId) => ({
+      supplier_id: supplierId,
+      invite_part: 'default',
+    })),
+  };
+}
+
+async function replaceRfqInvitesWithServiceRole(
+  rfqId: string,
+  input: InviteSelectionInput
+): Promise<ReplaceRfqInvitesResult> {
+  try {
     const supabase = createServiceRoleClient();
 
     const { data: rfq, error: rfqError } = await supabase
       .from('rfqs')
-      .select('id')
+      .select('id, product_type')
       .eq('id', rfqId)
-      .eq('status', 'draft')
+      .in('status', ['draft', 'sent_to_pricing'])
       .single();
 
     if (rfqError || !rfq) {
-      return { error: 'RFQ not found or not in draft status' };
+      return { error: 'RFQ not found or status does not allow invite updates' };
+    }
+
+    const inviteSelectionResult = buildInviteSelectionsForRfq(rfq.product_type, input);
+    if ('error' in inviteSelectionResult) {
+      return inviteSelectionResult;
     }
 
     const { error: deleteError } = await supabase
@@ -82,9 +159,10 @@ async function replaceRfqInvitesWithServiceRole(
     }
 
     const expiresAt = new Date(Date.now() + INVITE_EXPIRATION_MS).toISOString();
-    const inviteInserts = normalizedSupplierIds.map((supplierId) => ({
+    const inviteInserts = inviteSelectionResult.rows.map((row) => ({
       rfq_id: rfqId,
-      supplier_id: supplierId,
+      supplier_id: row.supplier_id,
+      invite_part: row.invite_part,
       token_hash: hashToken(generateToken()),
       expires_at: expiresAt,
     }));
@@ -97,7 +175,7 @@ async function replaceRfqInvitesWithServiceRole(
       return { error: `Failed to replace invites: ${insertError.message}` };
     }
 
-    return { data: { created: normalizedSupplierIds.length } };
+    return { data: { created: inviteSelectionResult.rows.length } };
   } catch (error) {
     if (isTokenHashingConfigError(error)) {
       return { error: TOKEN_CONFIG_ERROR_MESSAGE };
@@ -124,7 +202,12 @@ export async function createRfq(input: CreateRfqInput) {
     }
   }
 
-  if (parsed.data.supplier_ids && parsed.data.supplier_ids.length > 0) {
+  const hasSelectedSuppliers = isTablesProductType(normalizedProductType)
+    ? (parsed.data.supplier_ids_table_top?.length ?? 0) > 0 ||
+      (parsed.data.supplier_ids_table_foot?.length ?? 0) > 0
+    : (parsed.data.supplier_ids?.length ?? 0) > 0;
+
+  if (hasSelectedSuppliers) {
     try {
       assertTokenHashingConfigured();
     } catch (error) {
@@ -139,7 +222,12 @@ export async function createRfq(input: CreateRfqInput) {
 
   try {
     // Extract supplier_ids from the input (not stored in RFQ table)
-    const { supplier_ids, ...rfqData } = parsed.data;
+    const {
+      supplier_ids,
+      supplier_ids_table_top,
+      supplier_ids_table_foot,
+      ...rfqData
+    } = parsed.data;
     const normalizedRfqData = {
       ...rfqData,
       product_type: normalizedProductType,
@@ -178,12 +266,18 @@ export async function createRfq(input: CreateRfqInput) {
         tableFootFinish: rfq.finish_table_foot,
         quantity: rfq.quantity,
         supplierIds: supplier_ids,
+        supplierIdsTableTop: supplier_ids_table_top,
+        supplierIdsTableFoot: supplier_ids_table_foot,
       },
     });
 
     // If suppliers were selected, force invite creation via service role.
-    if (supplier_ids && supplier_ids.length > 0) {
-      const inviteResult = await replaceRfqInvitesWithServiceRole(rfq.id, supplier_ids);
+    if (hasSelectedSuppliers) {
+      const inviteResult = await replaceRfqInvitesWithServiceRole(rfq.id, {
+        supplierIds: supplier_ids,
+        supplierIdsTableTop: supplier_ids_table_top,
+        supplierIdsTableFoot: supplier_ids_table_foot,
+      });
       if ('error' in inviteResult) {
         console.error('Failed to create supplier invites after RFQ creation:', {
           rfqId: rfq.id,
@@ -214,7 +308,10 @@ export async function createRfq(input: CreateRfqInput) {
   }
 }
 
-export async function replaceRfqInvites(rfqId: string, supplierIds: string[]) {
+export async function replaceRfqInvites(
+  rfqId: string,
+  input: InviteSelectionInput | string[]
+) {
   const user = await requireAuth();
 
   if (user.role !== 'sales' && user.role !== 'admin') {
@@ -228,12 +325,8 @@ export async function replaceRfqInvites(rfqId: string, supplierIds: string[]) {
     return { error: TOKEN_CONFIG_ERROR_MESSAGE };
   }
 
-  const normalizedSupplierIds = [...new Set(supplierIds)];
-  if (normalizedSupplierIds.length === 0) {
-    return { error: 'Select at least one supplier' };
-  }
-
-  const result = await replaceRfqInvitesWithServiceRole(rfqId, normalizedSupplierIds);
+  const normalizedInput = normalizeInviteSelectionInput(input);
+  const result = await replaceRfqInvitesWithServiceRole(rfqId, normalizedInput);
   if ('error' in result) {
     return result;
   }
@@ -260,8 +353,13 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
     }
   }
 
+  const parsedUpdateData: Partial<CreateRfqInput> = { ...parsed.data };
+  delete parsedUpdateData.supplier_ids;
+  delete parsedUpdateData.supplier_ids_table_top;
+  delete parsedUpdateData.supplier_ids_table_foot;
+
   const updateData: Partial<CreateRfqInput> = {
-    ...parsed.data,
+    ...parsedUpdateData,
     product_type:
       parsed.data.product_type === undefined
         ? undefined
@@ -328,7 +426,9 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
       .single();
 
     if (rfqError || !rfq) {
-      return { error: 'RFQ not found.' };
+      const message = rfqError?.message ?? 'RFQ not found.';
+      console.error('Failed to load RFQ:', rfqError);
+      return { error: message.includes('schema cache') || message.includes('does not exist') ? message : 'RFQ not found.' };
     }
 
     const [
@@ -359,6 +459,11 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
         .order('created_at', { ascending: true }),
     ]);
 
+    const detailError =
+      attachmentsError?.message ??
+      invitesError?.message ??
+      quotesError?.message ??
+      commentsError?.message;
     if (attachmentsError || invitesError || quotesError || commentsError) {
       console.error('Failed to load RFQ detail data:', {
         attachmentsError: attachmentsError?.message,
@@ -366,7 +471,12 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
         quotesError: quotesError?.message,
         commentsError: commentsError?.message,
       });
-      return { error: 'Could not load RFQ details.' };
+      return {
+        error:
+          detailError && (detailError.includes('schema cache') || detailError.includes('does not exist'))
+            ? detailError
+            : 'Could not load RFQ details.',
+      };
     }
 
     return {
@@ -504,19 +614,28 @@ export async function sendRfq(rfqId: string) {
     return { error: TOKEN_CONFIG_ERROR_MESSAGE };
   }
 
-  // Fetch the RFQ with material details
+  // Fetch the RFQ (allow resend when already sent_to_supplier, e.g. after adding attachments)
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(`
-      *,
+      id, material, material_id, shape, finish, length, width, height, thickness, quantity,
+      material_table_top, material_table_foot, finish_table_top, finish_table_foot,
       material_details:materials(name)
     `)
     .eq('id', rfqId)
-    .in('status', ['draft', 'sent_to_pricing'])
+    .in('status', ['draft', 'sent_to_pricing', 'sent_to_supplier'])
     .single();
 
   if (rfqError || !rfq) {
-    return { error: 'RFQ not found or already sent to suppliers' };
+    if (rfqError) {
+      console.error('sendRfq: failed to fetch RFQ', { rfqId, code: rfqError.code, message: rfqError.message });
+    }
+    const isNoRows = rfqError?.code === 'PGRST116';
+    return {
+      error: isNoRows
+        ? 'RFQ not found or already sent to suppliers'
+        : rfqError?.message ?? 'RFQ not found or already sent to suppliers',
+    };
   }
 
   // Get existing invites for this RFQ
@@ -597,7 +716,7 @@ export async function sendRfq(rfqId: string) {
       action: 'INVITE_CREATED',
       entityType: 'rfq_invite',
       entityId: invite.id,
-      metadata: { rfqId, supplierId: invite.supplier.id },
+      metadata: { rfqId, supplierId: invite.supplier.id, invitePart: invite.invite_part ?? 'default' },
     });
 
     // Send email
@@ -610,6 +729,11 @@ export async function sendRfq(rfqId: string) {
       material: materialName,
       shape: rfq.shape,
       finish: rfq.finish,
+      invitePart: invite.invite_part ?? 'default',
+      materialTableTop: rfq.material_table_top,
+      finishTableTop: rfq.finish_table_top,
+      materialTableFoot: rfq.material_table_foot,
+      finishTableFoot: rfq.finish_table_foot,
       dimensionsText,
       quantity,
     });
@@ -624,6 +748,7 @@ export async function sendRfq(rfqId: string) {
         success: emailResult.success,
         error: emailResult.error,
         supplierEmail: invite.supplier.email,
+        invitePart: invite.invite_part ?? 'default',
       },
     });
 
@@ -644,12 +769,11 @@ export async function sendRfq(rfqId: string) {
     };
   }
 
-  // Update RFQ status to sent to supplier
+  // Update RFQ status to sent_to_supplier and refresh sent_at (also on resend)
   const { error: statusUpdateError } = await supabase
     .from('rfqs')
     .update({ status: 'sent_to_supplier', sent_at: new Date().toISOString() })
     .eq('id', rfqId)
-    .eq('status', 'draft')
     .select('id')
     .single();
 
@@ -689,7 +813,15 @@ export async function sendToPricingTeam(rfqId: string) {
     .single();
 
   if (rfqError || !rfq) {
-    return { error: 'RFQ not found' };
+    if (rfqError) {
+      console.error('sendToPricingTeam: failed to fetch RFQ', { rfqId, code: rfqError.code, message: rfqError.message });
+    }
+    return {
+      error:
+        rfqError?.message && (rfqError.message.includes('schema cache') || rfqError.message.includes('does not exist'))
+          ? rfqError.message
+          : 'RFQ not found',
+    };
   }
 
   if (rfq.status !== 'draft') {

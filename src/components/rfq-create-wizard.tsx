@@ -46,6 +46,8 @@ interface WizardData {
   material_table_foot: string;
   finish_table_foot: string;
   supplier_ids: string[];
+  supplier_ids_table_top: string[];
+  supplier_ids_table_foot: string[];
   diameter: string;
   length: string;
   width: string;
@@ -69,6 +71,8 @@ const initialData: WizardData = {
   material_table_foot: '',
   finish_table_foot: '',
   supplier_ids: [],
+  supplier_ids_table_top: [],
+  supplier_ids_table_foot: [],
   diameter: '',
   length: '',
   width: '',
@@ -107,6 +111,12 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
+  const [tableTopSuppliers, setTableTopSuppliers] = useState<Supplier[]>([]);
+  const [tableTopSuppliersLoading, setTableTopSuppliersLoading] = useState(false);
+  const [tableTopSuppliersError, setTableTopSuppliersError] = useState<string | null>(null);
+  const [tableFootSuppliers, setTableFootSuppliers] = useState<Supplier[]>([]);
+  const [tableFootSuppliersLoading, setTableFootSuppliersLoading] = useState(false);
+  const [tableFootSuppliersError, setTableFootSuppliersError] = useState<string | null>(null);
 
   const [attachments, setAttachments] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -175,51 +185,23 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     } catch (error) {
       console.error('Failed to load product types:', error);
       setProductTypes([]);
-      setProductTypesError('Soorten konden niet geladen worden.');
+      setProductTypesError('Product types could not be loaded.');
     } finally {
       setProductTypesLoading(false);
     }
   }, []);
 
-  const loadSuppliers = useCallback(async (materialIds: string[]) => {
-    const uniqueIds = [...new Set(materialIds.filter(Boolean))];
-    if (uniqueIds.length === 0) {
-      setSuppliers([]);
-      setSuppliersError(null);
-      return;
-    }
-
-    setSuppliersLoading(true);
-    setSuppliersError(null);
-
+  const loadSuppliersForMaterial = useCallback(async (materialId: string) => {
     try {
-      const results = await Promise.all(uniqueIds.map((materialId) => getSuppliersForMaterial(materialId)));
-
-      const firstError = results.find((result) => 'error' in result);
-      if (firstError && 'error' in firstError) {
-        setSuppliers([]);
-        setSuppliersError(firstError.error);
-        return;
+      const result = await getSuppliersForMaterial(materialId);
+      if ('error' in result) {
+        return { suppliers: [] as Supplier[], error: result.error };
       }
 
-      const supplierMap = new Map<string, Supplier>();
-      for (const result of results) {
-        if ('error' in result) {
-          continue;
-        }
-
-        for (const supplier of result.data) {
-          supplierMap.set(supplier.id, supplier);
-        }
-      }
-
-      setSuppliers([...supplierMap.values()]);
+      return { suppliers: result.data, error: null as string | null };
     } catch (error) {
       console.error('Failed to load suppliers:', error);
-      setSuppliers([]);
-      setSuppliersError('Leveranciers konden niet geladen worden.');
-    } finally {
-      setSuppliersLoading(false);
+      return { suppliers: [] as Supplier[], error: 'Leveranciers konden niet geladen worden.' };
     }
   }, []);
 
@@ -233,24 +215,97 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
   useEffect(() => {
     if (isTablesType) {
-      void loadSuppliers([data.material_id_table_top, data.material_id_table_foot]);
+      setSuppliers([]);
+      setSuppliersError(null);
+      setSuppliersLoading(false);
       return;
     }
 
-    if (data.material_id) {
-      void loadSuppliers([data.material_id]);
+    if (!data.material_id) {
+      setSuppliers([]);
+      setSuppliersError(null);
+      setSuppliersLoading(false);
       return;
     }
 
-    setSuppliers([]);
-    setSuppliersError(null);
-  }, [
-    data.material_id,
-    data.material_id_table_top,
-    data.material_id_table_foot,
-    isTablesType,
-    loadSuppliers,
-  ]);
+    let active = true;
+    const materialId = data.material_id;
+
+    async function loadSingleMaterialSuppliers() {
+      setSuppliersLoading(true);
+      setSuppliersError(null);
+      const result = await loadSuppliersForMaterial(materialId);
+      if (!active) return;
+
+      setSuppliers(result.suppliers);
+      setSuppliersError(result.error);
+      setSuppliersLoading(false);
+    }
+
+    void loadSingleMaterialSuppliers();
+
+    return () => {
+      active = false;
+    };
+  }, [data.material_id, isTablesType, loadSuppliersForMaterial]);
+
+  useEffect(() => {
+    if (!isTablesType || !data.material_id_table_top) {
+      setTableTopSuppliers([]);
+      setTableTopSuppliersError(null);
+      setTableTopSuppliersLoading(false);
+      return;
+    }
+
+    let active = true;
+    const materialId = data.material_id_table_top;
+
+    async function loadTableTopSuppliers() {
+      setTableTopSuppliersLoading(true);
+      setTableTopSuppliersError(null);
+      const result = await loadSuppliersForMaterial(materialId);
+      if (!active) return;
+
+      setTableTopSuppliers(result.suppliers);
+      setTableTopSuppliersError(result.error);
+      setTableTopSuppliersLoading(false);
+    }
+
+    void loadTableTopSuppliers();
+
+    return () => {
+      active = false;
+    };
+  }, [data.material_id_table_top, isTablesType, loadSuppliersForMaterial]);
+
+  useEffect(() => {
+    if (!isTablesType || !data.material_id_table_foot) {
+      setTableFootSuppliers([]);
+      setTableFootSuppliersError(null);
+      setTableFootSuppliersLoading(false);
+      return;
+    }
+
+    let active = true;
+    const materialId = data.material_id_table_foot;
+
+    async function loadTableFootSuppliers() {
+      setTableFootSuppliersLoading(true);
+      setTableFootSuppliersError(null);
+      const result = await loadSuppliersForMaterial(materialId);
+      if (!active) return;
+
+      setTableFootSuppliers(result.suppliers);
+      setTableFootSuppliersError(result.error);
+      setTableFootSuppliersLoading(false);
+    }
+
+    void loadTableFootSuppliers();
+
+    return () => {
+      active = false;
+    };
+  }, [data.material_id_table_foot, isTablesType, loadSuppliersForMaterial]);
 
   const updateData = <K extends keyof WizardData>(field: K, value: WizardData[K]) => {
     setData((prev) => ({ ...prev, [field]: value }));
@@ -262,8 +317,17 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const handleProductTypeChange = (productType: string) => {
     updateData('product_type', productType);
     updateData('supplier_ids', []);
+    updateData('supplier_ids_table_top', []);
+    updateData('supplier_ids_table_foot', []);
     setSuppliers([]);
     setSuppliersError(null);
+    setSuppliersLoading(false);
+    setTableTopSuppliers([]);
+    setTableTopSuppliersError(null);
+    setTableTopSuppliersLoading(false);
+    setTableFootSuppliers([]);
+    setTableFootSuppliersError(null);
+    setTableFootSuppliersLoading(false);
 
     if (productType === 'Tables') {
       updateData('material_id', '');
@@ -292,8 +356,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_name', material.name);
     updateData('finish', materialFinishOptions.length === 0 ? 'N.v.t.' : '');
     updateData('supplier_ids', []);
-    setSuppliers([]);
-    setSuppliersError(null);
   };
 
   const handleTableTopMaterialChange = (materialId: string) => {
@@ -307,9 +369,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_id_table_top', materialId);
     updateData('material_table_top', material.name);
     updateData('finish_table_top', finishOptions.length === 0 ? 'N.v.t.' : '');
-    updateData('supplier_ids', []);
-    setSuppliers([]);
-    setSuppliersError(null);
+    updateData('supplier_ids_table_top', []);
   };
 
   const handleTableFootMaterialChange = (materialId: string) => {
@@ -323,16 +383,28 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_id_table_foot', materialId);
     updateData('material_table_foot', material.name);
     updateData('finish_table_foot', finishOptions.length === 0 ? 'N.v.t.' : '');
-    updateData('supplier_ids', []);
-    setSuppliers([]);
-    setSuppliersError(null);
+    updateData('supplier_ids_table_foot', []);
   };
 
   const handleSupplierToggle = (supplierId: string, checked: boolean) => {
     const updatedSupplierIds = checked
-      ? [...data.supplier_ids, supplierId]
+      ? [...new Set([...data.supplier_ids, supplierId])]
       : data.supplier_ids.filter((id) => id !== supplierId);
     updateData('supplier_ids', updatedSupplierIds);
+  };
+
+  const handleTableTopSupplierToggle = (supplierId: string, checked: boolean) => {
+    const updatedSupplierIds = checked
+      ? [...new Set([...data.supplier_ids_table_top, supplierId])]
+      : data.supplier_ids_table_top.filter((id) => id !== supplierId);
+    updateData('supplier_ids_table_top', updatedSupplierIds);
+  };
+
+  const handleTableFootSupplierToggle = (supplierId: string, checked: boolean) => {
+    const updatedSupplierIds = checked
+      ? [...new Set([...data.supplier_ids_table_foot, supplierId])]
+      : data.supplier_ids_table_foot.filter((id) => id !== supplierId);
+    updateData('supplier_ids_table_foot', updatedSupplierIds);
   };
 
   const handleShapeChange = (shape: string) => {
@@ -384,6 +456,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
   const validateCurrentStep = (): boolean => {
     const stepErrors: Record<string, string[]> = {};
+    const detailsStepIndex = isTablesType ? 3 : 2;
 
     if (currentStep === 0) {
       if (isTablesType) {
@@ -411,10 +484,18 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         }
       }
     } else if (currentStep === 1) {
-      if (data.supplier_ids.length === 0) {
+      if (isTablesType) {
+        if (data.supplier_ids_table_top.length === 0) {
+          stepErrors.supplier_ids_table_top = ['Select at least one table top supplier'];
+        }
+      } else if (data.supplier_ids.length === 0) {
         stepErrors.supplier_ids = ['Select at least one supplier'];
       }
-    } else if (currentStep === 2) {
+    } else if (isTablesType && currentStep === 2) {
+      if (data.supplier_ids_table_foot.length === 0) {
+        stepErrors.supplier_ids_table_foot = ['Select at least one table foot supplier'];
+      }
+    } else if (currentStep === detailsStepIndex) {
       const isRound = data.shape === 'Round';
 
       if (!data.shape) {
@@ -457,8 +538,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   };
 
   const nextStep = () => {
+    const maxStep = isTablesType ? 3 : 2;
     if (validateCurrentStep()) {
-      setCurrentStep((prev) => Math.min(prev + 1, 2));
+      setCurrentStep((prev) => Math.min(prev + 1, maxStep));
     }
   };
 
@@ -502,7 +584,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       quantity: Number(data.quantity),
       shape: data.shape,
       notes: data.notes || null,
-      supplier_ids: data.supplier_ids,
+      supplier_ids: isTablesType ? undefined : data.supplier_ids,
+      supplier_ids_table_top: isTablesType ? data.supplier_ids_table_top : undefined,
+      supplier_ids_table_foot: isTablesType ? data.supplier_ids_table_foot : undefined,
     };
 
     try {
@@ -554,12 +638,18 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setErrors({});
     setSuppliers([]);
     setSuppliersError(null);
+    setTableTopSuppliers([]);
+    setTableTopSuppliersError(null);
+    setTableFootSuppliers([]);
+    setTableFootSuppliersError(null);
     setMaterialsError(null);
     setProductTypesError(null);
     setAttachments([]);
   };
-
-  const stepTitles = ['Material & finish', 'Suppliers', 'Details & dimensions'];
+  const stepTitles = isTablesType
+    ? ['Material & finish', 'Suppliers - table top', 'Suppliers - table foot', 'Details & dimensions']
+    : ['Material & finish', 'Suppliers', 'Details & dimensions'];
+  const detailsStepIndex = isTablesType ? 3 : 2;
 
   return (
     <Dialog
@@ -827,41 +917,49 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 <Label>Select suppliers *</Label>
                 <p className="mb-3 text-sm text-muted-foreground">
                   {isTablesType
-                    ? 'Choose one or more suppliers for the selected table materials.'
+                    ? 'Choose one or more suppliers for the selected table top material.'
                     : `Choose one or more suppliers for ${data.material_name || 'this material'}.`}
                 </p>
               </div>
 
-              {suppliersLoading ? (
+              {(isTablesType ? tableTopSuppliersLoading : suppliersLoading) ? (
                 <Card>
                   <CardContent className="pt-6">
                     <p className="text-center text-muted-foreground">Loading suppliers...</p>
                   </CardContent>
                 </Card>
-              ) : suppliersError ? (
+              ) : (isTablesType ? tableTopSuppliersError : suppliersError) ? (
                 <Card>
                   <CardContent className="pt-6">
-                    <p className="text-center text-destructive">{suppliersError}</p>
+                    <p className="text-center text-destructive">
+                      {isTablesType ? tableTopSuppliersError : suppliersError}
+                    </p>
                   </CardContent>
                 </Card>
-              ) : suppliers.length === 0 ? (
+              ) : (isTablesType ? tableTopSuppliers.length : suppliers.length) === 0 ? (
                 <Card>
                   <CardContent className="pt-6">
                     <p className="text-center text-muted-foreground">
-                      No suppliers available for the selected material(s).
+                      No suppliers available for the selected material.
                     </p>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="max-h-[300px] space-y-2 overflow-y-auto">
-                  {suppliers.map((supplier) => (
+                  {(isTablesType ? tableTopSuppliers : suppliers).map((supplier) => (
                     <Card key={supplier.id} className="p-3">
                       <div className="flex items-center space-x-2">
                         <Checkbox
                           id={`supplier-${supplier.id}`}
-                          checked={data.supplier_ids.includes(supplier.id)}
+                          checked={
+                            isTablesType
+                              ? data.supplier_ids_table_top.includes(supplier.id)
+                              : data.supplier_ids.includes(supplier.id)
+                          }
                           onCheckedChange={(checked) =>
-                            handleSupplierToggle(supplier.id, checked as boolean)
+                            isTablesType
+                              ? handleTableTopSupplierToggle(supplier.id, checked as boolean)
+                              : handleSupplierToggle(supplier.id, checked as boolean)
                           }
                         />
                         <div className="flex-1">
@@ -876,11 +974,75 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 </div>
               )}
 
-              {errors.supplier_ids && <p className="text-destructive text-xs">{errors.supplier_ids[0]}</p>}
+              {isTablesType && errors.supplier_ids_table_top && (
+                <p className="text-destructive text-xs">{errors.supplier_ids_table_top[0]}</p>
+              )}
+              {!isTablesType && errors.supplier_ids && (
+                <p className="text-destructive text-xs">{errors.supplier_ids[0]}</p>
+              )}
             </div>
           )}
 
-          {currentStep === 2 && (
+          {isTablesType && currentStep === 2 && (
+            <div className="space-y-4">
+              <div>
+                <Label>Select suppliers *</Label>
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Choose one or more suppliers for the selected table foot material.
+                </p>
+              </div>
+
+              {tableFootSuppliersLoading ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-center text-muted-foreground">Loading suppliers...</p>
+                  </CardContent>
+                </Card>
+              ) : tableFootSuppliersError ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-center text-destructive">{tableFootSuppliersError}</p>
+                  </CardContent>
+                </Card>
+              ) : tableFootSuppliers.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-center text-muted-foreground">
+                      No suppliers available for the selected material.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="max-h-[300px] space-y-2 overflow-y-auto">
+                  {tableFootSuppliers.map((supplier) => (
+                    <Card key={supplier.id} className="p-3">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`supplier-foot-${supplier.id}`}
+                          checked={data.supplier_ids_table_foot.includes(supplier.id)}
+                          onCheckedChange={(checked) =>
+                            handleTableFootSupplierToggle(supplier.id, checked as boolean)
+                          }
+                        />
+                        <div className="flex-1">
+                          <Label htmlFor={`supplier-foot-${supplier.id}`} className="cursor-pointer font-medium">
+                            {supplier.name}
+                          </Label>
+                          <p className="text-xs text-muted-foreground">{supplier.email}</p>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {errors.supplier_ids_table_foot && (
+                <p className="text-destructive text-xs">{errors.supplier_ids_table_foot[0]}</p>
+              )}
+            </div>
+          )}
+
+          {currentStep === detailsStepIndex && (
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="shape">Shape *</Label>
@@ -1095,7 +1257,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            {currentStep < 2 ? (
+            {currentStep < detailsStepIndex ? (
               <Button type="button" onClick={nextStep}>
                 Next
               </Button>

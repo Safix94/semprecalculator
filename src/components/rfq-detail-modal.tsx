@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getRfqDetail, sendToPricingTeam } from '@/actions/rfq';
 import { AttachmentUpload } from '@/components/attachment-upload';
+import { RfqNotesEditor } from '@/components/rfq-notes-editor';
+import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { Button } from '@/components/ui/button';
 import { FormattedDate } from '@/components/formatted-date';
 import { QuoteComparison } from '@/components/quote-comparison';
@@ -18,7 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { Rfq, RfqAttachment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
+import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
 
 interface RfqDetailModalProps {
   rfqId: string | null;
@@ -30,6 +32,7 @@ interface RfqDetailData {
   attachments: RfqAttachment[];
   invites: (RfqInvite & { supplier: Supplier | null })[];
   quotes: (RfqQuote & { supplier: Supplier | null })[];
+  comments: RfqComment[];
 }
 
 const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
@@ -133,6 +136,7 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
     : null;
 
   const isRound = detail ? isRoundShape(detail.rfq.shape) : false;
+  const isTablesType = detail?.rfq.product_type === 'Tables';
 
   const handleSendToPricingTeam = useCallback(async () => {
     if (!detail?.rfq.id) return;
@@ -252,10 +256,30 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                       <dd className="mt-1 text-sm font-medium">{detail.rfq.product_type}</dd>
                     </div>
                   )}
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Material</dt>
-                    <dd className="mt-1 text-sm font-medium">{detail.rfq.material}</dd>
-                  </div>
+                  {!isTablesType && (
+                    <div>
+                      <dt className="text-xs uppercase text-muted-foreground">Material</dt>
+                      <dd className="mt-1 text-sm font-medium">{detail.rfq.material}</dd>
+                    </div>
+                  )}
+                  {isTablesType && detail.rfq.material_table_top && (
+                    <div>
+                      <dt className="text-xs uppercase text-muted-foreground">Tafelblad</dt>
+                      <dd className="mt-1 text-sm font-medium">
+                        {detail.rfq.material_table_top}
+                        {detail.rfq.finish_table_top ? ` (${detail.rfq.finish_table_top})` : ''}
+                      </dd>
+                    </div>
+                  )}
+                  {isTablesType && detail.rfq.material_table_foot && (
+                    <div>
+                      <dt className="text-xs uppercase text-muted-foreground">Tafelpoot</dt>
+                      <dd className="mt-1 text-sm font-medium">
+                        {detail.rfq.material_table_foot}
+                        {detail.rfq.finish_table_foot ? ` (${detail.rfq.finish_table_foot})` : ''}
+                      </dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.shape}</dd>
@@ -282,13 +306,17 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                       <dd className="mt-1 text-sm font-medium">{detail.rfq.thickness} cm</dd>
                     </div>
                   )}
-                  {detail.rfq.notes && (
-                    <div className="col-span-2 md:col-span-3">
-                      <dt className="text-xs uppercase text-muted-foreground">Notes</dt>
-                      <dd className="mt-1 whitespace-pre-wrap text-sm">{detail.rfq.notes}</dd>
-                    </div>
-                  )}
                 </dl>
+
+                <div className="mt-4 border-t pt-4">
+                  <h3 className="mb-2 text-xs uppercase text-muted-foreground">Notes</h3>
+                  <RfqNotesEditor
+                    key={`rfq-notes-${detail.rfq.id}`}
+                    rfqId={detail.rfq.id}
+                    initialNotes={detail.rfq.notes}
+                    disabled={detail.rfq.status === 'closed'}
+                  />
+                </div>
               </CardContent>
             </Card>
 
@@ -310,8 +338,7 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                   <p className="text-sm text-muted-foreground">No attachments.</p>
                 )}
 
-                {(detail.rfq.status === 'draft' ||
-                  detail.rfq.status === 'waiting_for_technical_drawing') && (
+                {detail.rfq.status !== 'closed' && (
                   <div className="mt-4">
                     <AttachmentUpload rfqId={detail.rfq.id} />
                   </div>
@@ -322,6 +349,14 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
             {detail.rfq.status !== 'draft' && (
               <QuoteComparison invites={invitesWithSupplier} quotes={quotesWithSupplier} />
             )}
+
+            <RfqSupplierThreads
+              key={`rfq-threads-${detail.rfq.id}`}
+              rfqId={detail.rfq.id}
+              rfqStatus={detail.rfq.status}
+              invites={detail.invites}
+              initialComments={detail.comments}
+            />
           </div>
         )}
       </DialogContent>

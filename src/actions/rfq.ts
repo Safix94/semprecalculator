@@ -2,27 +2,49 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
-import { requireAuth } from '@/lib/auth';
-import { createRfqSchema, updateRfqSchema } from '@/lib/validation';
+import { requireAuth, requireRole } from '@/lib/auth';
+import { createRfqSchema, updateRfqSchema, updateRfqNotesSchema } from '@/lib/validation';
 import {
   assertTokenHashingConfigured,
   generateToken,
   hashToken,
   isTokenHashingConfigError,
 } from '@/lib/tokens';
-import { sendPricingTeamRfqNotification, sendSupplierInviteEmail } from '@/lib/mailer';
+import {
+  getPricingTeamEmailsFromEnv,
+  sendPricingTeamRfqNotification,
+  sendSupplierInviteEmail,
+} from '@/lib/mailer';
 import { formatRfqDimensionsWithOptions } from '@/lib/rfq-format';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput } from '@/lib/validation';
-import type { Rfq, RfqAttachment, RfqInvite, RfqQuote, Supplier } from '@/types';
+import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } from '@/types';
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
 const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-function getPricingTeamEmailsFromEnv(): string[] {
-  const raw = process.env.PRICING_TEAM_EMAIL ?? '';
+async function productTypeExists(
+  supabase: SupabaseServerClient,
+  productType: string
+): Promise<boolean> {
+  const normalized = productType.trim();
+  if (!normalized) {
+    return true;
+  }
 
-  return [...new Set(raw.split(',').map((email) => email.trim()).filter(Boolean))];
+  const { data, error } = await supabase
+    .from('product_types')
+    .select('id')
+    .eq('name', normalized)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to validate product type:', error.message);
+    return false;
+  }
+
+  return Boolean(data);
 }
 
 type ReplaceRfqInvitesResult = { data: { created: number } } | { error: string };
@@ -94,6 +116,14 @@ export async function createRfq(input: CreateRfqInput) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  const normalizedProductType = parsed.data.product_type?.trim() || null;
+  if (normalizedProductType) {
+    const isAllowedProductType = await productTypeExists(supabase, normalizedProductType);
+    if (!isAllowedProductType) {
+      return { error: { product_type: ['Invalid product type'] } };
+    }
+  }
+
   if (parsed.data.supplier_ids && parsed.data.supplier_ids.length > 0) {
     try {
       assertTokenHashingConfigured();
@@ -110,11 +140,19 @@ export async function createRfq(input: CreateRfqInput) {
   try {
     // Extract supplier_ids from the input (not stored in RFQ table)
     const { supplier_ids, ...rfqData } = parsed.data;
+    const normalizedRfqData = {
+      ...rfqData,
+      product_type: normalizedProductType,
+      material_table_top: rfqData.material_table_top?.trim() || null,
+      material_table_foot: rfqData.material_table_foot?.trim() || null,
+      finish_table_top: rfqData.finish_table_top?.trim() || null,
+      finish_table_foot: rfqData.finish_table_foot?.trim() || null,
+    };
 
     const { data: rfq, error } = await supabase
       .from('rfqs')
       .insert({
-        ...rfqData,
+        ...normalizedRfqData,
         created_by: user.id,
         status: 'draft',
       })
@@ -134,6 +172,10 @@ export async function createRfq(input: CreateRfqInput) {
       metadata: {
         materialId: rfq.material_id,
         finish: rfq.finish,
+        tableTopMaterialId: rfq.material_id_table_top,
+        tableFootMaterialId: rfq.material_id_table_foot,
+        tableTopFinish: rfq.finish_table_top,
+        tableFootFinish: rfq.finish_table_foot,
         quantity: rfq.quantity,
         supplierIds: supplier_ids,
       },
@@ -210,9 +252,41 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
+  if (parsed.data.product_type) {
+    const normalizedProductType = parsed.data.product_type.trim();
+    const isAllowedProductType = await productTypeExists(supabase, normalizedProductType);
+    if (!isAllowedProductType) {
+      return { error: { product_type: ['Invalid product type'] } };
+    }
+  }
+
+  const updateData: Partial<CreateRfqInput> = {
+    ...parsed.data,
+    product_type:
+      parsed.data.product_type === undefined
+        ? undefined
+        : parsed.data.product_type?.trim() || null,
+    material_table_top:
+      parsed.data.material_table_top === undefined
+        ? undefined
+        : parsed.data.material_table_top?.trim() || null,
+    material_table_foot:
+      parsed.data.material_table_foot === undefined
+        ? undefined
+        : parsed.data.material_table_foot?.trim() || null,
+    finish_table_top:
+      parsed.data.finish_table_top === undefined
+        ? undefined
+        : parsed.data.finish_table_top?.trim() || null,
+    finish_table_foot:
+      parsed.data.finish_table_foot === undefined
+        ? undefined
+        : parsed.data.finish_table_foot?.trim() || null,
+  };
+
   const { data: rfq, error } = await supabase
     .from('rfqs')
-    .update(parsed.data)
+    .update(updateData)
     .eq('id', rfqId)
     .eq('status', 'draft')
     .select()
@@ -239,6 +313,7 @@ interface RfqDetailData {
   attachments: RfqAttachment[];
   invites: (RfqInvite & { supplier: Supplier | null })[];
   quotes: (RfqQuote & { supplier: Supplier | null })[];
+  comments: RfqComment[];
 }
 
 export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData } | { error: string }> {
@@ -260,6 +335,7 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
       { data: attachments, error: attachmentsError },
       { data: invites, error: invitesError },
       { data: quotes, error: quotesError },
+      { data: comments, error: commentsError },
     ] = await Promise.all([
       supabase
         .from('rfq_attachments')
@@ -276,13 +352,19 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
         .select('*, supplier:suppliers(*)')
         .eq('rfq_id', rfqId)
         .order('final_price_calculated', { ascending: true }),
+      supabase
+        .from('rfq_comments')
+        .select('*')
+        .eq('rfq_id', rfqId)
+        .order('created_at', { ascending: true }),
     ]);
 
-    if (attachmentsError || invitesError || quotesError) {
+    if (attachmentsError || invitesError || quotesError || commentsError) {
       console.error('Failed to load RFQ detail data:', {
         attachmentsError: attachmentsError?.message,
         invitesError: invitesError?.message,
         quotesError: quotesError?.message,
+        commentsError: commentsError?.message,
       });
       return { error: 'Could not load RFQ details.' };
     }
@@ -293,6 +375,7 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
         attachments: (attachments ?? []) as RfqAttachment[],
         invites: (invites ?? []) as (RfqInvite & { supplier: Supplier | null })[],
         quotes: (quotes ?? []) as (RfqQuote & { supplier: Supplier | null })[],
+        comments: (comments ?? []) as RfqComment[],
       },
     };
   } catch (error) {
@@ -302,8 +385,22 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
 }
 
 export async function uploadAttachment(rfqId: string, formData: FormData) {
-  await requireAuth();
+  await requireRole('sales');
   const supabase = await createClient();
+
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select('status')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    return { error: 'RFQ not found' };
+  }
+
+  if (rfq.status === 'closed') {
+    return { error: 'Cannot upload attachments to a closed RFQ' };
+  }
 
   const file = formData.get('file') as File | null;
   if (!file) {
@@ -350,6 +447,50 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
 
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
   return { success: true };
+}
+
+export async function updateRfqNotes(rfqId: string, notes: string | null) {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+  const normalizedNotes = typeof notes === 'string' ? notes.trim() : null;
+  const parsed = updateRfqNotesSchema.safeParse({
+    notes: normalizedNotes && normalizedNotes.length > 0 ? normalizedNotes : null,
+  });
+
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.flatten().fieldErrors.notes?.[0] ??
+        'Invalid notes value',
+    };
+  }
+
+  const { data: rfq, error: updateError } = await supabase
+    .from('rfqs')
+    .update({ notes: parsed.data.notes })
+    .eq('id', rfqId)
+    .neq('status', 'closed')
+    .select('id')
+    .single();
+
+  if (updateError || !rfq) {
+    return { error: updateError?.message ?? 'Could not update notes' };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_UPDATED',
+    entityType: 'rfq',
+    entityId: rfqId,
+    metadata: {
+      notesUpdated: true,
+    },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return { data: { notes: parsed.data.notes } };
 }
 
 export async function sendRfq(rfqId: string) {
@@ -541,7 +682,9 @@ export async function sendToPricingTeam(rfqId: string) {
   const supabase = await createClient();
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
-    .select('id, material, shape, finish, quantity, customer_name, product_type, status')
+    .select(
+      'id, material, shape, finish, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+    )
     .eq('id', rfqId)
     .single();
 
@@ -561,6 +704,12 @@ export async function sendToPricingTeam(rfqId: string) {
   const rfqSummary = [
     rfq.product_type ? `Type: ${rfq.product_type}` : null,
     `Material: ${rfq.material}`,
+    rfq.product_type === 'Tables' && rfq.material_table_top
+      ? `Table top: ${rfq.material_table_top}${rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}`
+      : null,
+    rfq.product_type === 'Tables' && rfq.material_table_foot
+      ? `Table foot: ${rfq.material_table_foot}${rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}`
+      : null,
     `Shape: ${rfq.shape}`,
     rfq.finish ? `Finish: ${rfq.finish}` : null,
     `Quantity: ${Number(rfq.quantity ?? 1)}`,

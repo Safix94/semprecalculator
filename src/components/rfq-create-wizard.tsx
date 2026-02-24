@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createRfq } from '@/actions/rfq';
 import { getActiveMaterials, getSuppliersForMaterial } from '@/actions/materials';
+import { getProductTypes } from '@/actions/product-types';
+import { createRfq, uploadAttachment } from '@/actions/rfq';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,8 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PRODUCT_TYPES } from '@/lib/product-types';
-import type { Material, Supplier } from '@/types';
+import type { Material, ProductType, Supplier } from '@/types';
 
 interface RfqCreateWizardProps {
   children?: React.ReactNode;
@@ -39,6 +39,12 @@ interface WizardData {
   material_id: string;
   material_name: string;
   finish: string;
+  material_id_table_top: string;
+  material_table_top: string;
+  finish_table_top: string;
+  material_id_table_foot: string;
+  material_table_foot: string;
+  finish_table_foot: string;
   supplier_ids: string[];
   diameter: string;
   length: string;
@@ -56,6 +62,12 @@ const initialData: WizardData = {
   material_id: '',
   material_name: '',
   finish: '',
+  material_id_table_top: '',
+  material_table_top: '',
+  finish_table_top: '',
+  material_id_table_foot: '',
+  material_table_foot: '',
+  finish_table_foot: '',
   supplier_ids: [],
   diameter: '',
   length: '',
@@ -66,6 +78,16 @@ const initialData: WizardData = {
   shape: 'Rectangular',
   notes: '',
 };
+
+const attachmentExtensions = new Set(['skp', 'pdf', 'jpg', 'jpeg', 'png', 'dwg']);
+
+function isAllowedAttachment(file: File): boolean {
+  const extension = file.name.split('.').pop()?.toLowerCase();
+  if (!extension) {
+    return false;
+  }
+  return attachmentExtensions.has(extension);
+}
 
 export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [open, setOpen] = useState(false);
@@ -78,21 +100,56 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
 
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
+  const [productTypesLoading, setProductTypesLoading] = useState(false);
+  const [productTypesError, setProductTypesError] = useState<string | null>(null);
+
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [suppliersError, setSuppliersError] = useState<string | null>(null);
+
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const router = useRouter();
+  const isTablesType = data.product_type === 'Tables';
+
+  const selectedMaterial = useMemo(
+    () => materials.find((item) => item.id === data.material_id) ?? null,
+    [data.material_id, materials]
+  );
+  const selectedTableTopMaterial = useMemo(
+    () => materials.find((item) => item.id === data.material_id_table_top) ?? null,
+    [data.material_id_table_top, materials]
+  );
+  const selectedTableFootMaterial = useMemo(
+    () => materials.find((item) => item.id === data.material_id_table_foot) ?? null,
+    [data.material_id_table_foot, materials]
+  );
+
   const availableFinishOptions = (selectedMaterial?.finish_options ?? [])
+    .map((finish) => finish.trim())
+    .filter((finish) => finish.length > 0);
+  const tableTopFinishOptions = (selectedTableTopMaterial?.finish_options ?? [])
+    .map((finish) => finish.trim())
+    .filter((finish) => finish.length > 0);
+  const tableFootFinishOptions = (selectedTableFootMaterial?.finish_options ?? [])
     .map((finish) => finish.trim())
     .filter((finish) => finish.length > 0);
 
   const loadMaterials = useCallback(async () => {
     setMaterialsLoading(true);
     setMaterialsError(null);
+
     try {
-      const materialsData = await getActiveMaterials();
-      setMaterials(materialsData);
+      const result = await getActiveMaterials();
+      if ('error' in result) {
+        setMaterials([]);
+        setMaterialsError(result.error);
+        return;
+      }
+
+      setMaterials(result.data);
     } catch (error) {
       console.error('Failed to load materials:', error);
       setMaterials([]);
@@ -102,32 +159,98 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     }
   }, []);
 
-  const loadSuppliers = useCallback(async (materialId: string) => {
-    setSuppliersLoading(true);
+  const loadProductTypeOptions = useCallback(async () => {
+    setProductTypesLoading(true);
+    setProductTypesError(null);
+
     try {
-      const suppliersData = await getSuppliersForMaterial(materialId);
-      setSuppliers(suppliersData);
+      const result = await getProductTypes();
+      if ('error' in result) {
+        setProductTypes([]);
+        setProductTypesError(result.error);
+        return;
+      }
+
+      setProductTypes(result.data);
+    } catch (error) {
+      console.error('Failed to load product types:', error);
+      setProductTypes([]);
+      setProductTypesError('Soorten konden niet geladen worden.');
+    } finally {
+      setProductTypesLoading(false);
+    }
+  }, []);
+
+  const loadSuppliers = useCallback(async (materialIds: string[]) => {
+    const uniqueIds = [...new Set(materialIds.filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      setSuppliers([]);
+      setSuppliersError(null);
+      return;
+    }
+
+    setSuppliersLoading(true);
+    setSuppliersError(null);
+
+    try {
+      const results = await Promise.all(uniqueIds.map((materialId) => getSuppliersForMaterial(materialId)));
+
+      const firstError = results.find((result) => 'error' in result);
+      if (firstError && 'error' in firstError) {
+        setSuppliers([]);
+        setSuppliersError(firstError.error);
+        return;
+      }
+
+      const supplierMap = new Map<string, Supplier>();
+      for (const result of results) {
+        if ('error' in result) {
+          continue;
+        }
+
+        for (const supplier of result.data) {
+          supplierMap.set(supplier.id, supplier);
+        }
+      }
+
+      setSuppliers([...supplierMap.values()]);
     } catch (error) {
       console.error('Failed to load suppliers:', error);
       setSuppliers([]);
+      setSuppliersError('Leveranciers konden niet geladen worden.');
     } finally {
       setSuppliersLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (open) {
-      loadMaterials();
-    }
-  }, [open, loadMaterials]);
-
-  useEffect(() => {
-    if (data.material_id) {
-      loadSuppliers(data.material_id);
+    if (!open) {
       return;
     }
+
+    void Promise.all([loadMaterials(), loadProductTypeOptions()]);
+  }, [open, loadMaterials, loadProductTypeOptions]);
+
+  useEffect(() => {
+    if (isTablesType) {
+      void loadSuppliers([data.material_id_table_top, data.material_id_table_foot]);
+      return;
+    }
+
+    if (data.material_id) {
+      void loadSuppliers([data.material_id]);
+      return;
+    }
+
     setSuppliers([]);
-  }, [data.material_id, loadSuppliers]);
+    setSuppliersError(null);
+  }, [
+    data.material_id,
+    data.material_id_table_top,
+    data.material_id_table_foot,
+    isTablesType,
+    loadSuppliers,
+  ]);
 
   const updateData = <K extends keyof WizardData>(field: K, value: WizardData[K]) => {
     setData((prev) => ({ ...prev, [field]: value }));
@@ -136,9 +259,31 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     }
   };
 
+  const handleProductTypeChange = (productType: string) => {
+    updateData('product_type', productType);
+    updateData('supplier_ids', []);
+    setSuppliers([]);
+    setSuppliersError(null);
+
+    if (productType === 'Tables') {
+      updateData('material_id', '');
+      updateData('material_name', '');
+      updateData('finish', '');
+      return;
+    }
+
+    updateData('material_id_table_top', '');
+    updateData('material_table_top', '');
+    updateData('finish_table_top', '');
+    updateData('material_id_table_foot', '');
+    updateData('material_table_foot', '');
+    updateData('finish_table_foot', '');
+  };
+
   const handleMaterialChange = (materialId: string) => {
     const material = materials.find((item) => item.id === materialId);
     if (!material) return;
+
     const materialFinishOptions = material.finish_options
       .map((finish) => finish.trim())
       .filter((finish) => finish.length > 0);
@@ -147,8 +292,40 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_name', material.name);
     updateData('finish', materialFinishOptions.length === 0 ? 'N.v.t.' : '');
     updateData('supplier_ids', []);
-    setSelectedMaterial(material);
     setSuppliers([]);
+    setSuppliersError(null);
+  };
+
+  const handleTableTopMaterialChange = (materialId: string) => {
+    const material = materials.find((item) => item.id === materialId);
+    if (!material) return;
+
+    const finishOptions = material.finish_options
+      .map((finish) => finish.trim())
+      .filter((finish) => finish.length > 0);
+
+    updateData('material_id_table_top', materialId);
+    updateData('material_table_top', material.name);
+    updateData('finish_table_top', finishOptions.length === 0 ? 'N.v.t.' : '');
+    updateData('supplier_ids', []);
+    setSuppliers([]);
+    setSuppliersError(null);
+  };
+
+  const handleTableFootMaterialChange = (materialId: string) => {
+    const material = materials.find((item) => item.id === materialId);
+    if (!material) return;
+
+    const finishOptions = material.finish_options
+      .map((finish) => finish.trim())
+      .filter((finish) => finish.length > 0);
+
+    updateData('material_id_table_foot', materialId);
+    updateData('material_table_foot', material.name);
+    updateData('finish_table_foot', finishOptions.length === 0 ? 'N.v.t.' : '');
+    updateData('supplier_ids', []);
+    setSuppliers([]);
+    setSuppliersError(null);
   };
 
   const handleSupplierToggle = (supplierId: string, checked: boolean) => {
@@ -181,15 +358,57 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('diameter', '');
   };
 
+  const handleAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(event.target.files ?? []);
+    if (selectedFiles.length === 0) {
+      return;
+    }
+
+    const invalidFile = selectedFiles.find((file) => !isAllowedAttachment(file));
+    if (invalidFile) {
+      setErrors({ _form: [`Ongeldig bestandstype voor ${invalidFile.name}. Gebruik SKP, PDF, JPG, PNG of DWG.`] });
+      event.target.value = '';
+      return;
+    }
+
+    setAttachments((prev) => [...prev, ...selectedFiles]);
+    if (errors._form) {
+      setErrors((prev) => ({ ...prev, _form: [] }));
+    }
+    event.target.value = '';
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
+  };
+
   const validateCurrentStep = (): boolean => {
     const stepErrors: Record<string, string[]> = {};
 
     if (currentStep === 0) {
-      if (!data.material_id) {
-        stepErrors.material_id = ['Material is required'];
-      }
-      if (availableFinishOptions.length > 0 && !data.finish) {
-        stepErrors.finish = ['Finish is required'];
+      if (isTablesType) {
+        if (!data.material_id_table_top) {
+          stepErrors.material_id_table_top = ['Table top material is required'];
+        }
+
+        if (!data.material_id_table_foot) {
+          stepErrors.material_id_table_foot = ['Table foot material is required'];
+        }
+
+        if (tableTopFinishOptions.length > 0 && !data.finish_table_top) {
+          stepErrors.finish_table_top = ['Table top finish is required'];
+        }
+
+        if (tableFootFinishOptions.length > 0 && !data.finish_table_foot) {
+          stepErrors.finish_table_foot = ['Table foot finish is required'];
+        }
+      } else {
+        if (!data.material_id) {
+          stepErrors.material_id = ['Material is required'];
+        }
+        if (availableFinishOptions.length > 0 && !data.finish) {
+          stepErrors.finish = ['Finish is required'];
+        }
       }
     } else if (currentStep === 1) {
       if (data.supplier_ids.length === 0) {
@@ -257,12 +476,25 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     const diameter = Number(data.diameter);
     const thicknessValue = data.thickness === '' ? 0 : Number(data.thickness);
 
+    const materialSummary = isTablesType
+      ? [data.material_table_top, data.material_table_foot].filter(Boolean).join(' / ')
+      : data.material_name;
+    const finishSummary = isTablesType
+      ? [data.finish_table_top, data.finish_table_foot].filter(Boolean).join(' / ')
+      : data.finish;
+
     const input = {
       customer_name: data.customer_name || null,
       product_type: data.product_type || null,
-      material: data.material_name,
-      material_id: data.material_id,
-      finish: data.finish,
+      material: materialSummary,
+      material_id: isTablesType ? data.material_id_table_top || null : data.material_id,
+      material_id_table_top: isTablesType ? data.material_id_table_top || null : null,
+      material_id_table_foot: isTablesType ? data.material_id_table_foot || null : null,
+      material_table_top: isTablesType ? data.material_table_top || null : null,
+      material_table_foot: isTablesType ? data.material_table_foot || null : null,
+      finish: finishSummary || 'N.v.t.',
+      finish_table_top: isTablesType ? data.finish_table_top || null : null,
+      finish_table_foot: isTablesType ? data.finish_table_foot || null : null,
       length: isRound ? diameter : Number(data.length),
       width: isRound ? diameter : Number(data.width),
       height: Number(data.height),
@@ -281,13 +513,32 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         return;
       }
 
-      setOpen(false);
-      setCurrentStep(0);
-      setData(initialData);
-      setSelectedMaterial(null);
-
       if (result.data) {
+        const failedUploads: string[] = [];
+
+        for (const attachment of attachments) {
+          const formData = new FormData();
+          formData.append('file', attachment);
+
+          const uploadResult = await uploadAttachment(result.data.id, formData);
+          if (uploadResult.error) {
+            failedUploads.push(attachment.name);
+          }
+        }
+
+        setOpen(false);
+        setCurrentStep(0);
+        setData(initialData);
+        setSuppliers([]);
+        setSuppliersError(null);
+        setAttachments([]);
+
+        if (failedUploads.length > 0) {
+          console.error('Some attachments failed to upload:', failedUploads);
+        }
+
         router.push(`/dashboard?rfq=${result.data.id}`);
+        router.refresh();
       }
     } catch (error) {
       console.error('Failed to create RFQ:', error);
@@ -301,9 +552,11 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setCurrentStep(0);
     setData(initialData);
     setErrors({});
-    setSelectedMaterial(null);
     setSuppliers([]);
+    setSuppliersError(null);
     setMaterialsError(null);
+    setProductTypesError(null);
+    setAttachments([]);
   };
 
   const stepTitles = ['Material & finish', 'Suppliers', 'Details & dimensions'];
@@ -351,79 +604,219 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 <Label htmlFor="product_type">Type</Label>
                 <Select
                   value={data.product_type || undefined}
-                  onValueChange={(value) => updateData('product_type', value)}
+                  onValueChange={handleProductTypeChange}
+                  disabled={productTypesLoading || productTypes.length === 0}
                 >
                   <SelectTrigger id="product_type" className="w-full">
-                    <SelectValue placeholder="Select type (optional)" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[70]">
-                    {PRODUCT_TYPES.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="material">Material *</Label>
-                <Select
-                  value={data.material_id}
-                  onValueChange={handleMaterialChange}
-                  disabled={materialsLoading || materials.length === 0}
-                >
-                  <SelectTrigger className="w-full">
                     <SelectValue
                       placeholder={
-                        materialsLoading
-                          ? 'Loading materials...'
-                          : materials.length === 0
-                            ? 'No materials available'
-                            : 'Select a material'
+                        productTypesLoading
+                          ? 'Loading types...'
+                          : productTypes.length === 0
+                            ? 'No types available'
+                            : 'Select type (optional)'
                       }
                     />
                   </SelectTrigger>
                   <SelectContent className="z-[70]">
-                    {materials.map((material) => (
-                      <SelectItem key={material.id} value={material.id}>
-                        {material.name}
+                    {productTypes.map((type) => (
+                      <SelectItem key={type.id} value={type.name}>
+                        {type.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {materialsError && <p className="text-destructive text-xs">{materialsError}</p>}
-                {!materialsLoading && !materialsError && materials.length === 0 && (
-                  <p className="text-muted-foreground text-xs">
-                    Add materials first via Admin &gt; Materials.
-                  </p>
-                )}
-                {errors.material_id && <p className="text-destructive text-xs">{errors.material_id[0]}</p>}
+                {productTypesError && <p className="text-destructive text-xs">{productTypesError}</p>}
               </div>
 
-              {selectedMaterial && availableFinishOptions.length > 0 && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="finish">Finish *</Label>
-                  <Select value={data.finish} onValueChange={(value) => updateData('finish', value)}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select a finish" />
-                    </SelectTrigger>
-                    <SelectContent className="z-[70]">
-                      {availableFinishOptions.map((finish) => (
-                        <SelectItem key={finish} value={finish}>
-                          {finish}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {errors.finish && <p className="text-destructive text-xs">{errors.finish[0]}</p>}
-                </div>
+              {!isTablesType && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="material">Material *</Label>
+                    <Select
+                      value={data.material_id}
+                      onValueChange={handleMaterialChange}
+                      disabled={materialsLoading || materials.length === 0}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue
+                          placeholder={
+                            materialsLoading
+                              ? 'Loading materials...'
+                              : materials.length === 0
+                                ? 'No materials available'
+                                : 'Select a material'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="z-[70]">
+                        {materials.map((material) => (
+                          <SelectItem key={material.id} value={material.id}>
+                            {material.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {materialsError && <p className="text-destructive text-xs">{materialsError}</p>}
+                    {!materialsLoading && !materialsError && materials.length === 0 && (
+                      <p className="text-muted-foreground text-xs">
+                        Add materials first via Admin &gt; Materials.
+                      </p>
+                    )}
+                    {errors.material_id && <p className="text-destructive text-xs">{errors.material_id[0]}</p>}
+                  </div>
+
+                  {selectedMaterial && availableFinishOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="finish">Finish *</Label>
+                      <Select value={data.finish} onValueChange={(value) => updateData('finish', value)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a finish" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          {availableFinishOptions.map((finish) => (
+                            <SelectItem key={finish} value={finish}>
+                              {finish}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.finish && <p className="text-destructive text-xs">{errors.finish[0]}</p>}
+                    </div>
+                  )}
+
+                  {selectedMaterial && availableFinishOptions.length === 0 && (
+                    <p className="text-muted-foreground text-xs">
+                      No finishes are configured for this material.
+                    </p>
+                  )}
+                </>
               )}
 
-              {selectedMaterial && availableFinishOptions.length === 0 && (
-                <p className="text-muted-foreground text-xs">
-                  No finishes are configured for this material.
-                </p>
+              {isTablesType && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="material-table-top">Material (Table top) *</Label>
+                    <Select
+                      value={data.material_id_table_top}
+                      onValueChange={handleTableTopMaterialChange}
+                      disabled={materialsLoading || materials.length === 0}
+                    >
+                      <SelectTrigger className="w-full" id="material-table-top">
+                        <SelectValue
+                          placeholder={
+                            materialsLoading
+                              ? 'Loading materials...'
+                              : materials.length === 0
+                                ? 'No materials available'
+                                : 'Select table top material'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="z-[70]">
+                        {materials.map((material) => (
+                          <SelectItem key={material.id} value={material.id}>
+                            {material.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.material_id_table_top && (
+                      <p className="text-destructive text-xs">{errors.material_id_table_top[0]}</p>
+                    )}
+                  </div>
+
+                  {selectedTableTopMaterial && tableTopFinishOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="finish-table-top">Finish (Table top) *</Label>
+                      <Select
+                        value={data.finish_table_top}
+                        onValueChange={(value) => updateData('finish_table_top', value)}
+                      >
+                        <SelectTrigger className="w-full" id="finish-table-top">
+                          <SelectValue placeholder="Select a finish" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          {tableTopFinishOptions.map((finish) => (
+                            <SelectItem key={finish} value={finish}>
+                              {finish}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.finish_table_top && (
+                        <p className="text-destructive text-xs">{errors.finish_table_top[0]}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedTableTopMaterial && tableTopFinishOptions.length === 0 && (
+                    <p className="text-muted-foreground text-xs">
+                      No finishes are configured for the table top material.
+                    </p>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="material-table-foot">Material (Table foot) *</Label>
+                    <Select
+                      value={data.material_id_table_foot}
+                      onValueChange={handleTableFootMaterialChange}
+                      disabled={materialsLoading || materials.length === 0}
+                    >
+                      <SelectTrigger className="w-full" id="material-table-foot">
+                        <SelectValue
+                          placeholder={
+                            materialsLoading
+                              ? 'Loading materials...'
+                              : materials.length === 0
+                                ? 'No materials available'
+                                : 'Select table foot material'
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="z-[70]">
+                        {materials.map((material) => (
+                          <SelectItem key={material.id} value={material.id}>
+                            {material.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.material_id_table_foot && (
+                      <p className="text-destructive text-xs">{errors.material_id_table_foot[0]}</p>
+                    )}
+                  </div>
+
+                  {selectedTableFootMaterial && tableFootFinishOptions.length > 0 && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="finish-table-foot">Finish (Table foot) *</Label>
+                      <Select
+                        value={data.finish_table_foot}
+                        onValueChange={(value) => updateData('finish_table_foot', value)}
+                      >
+                        <SelectTrigger className="w-full" id="finish-table-foot">
+                          <SelectValue placeholder="Select a finish" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          {tableFootFinishOptions.map((finish) => (
+                            <SelectItem key={finish} value={finish}>
+                              {finish}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {errors.finish_table_foot && (
+                        <p className="text-destructive text-xs">{errors.finish_table_foot[0]}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedTableFootMaterial && tableFootFinishOptions.length === 0 && (
+                    <p className="text-muted-foreground text-xs">
+                      No finishes are configured for the table foot material.
+                    </p>
+                  )}
+                </>
               )}
             </>
           )}
@@ -433,7 +826,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               <div>
                 <Label>Select suppliers *</Label>
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Choose one or more suppliers for {data.material_name || 'this material'}.
+                  {isTablesType
+                    ? 'Choose one or more suppliers for the selected table materials.'
+                    : `Choose one or more suppliers for ${data.material_name || 'this material'}.`}
                 </p>
               </div>
 
@@ -443,11 +838,17 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     <p className="text-center text-muted-foreground">Loading suppliers...</p>
                   </CardContent>
                 </Card>
+              ) : suppliersError ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <p className="text-center text-destructive">{suppliersError}</p>
+                  </CardContent>
+                </Card>
               ) : suppliers.length === 0 ? (
                 <Card>
                   <CardContent className="pt-6">
                     <p className="text-center text-muted-foreground">
-                      No suppliers available for this material.
+                      No suppliers available for the selected material(s).
                     </p>
                   </CardContent>
                 </Card>
@@ -639,6 +1040,42 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   value={data.notes}
                   onChange={(e) => updateData('notes', e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Bijlagen (optioneel)</Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  accept=".skp,.pdf,.jpg,.jpeg,.png,.dwg"
+                  multiple
+                  onChange={handleAttachmentChange}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Bestanden toevoegen
+                </Button>
+                {attachments.length > 0 && (
+                  <div className="space-y-1">
+                    {attachments.map((attachment, index) => (
+                      <div key={`${attachment.name}-${attachment.size}-${index}`} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="truncate">{attachment.name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeAttachment(index)}
+                        >
+                          Verwijderen
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </>
           )}

@@ -1,16 +1,17 @@
 import { z } from 'zod';
-import { isProductType } from '@/lib/product-types';
 
 const rfqSchemaBase = z.object({
   customer_name: z.string().optional().nullable(),
-  product_type: z
-    .string()
-    .optional()
-    .nullable()
-    .refine((v) => !v || isProductType(v), 'Invalid product type'),
+  product_type: z.string().optional().nullable(),
   material: z.string().min(1, 'Material is required'),
   material_id: z.string().uuid('Invalid material ID').optional().nullable(),
+  material_id_table_top: z.string().uuid('Invalid table top material ID').optional().nullable(),
+  material_id_table_foot: z.string().uuid('Invalid table foot material ID').optional().nullable(),
+  material_table_top: z.string().optional().nullable(),
+  material_table_foot: z.string().optional().nullable(),
   finish: z.string().min(1, 'Finish is required'),
+  finish_table_top: z.string().optional().nullable(),
+  finish_table_foot: z.string().optional().nullable(),
   length: z.coerce.number().positive('Length must be positive'),
   width: z.coerce.number().positive('Width must be positive'),
   height: z.coerce.number().positive('Height must be positive'),
@@ -64,12 +65,44 @@ const validateShapeThickness = (
   }
 };
 
+const validateTableMaterials = (
+  data: {
+    product_type?: string | null;
+    material_id_table_top?: string | null;
+    material_id_table_foot?: string | null;
+  },
+  ctx: z.RefinementCtx
+) => {
+  const isTablesType = data.product_type?.trim().toLowerCase() === 'tables';
+  if (!isTablesType) {
+    return;
+  }
+
+  if (!data.material_id_table_top) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['material_id_table_top'],
+      message: 'Table top material is required for Tables',
+    });
+  }
+
+  if (!data.material_id_table_foot) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['material_id_table_foot'],
+      message: 'Table foot material is required for Tables',
+    });
+  }
+};
+
 export const createRfqSchema = rfqSchemaBase.superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
+  validateTableMaterials(data, ctx);
 });
 
 export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
+  validateTableMaterials(data, ctx);
 });
 
 export const submitQuoteSchema = z.object({
@@ -85,6 +118,12 @@ export const submitQuoteSchema = z.object({
     }, 'Area may have at most 3 decimal places'),
   leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
   comment: z.string().max(2000).optional().nullable(),
+});
+
+export const rfqCommentBodySchema = z.string().trim().min(1, 'Message is required').max(2000, 'Message may be at most 2000 characters');
+
+export const updateRfqNotesSchema = z.object({
+  notes: z.string().max(5000, 'Notes may be at most 5000 characters').nullable(),
 });
 
 export const createMaterialSchema = z.object({
@@ -107,6 +146,7 @@ export const linkMaterialSupplierSchema = z.object({
 export type CreateRfqInput = z.infer<typeof createRfqSchema>;
 export type UpdateRfqInput = z.infer<typeof updateRfqSchema>;
 export type SubmitQuoteInput = z.infer<typeof submitQuoteSchema>;
+export type UpdateRfqNotesInput = z.infer<typeof updateRfqNotesSchema>;
 export type CreateMaterialInput = z.infer<typeof createMaterialSchema>;
 export type UpdateMaterialInput = z.infer<typeof updateMaterialSchema>;
 export type LinkMaterialSupplierInput = z.infer<typeof linkMaterialSupplierSchema>;

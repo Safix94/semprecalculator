@@ -18,6 +18,28 @@ interface SendEmailParams {
   htmlContent: string;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function toExcerpt(text: string, maxLength = 240): string {
+  const normalized = text.trim().replace(/\s+/g, ' ');
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength - 1).trimEnd()}\u2026`;
+}
+
+export function getPricingTeamEmailsFromEnv(): string[] {
+  const raw = process.env.PRICING_TEAM_EMAIL ?? '';
+  return [...new Set(raw.split(',').map((email) => email.trim()).filter(Boolean))];
+}
+
 async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; messageId?: string; error?: string }> {
   if (!BREVO_API_KEY) {
     return { success: false, error: 'BREVO_API_KEY is not configured' };
@@ -152,4 +174,69 @@ export async function sendPricingTeamRfqNotification(params: {
     total: results.length,
     results,
   };
+}
+
+export async function sendInternalSupplierCommentEmail(params: {
+  recipients: string[];
+  rfqId: string;
+  supplierName: string;
+  bodyExcerpt: string;
+}) {
+  const link = `${APP_URL}/dashboard/rfqs/${params.rfqId}`;
+  const excerpt = escapeHtml(toExcerpt(params.bodyExcerpt));
+  const recipients = [...new Set(params.recipients.map((email) => email.trim()).filter(Boolean))];
+
+  const results = await Promise.all(
+    recipients.map(async (email) => {
+      const emailResult = await sendEmail({
+        to: { email },
+        subject: `New supplier message from ${params.supplierName}`,
+        htmlContent: `
+          <h2>New supplier message</h2>
+          <p><strong>${escapeHtml(params.supplierName)}</strong> posted a new message in the RFQ thread.</p>
+          <p><strong>Message:</strong> ${excerpt}</p>
+          <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open RFQ thread</a></p>
+        `,
+      });
+
+      return { email, ...emailResult };
+    })
+  );
+
+  return {
+    sent: results.filter((result) => result.success).length,
+    total: results.length,
+    results,
+  };
+}
+
+export async function sendSupplierThreadReplyEmail(params: {
+  supplierEmail: string;
+  supplierName: string;
+  rfqId: string;
+  token: string;
+  messageExcerpt: string;
+  requestUpdatedQuote: boolean;
+}) {
+  const link = new URL(`/supplier/rfq/${params.rfqId}`, APP_URL);
+  link.searchParams.set('t', params.token);
+  const replyText = escapeHtml(toExcerpt(params.messageExcerpt));
+  const updateNote = params.requestUpdatedQuote
+    ? '<p><strong>You can now submit an updated quote using this fresh link.</strong></p>'
+    : '';
+
+  return sendEmail({
+    to: { email: params.supplierEmail, name: params.supplierName },
+    subject: `New message about RFQ ${params.rfqId}`,
+    htmlContent: `
+      <h2>There is a new message about your RFQ</h2>
+      <p>Dear ${escapeHtml(params.supplierName)},</p>
+      <p>There is a new message in your RFQ thread.</p>
+      <p><strong>Message:</strong> ${replyText}</p>
+      ${updateNote}
+      <p>Open the link to view full history.</p>
+      <p><a href="${link.toString()}" style="${EMAIL_BUTTON_STYLE}">Open RFQ thread</a></p>
+      <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
+    `,
+  });
 }

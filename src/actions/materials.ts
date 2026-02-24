@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { requireRole } from '@/lib/auth';
+import { getCurrentUser, requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
 import type { Material, MaterialWithSuppliers, Supplier } from '@/types';
 
@@ -83,8 +83,14 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
 /**
  * Get active materials for RFQ creation (sales/admin)
  */
-export async function getActiveMaterials(): Promise<Material[]> {
-  await requireRole('sales');
+export async function getActiveMaterials(): Promise<{ data: Material[] } | { error: string }> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: 'Je bent niet ingelogd.' };
+  }
+  if (user.role !== 'sales' && user.role !== 'admin') {
+    return { error: 'Je hebt geen rechten om materialen te laden.' };
+  }
 
   try {
     const supabase = await createClient();
@@ -96,21 +102,29 @@ export async function getActiveMaterials(): Promise<Material[]> {
 
     if (error) {
       console.error('Failed to fetch active materials:', error.message);
-      return [];
+      return { error: 'Materialen konden niet geladen worden.' };
     }
 
-    return data ?? [];
+    return { data: (data ?? []) as Material[] };
   } catch (error) {
     console.error('Failed to fetch active materials:', error);
-    return [];
+    return { error: 'Materialen konden niet geladen worden.' };
   }
 }
 
 /**
  * Get suppliers for a specific material
  */
-export async function getSuppliersForMaterial(materialId: string): Promise<Supplier[]> {
-  await requireRole('sales');
+export async function getSuppliersForMaterial(
+  materialId: string
+): Promise<{ data: Supplier[] } | { error: string }> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { error: 'Je bent niet ingelogd.' };
+  }
+  if (user.role !== 'sales' && user.role !== 'admin') {
+    return { error: 'Je hebt geen rechten om leveranciers te laden.' };
+  }
 
   try {
     const supabase = await createClient();
@@ -119,13 +133,13 @@ export async function getSuppliersForMaterial(materialId: string): Promise<Suppl
 
     if (error) {
       console.error('Failed to fetch suppliers for material:', error.message);
-      return [];
+      return { error: 'Leveranciers konden niet geladen worden.' };
     }
 
-    return (data ?? []) as Supplier[];
+    return { data: (data ?? []) as Supplier[] };
   } catch (error) {
     console.error('Failed to fetch suppliers for material:', error);
-    return [];
+    return { error: 'Leveranciers konden niet geladen worden.' };
   }
 }
 

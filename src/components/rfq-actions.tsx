@@ -58,11 +58,18 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
     async function loadSuppliers() {
       setSuppliersLoading(true);
       try {
-        const supplierRows = await getSuppliersForMaterial(targetMaterialId);
+        const supplierResult = await getSuppliersForMaterial(targetMaterialId);
         if (!active) {
           return;
         }
-        setSuppliers(supplierRows);
+
+        if ('error' in supplierResult) {
+          setSuppliers([]);
+          setPickerError(supplierResult.error);
+          return;
+        }
+
+        setSuppliers(supplierResult.data);
       } catch (error) {
         if (!active) {
           return;

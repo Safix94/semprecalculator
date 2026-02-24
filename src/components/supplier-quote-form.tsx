@@ -12,9 +12,21 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 interface SupplierQuoteFormProps {
   rfqId: string;
   token: string;
+  initialValues?: {
+    basePrice: number;
+    areaM2: number;
+    leadTimeDays: number | null;
+    comment: string | null;
+  } | null;
+  isUpdate?: boolean;
 }
 
-export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
+export function SupplierQuoteForm({
+  rfqId,
+  token,
+  initialValues = null,
+  isUpdate = false,
+}: SupplierQuoteFormProps) {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]> | string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -49,8 +61,14 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
       <Card className="border-chart-2/50">
         <CardContent className="py-8 text-center">
           <div className="text-chart-2 text-4xl mb-4">✓</div>
-          <h2 className="text-lg font-semibold text-chart-2 mb-2">Quote submitted</h2>
-          <p className="text-muted-foreground">Thank you for your quote. You can close this page.</p>
+          <h2 className="text-lg font-semibold text-chart-2 mb-2">
+            {isUpdate ? 'Quote updated' : 'Quote submitted'}
+          </h2>
+          <p className="text-muted-foreground">
+            {isUpdate
+              ? 'Your latest quote has been saved. You can close this page.'
+              : 'Thank you for your quote. You can close this page.'}
+          </p>
         </CardContent>
       </Card>
     );
@@ -66,7 +84,7 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Submit quote</CardTitle>
+        <CardTitle>{isUpdate ? 'Update quote' : 'Submit quote'}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -81,6 +99,7 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
                 min="0.01"
                 required
                 placeholder="0.00"
+                defaultValue={initialValues?.basePrice ?? ''}
                 aria-invalid={Boolean(typeof errors === 'object' && errors?.basePrice)}
               />
               {typeof errors === 'object' && errors?.basePrice && (
@@ -97,6 +116,7 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
                 min="0.001"
                 required
                 placeholder="0.000"
+                defaultValue={initialValues?.areaM2 ?? ''}
                 aria-invalid={Boolean(typeof errors === 'object' && errors?.areaM2)}
               />
               {typeof errors === 'object' && errors?.areaM2 && (
@@ -107,12 +127,24 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
 
           <div className="space-y-1.5">
             <Label htmlFor="leadTimeDays">Lead time (days, optional)</Label>
-            <Input id="leadTimeDays" name="leadTimeDays" type="number" min="1" />
+            <Input
+              id="leadTimeDays"
+              name="leadTimeDays"
+              type="number"
+              min="1"
+              defaultValue={initialValues?.leadTimeDays ?? ''}
+            />
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="comment">Comment (optional)</Label>
-            <Textarea id="comment" name="comment" rows={3} maxLength={2000} />
+            <Textarea
+              id="comment"
+              name="comment"
+              rows={3}
+              maxLength={2000}
+              defaultValue={initialValues?.comment ?? ''}
+            />
           </div>
 
           {errorMessage && (
@@ -122,7 +154,7 @@ export function SupplierQuoteForm({ rfqId, token }: SupplierQuoteFormProps) {
           )}
 
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Submitting...' : 'Submit quote'}
+            {loading ? 'Submitting...' : isUpdate ? 'Update quote' : 'Submit quote'}
           </Button>
         </form>
       </CardContent>

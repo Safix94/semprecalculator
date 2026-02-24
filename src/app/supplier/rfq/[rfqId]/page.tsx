@@ -1,4 +1,6 @@
 import { validateSupplierToken } from '@/actions/quote';
+import { listSupplierComments } from '@/actions/rfq-comments';
+import { SupplierCommentThread } from '@/components/supplier-comment-thread';
 import { SupplierQuoteForm } from '@/components/supplier-quote-form';
 import { SupplierQuoteReadOnly } from '@/components/supplier-quote-readonly';
 import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
@@ -70,8 +72,19 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
     return <SupplierMessageCard title="Access denied" message={result.error} />;
   }
 
-  const { rfq, supplier, existingQuote } = result.data!;
+  const { rfq, supplier, invite, existingQuote } = result.data!;
+  const commentResult = await listSupplierComments(rfqId, supplierToken);
+  const initialComments = 'data' in commentResult ? commentResult.data : [];
   const isRound = isRoundShape(rfq.shape);
+  const canSubmitOrUpdateQuote = !invite.used_at;
+  const quoteInitialValues = existingQuote
+    ? {
+        basePrice: Number(existingQuote.base_price),
+        areaM2: Number(existingQuote.area_m2 ?? existingQuote.volume_m3),
+        leadTimeDays: existingQuote.lead_time_days,
+        comment: existingQuote.comment,
+      }
+    : null;
 
   return (
     <SupplierPageShell>
@@ -133,11 +146,24 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
           </CardContent>
         </Card>
 
-        {existingQuote ? (
+        {existingQuote && !canSubmitOrUpdateQuote ? (
           <SupplierQuoteReadOnly quote={existingQuote} />
         ) : (
-          <SupplierQuoteForm rfqId={rfqId} token={supplierToken} />
+          <SupplierQuoteForm
+            rfqId={rfqId}
+            token={supplierToken}
+            initialValues={quoteInitialValues}
+            isUpdate={Boolean(existingQuote)}
+          />
         )}
+
+        <div className="mt-6">
+          <SupplierCommentThread
+            rfqId={rfqId}
+            token={supplierToken}
+            initialComments={initialComments}
+          />
+        </div>
       </div>
     </SupplierPageShell>
   );

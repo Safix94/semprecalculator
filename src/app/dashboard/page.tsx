@@ -4,7 +4,7 @@ import { DashboardRfqTable } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
-import { isProductType } from '@/lib/product-types';
+import { getProductTypes } from '@/actions/product-types';
 import type { Rfq } from '@/types';
 
 interface DashboardPageProps {
@@ -33,8 +33,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const adminRequired = getStringParam(params.admin_required) === '1';
   const selectedRfqId = getStringParam(params.rfq) ?? null;
   const productTypeParam = getStringParam(params.product_type) ?? null;
-  const productTypeFilter = productTypeParam && isProductType(productTypeParam) ? productTypeParam : null;
   const searchQuery = getStringParam(params.search)?.trim() ?? null;
+  const productTypeResult = await getProductTypes();
+  const productTypes = 'data' in productTypeResult
+    ? productTypeResult.data.map((productType) => productType.name)
+    : [];
+  const productTypeNameSet = new Set(productTypes);
+  const productTypeFilter = productTypeParam
+    ? (productTypes.length === 0 || productTypeNameSet.has(productTypeParam) ? productTypeParam : null)
+    : null;
 
   const parsedPage = Number.parseInt(pageParam, 10);
   const requestedPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
@@ -133,6 +140,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               totalPages={totalPages}
               selectedRfqId={selectedRfqId}
               productTypeFilter={productTypeFilter}
+              productTypes={productTypes}
               searchQuery={searchQuery}
             />
           </CardContent>

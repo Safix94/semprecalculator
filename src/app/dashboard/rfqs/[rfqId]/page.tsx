@@ -2,10 +2,12 @@ import { notFound } from 'next/navigation';
 import { requireAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { RfqActions } from '@/components/rfq-actions';
+import { RfqNotesEditor } from '@/components/rfq-notes-editor';
+import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
 import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
-import type { Rfq, RfqAttachment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
+import type { Rfq, RfqAttachment, RfqComment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface PageProps {
@@ -38,6 +40,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
     { data: attachments },
     { data: invites },
     { data: quotes },
+    { data: comments },
   ] = await Promise.all([
     supabase
       .from('rfq_attachments')
@@ -54,10 +57,16 @@ export default async function RfqDetailPage({ params }: PageProps) {
       .select('*, supplier:suppliers(*)')
       .eq('rfq_id', rfqId)
       .order('final_price_calculated', { ascending: true }),
+    supabase
+      .from('rfq_comments')
+      .select('*')
+      .eq('rfq_id', rfqId)
+      .order('created_at', { ascending: true }),
   ]);
 
   const typedRfq = rfq as Rfq;
   const isRound = isRoundShape(typedRfq.shape);
+  const isTablesType = typedRfq.product_type === 'Tables';
   const status = statusLabels[typedRfq.status] ?? {
     label: typedRfq.status,
     color: 'bg-muted text-muted-foreground',
@@ -89,10 +98,30 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </CardHeader>
         <CardContent>
           <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Material</dt>
-              <dd className="mt-1 text-sm font-medium">{typedRfq.material}</dd>
-            </div>
+            {!isTablesType && (
+              <div>
+                <dt className="text-xs uppercase text-muted-foreground">Material</dt>
+                <dd className="mt-1 text-sm font-medium">{typedRfq.material}</dd>
+              </div>
+            )}
+            {isTablesType && typedRfq.material_table_top && (
+              <div>
+                <dt className="text-xs uppercase text-muted-foreground">Tafelblad</dt>
+                <dd className="mt-1 text-sm font-medium">
+                  {typedRfq.material_table_top}
+                  {typedRfq.finish_table_top ? ` (${typedRfq.finish_table_top})` : ''}
+                </dd>
+              </div>
+            )}
+            {isTablesType && typedRfq.material_table_foot && (
+              <div>
+                <dt className="text-xs uppercase text-muted-foreground">Tafelpoot</dt>
+                <dd className="mt-1 text-sm font-medium">
+                  {typedRfq.material_table_foot}
+                  {typedRfq.finish_table_foot ? ` (${typedRfq.finish_table_foot})` : ''}
+                </dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
               <dd className="mt-1 text-sm font-medium">{typedRfq.shape}</dd>
@@ -119,13 +148,17 @@ export default async function RfqDetailPage({ params }: PageProps) {
                 <dd className="mt-1 text-sm font-medium">{typedRfq.thickness} cm</dd>
               </div>
             )}
-            {typedRfq.notes && (
-              <div className="col-span-2 md:col-span-3">
-                <dt className="text-xs uppercase text-muted-foreground">Notes</dt>
-                <dd className="mt-1 whitespace-pre-wrap text-sm">{typedRfq.notes}</dd>
-              </div>
-            )}
           </dl>
+
+          <div className="mt-4 border-t pt-4">
+            <h3 className="mb-2 text-xs uppercase text-muted-foreground">Notes</h3>
+            <RfqNotesEditor
+              key={`rfq-notes-${rfqId}`}
+              rfqId={rfqId}
+              initialNotes={typedRfq.notes}
+              disabled={typedRfq.status === 'closed'}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -146,7 +179,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
           ) : (
             <p className="text-sm text-muted-foreground">No attachments.</p>
           )}
-          {(typedRfq.status === 'draft' || typedRfq.status === 'waiting_for_technical_drawing') && (
+          {typedRfq.status !== 'closed' && (
             <div className="mt-4">
               <AttachmentUpload rfqId={rfqId} />
             </div>
@@ -160,6 +193,14 @@ export default async function RfqDetailPage({ params }: PageProps) {
           quotes={(quotes as (RfqQuote & { supplier: Supplier })[]) ?? []}
         />
       )}
+
+      <RfqSupplierThreads
+        key={`rfq-threads-${rfqId}`}
+        rfqId={rfqId}
+        rfqStatus={typedRfq.status}
+        invites={(invites as (RfqInvite & { supplier: Supplier | null })[]) ?? []}
+        initialComments={(comments as RfqComment[]) ?? []}
+      />
     </div>
   );
 }

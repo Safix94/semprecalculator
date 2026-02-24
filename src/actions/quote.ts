@@ -7,6 +7,7 @@ import { calculateAllPricing } from '@/lib/pricing';
 import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
 import { logAuditEvent } from './audit';
 import type { SubmitQuoteInput } from '@/lib/validation';
+import type { RfqQuote } from '@/types';
 
 const SUPPLIER_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
 
@@ -225,16 +226,6 @@ export async function submitQuote(
     return { error: 'This link has expired' };
   }
 
-  if (invite.used_at) {
-    console.info('Quote submission blocked: invite already used.', {
-      rfqId,
-      inviteId: invite.id,
-      supplierId: invite.supplier_id,
-      usedAt: invite.used_at,
-    });
-    return { error: 'A quote has already been submitted via this link' };
-  }
-
   // Validate input
   const parsed = submitQuoteSchema.safeParse(input);
   if (!parsed.success) {
@@ -260,29 +251,83 @@ export async function submitQuote(
   // Server-side pricing calculation
   const { shippingCostCalculated, finalPriceCalculated } =
     calculateAllPricing(basePrice, volumeM3);
-
-  // Insert quote
-  const { data: quote, error: quoteError } = await supabase
+  const { data: existingQuote, error: existingQuoteError } = await supabase
     .from('rfq_quotes')
-    .insert({
-      rfq_id: rfqId,
-      supplier_id: invite.supplier_id,
-      base_price: basePrice,
-      area_m2: areaM2,
-      volume_m3: volumeM3,
-      shipping_cost_calculated: shippingCostCalculated,
-      final_price_calculated: finalPriceCalculated,
-      lead_time_days: leadTimeDays ?? null,
-      comment: comment ?? null,
-    })
-    .select()
-    .single();
+    .select('*')
+    .eq('rfq_id', rfqId)
+    .eq('supplier_id', invite.supplier_id)
+    .maybeSingle();
 
-  if (quoteError) {
-    if (quoteError.code === '23505') {
-      return { error: 'A quote has already been submitted for this request' };
+  if (existingQuoteError) {
+    return { error: `Failed to check existing quote: ${existingQuoteError.message}` };
+  }
+
+  if (invite.used_at) {
+    console.info('Quote submission blocked: invite already used.', {
+      rfqId,
+      inviteId: invite.id,
+      supplierId: invite.supplier_id,
+      usedAt: invite.used_at,
+      hasExistingQuote: Boolean(existingQuote),
+    });
+    return { error: 'A quote has already been submitted via this link' };
+  }
+
+  let quote: RfqQuote | null = null;
+  let isQuoteUpdate = false;
+
+  if (existingQuote) {
+    const { data: updatedQuote, error: updateQuoteError } = await supabase
+      .from('rfq_quotes')
+      .update({
+        base_price: basePrice,
+        area_m2: areaM2,
+        volume_m3: volumeM3,
+        shipping_cost_calculated: shippingCostCalculated,
+        final_price_calculated: finalPriceCalculated,
+        lead_time_days: leadTimeDays ?? null,
+        comment: comment ?? null,
+        submitted_at: new Date().toISOString(),
+      })
+      .eq('id', existingQuote.id)
+      .select()
+      .single();
+
+    if (updateQuoteError || !updatedQuote) {
+      return { error: `Failed to update quote: ${updateQuoteError?.message ?? 'Unknown error'}` };
     }
-    return { error: `Failed to save quote: ${quoteError.message}` };
+
+    quote = updatedQuote as RfqQuote;
+    isQuoteUpdate = true;
+  } else {
+    const { data: insertedQuote, error: quoteError } = await supabase
+      .from('rfq_quotes')
+      .insert({
+        rfq_id: rfqId,
+        supplier_id: invite.supplier_id,
+        base_price: basePrice,
+        area_m2: areaM2,
+        volume_m3: volumeM3,
+        shipping_cost_calculated: shippingCostCalculated,
+        final_price_calculated: finalPriceCalculated,
+        lead_time_days: leadTimeDays ?? null,
+        comment: comment ?? null,
+      })
+      .select()
+      .single();
+
+    if (quoteError || !insertedQuote) {
+      if (quoteError?.code === '23505') {
+        return { error: 'A quote has already been submitted for this request' };
+      }
+      return { error: `Failed to save quote: ${quoteError?.message ?? 'Unknown error'}` };
+    }
+
+    quote = insertedQuote as RfqQuote;
+  }
+
+  if (!quote) {
+    return { error: 'Failed to save quote' };
   }
 
   // Mark invite as used
@@ -321,7 +366,7 @@ export async function submitQuote(
   await logAuditEvent({
     actorType: 'supplier_link',
     actorId: invite.supplier_id,
-    action: 'QUOTE_SUBMITTED',
+    action: isQuoteUpdate ? 'QUOTE_UPDATED' : 'QUOTE_SUBMITTED',
     entityType: 'rfq_quote',
     entityId: quote.id,
     metadata: {

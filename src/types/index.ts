@@ -12,11 +12,16 @@ export type AuditAction =
   | 'RFQ_CREATED'
   | 'RFQ_UPDATED'
   | 'RFQ_SENT'
+  | 'RFQ_SENT_TO_PRICING'
   | 'INVITE_CREATED'
   | 'INVITE_OPENED'
   | 'INVITE_REVOKED'
   | 'INVITE_EXPIRED'
   | 'QUOTE_SUBMITTED'
+  | 'QUOTE_UPDATED'
+  | 'SUPPLIER_COMMENT_ADDED'
+  | 'INTERNAL_COMMENT_ADDED'
+  | 'SUPPLIER_LINK_SENT'
   | 'EMAIL_SENT';
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';
@@ -46,6 +51,13 @@ export interface MaterialSupplier {
   created_at: string;
 }
 
+export interface ProductType {
+  id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Rfq {
   id: string;
   created_by: string;
@@ -53,7 +65,13 @@ export interface Rfq {
   product_type: string | null;
   material: string;
   material_id: string | null;
+  material_id_table_top: string | null;
+  material_id_table_foot: string | null;
+  material_table_top: string | null;
+  material_table_foot: string | null;
   finish: string | null;
+  finish_table_top: string | null;
+  finish_table_foot: string | null;
   length: number;
   width: number;
   height: number;
@@ -102,6 +120,17 @@ export interface RfqQuote {
   submitted_at: string;
 }
 
+export interface RfqComment {
+  id: string;
+  rfq_id: string;
+  supplier_id: string;
+  author_type: 'supplier' | 'internal';
+  author_id: string;
+  author_email: string | null;
+  body: string;
+  created_at: string;
+}
+
 export interface AuditLog {
   id: string;
   actor_type: ActorType;
@@ -128,6 +157,7 @@ export interface RfqWithRelations extends Rfq {
   attachments?: RfqAttachment[];
   invites?: (RfqInvite & { supplier?: Supplier })[];
   quotes?: (RfqQuote & { supplier?: Supplier })[];
+  comments?: RfqComment[];
   material_details?: Material;
 }
 

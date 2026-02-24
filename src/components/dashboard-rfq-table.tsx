@@ -21,7 +21,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { FormattedDate } from '@/components/formatted-date';
-import { PRODUCT_TYPES } from '@/lib/product-types';
 import { formatRfqDimensions } from '@/lib/rfq-format';
 import type { Rfq, RfqStatus } from '@/types';
 
@@ -32,6 +31,7 @@ interface DashboardRfqTableProps {
   totalPages: number;
   selectedRfqId: string | null;
   productTypeFilter: string | null;
+  productTypes: string[];
   searchQuery: string | null;
 }
 
@@ -51,6 +51,7 @@ export function DashboardRfqTable({
   totalPages,
   selectedRfqId,
   productTypeFilter,
+  productTypes,
   searchQuery,
 }: DashboardRfqTableProps) {
   const router = useRouter();
@@ -59,6 +60,8 @@ export function DashboardRfqTable({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
+  const selectedProductTypeValue =
+    productTypeFilter && productTypes.includes(productTypeFilter) ? productTypeFilter : 'all';
 
   const setProductTypeFilter = (value: string) => {
     const params = new URLSearchParams(searchParamsString);
@@ -143,7 +146,7 @@ export function DashboardRfqTable({
           <div className="flex items-center gap-2">
             <span className="whitespace-nowrap text-sm text-muted-foreground">Filter by type</span>
             <Select
-              value={productTypeFilter ?? 'all'}
+              value={selectedProductTypeValue}
               onValueChange={setProductTypeFilter}
             >
               <SelectTrigger className="w-[220px]">
@@ -151,7 +154,7 @@ export function DashboardRfqTable({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
-                {PRODUCT_TYPES.map((type) => (
+                {productTypes.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}
                   </SelectItem>

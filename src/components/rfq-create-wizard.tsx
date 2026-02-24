@@ -348,13 +348,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="product_type">Soort</Label>
+                <Label htmlFor="product_type">Type</Label>
                 <Select
                   value={data.product_type || undefined}
                   onValueChange={(value) => updateData('product_type', value)}
                 >
                   <SelectTrigger id="product_type" className="w-full">
-                    <SelectValue placeholder="Selecteer soort (optioneel)" />
+                    <SelectValue placeholder="Select type (optional)" />
                   </SelectTrigger>
                   <SelectContent className="z-[70]">
                     {PRODUCT_TYPES.map((type) => (

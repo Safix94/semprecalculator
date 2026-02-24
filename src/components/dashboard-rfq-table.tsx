@@ -119,10 +119,76 @@ export function DashboardRfqTable({
 
   return (
     <>
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
+        <div className="flex flex-wrap items-center gap-4">
+          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+            <Label htmlFor="customer-search" className="sr-only whitespace-nowrap text-sm text-muted-foreground">
+              Search by customer
+            </Label>
+            <Input
+              key={`search-${searchQuery ?? ''}`}
+              id="customer-search"
+              ref={searchInputRef}
+              type="search"
+              name="search"
+              defaultValue={searchQuery ?? ''}
+              placeholder="Search by customer..."
+              className="w-[200px]"
+              aria-label="Search by customer"
+            />
+            <Button type="submit" variant="secondary" size="sm">
+              Search
+            </Button>
+          </form>
+          <div className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-sm text-muted-foreground">Filter by type</span>
+            <Select
+              value={productTypeFilter ?? 'all'}
+              onValueChange={setProductTypeFilter}
+            >
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="All types" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                {PRODUCT_TYPES.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <span className="text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage - 1)}
+            disabled={currentPage <= 1}
+          >
+            Previous
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => goToPage(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+          >
+            Next
+          </Button>
+        </div>
+      </div>
+
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead>Soort</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Material</TableHead>
             <TableHead>Finish</TableHead>
             <TableHead>Shape</TableHead>
@@ -183,72 +249,6 @@ export function DashboardRfqTable({
           })}
         </TableBody>
       </Table>
-
-      <div className="flex flex-wrap items-center justify-between gap-4 border-t px-4 py-3">
-        <div className="flex flex-wrap items-center gap-4">
-          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
-            <Label htmlFor="customer-search" className="text-sm text-muted-foreground whitespace-nowrap sr-only">
-              Zoek op klant
-            </Label>
-            <Input
-              key={`search-${searchQuery ?? ''}`}
-              id="customer-search"
-              ref={searchInputRef}
-              type="search"
-              name="search"
-              defaultValue={searchQuery ?? ''}
-              placeholder="Zoek op klant..."
-              className="w-[200px]"
-              aria-label="Zoek op klant"
-            />
-            <Button type="submit" variant="secondary" size="sm">
-              Zoeken
-            </Button>
-          </form>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground whitespace-nowrap">Filter op soort</span>
-            <Select
-              value={productTypeFilter ?? 'all'}
-              onValueChange={setProductTypeFilter}
-            >
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Alle soorten" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alle soorten</SelectItem>
-                {PRODUCT_TYPES.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => goToPage(currentPage - 1)}
-            disabled={currentPage <= 1}
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => goToPage(currentPage + 1)}
-            disabled={currentPage >= totalPages}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
     </>
   );
 }

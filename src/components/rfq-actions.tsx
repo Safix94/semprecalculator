@@ -48,7 +48,7 @@ export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamBu
 
     if (!materialId) {
       setSuppliersLoading(false);
-      setPickerError('RFQ heeft geen material_id; kan suppliers niet ophalen.');
+      setPickerError('RFQ has no material; cannot load suppliers.');
       return;
     }
     const targetMaterialId = materialId;

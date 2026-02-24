@@ -141,3 +141,9 @@ export interface AuthUser {
   email: string;
   role: UserRole;
 }
+
+export interface UserWithRole {
+  id: string;
+  email: string | null;
+  role: UserRole | null;
+}

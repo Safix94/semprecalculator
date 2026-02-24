@@ -620,7 +620,7 @@ export async function sendRfq(rfqId: string) {
     .select(`
       id, material, material_id, shape, finish, length, width, height, thickness, quantity,
       material_table_top, material_table_foot, finish_table_top, finish_table_foot,
-      material_details:materials(name)
+      material_details:materials!material_id(name)
     `)
     .eq('id', rfqId)
     .in('status', ['draft', 'sent_to_pricing', 'sent_to_supplier'])

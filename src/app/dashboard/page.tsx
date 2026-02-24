@@ -107,7 +107,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   return (
-    <div>
+    <div className="min-w-0">
       {adminRequired && (
         <Alert variant="default" className="mb-6 border-amber-500/50 bg-amber-500/10">
           <AlertDescription>
@@ -131,8 +131,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardContent className="p-0">
+        <Card className="min-w-0 overflow-hidden">
+          <CardContent className="min-w-0 overflow-hidden p-0">
             <DashboardRfqTable
               rfqs={rfqs}
               creatorEmailById={creatorEmailById}

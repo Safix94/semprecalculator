@@ -121,7 +121,7 @@ export function DashboardRfqTable({
   };
 
   return (
-    <>
+    <div className="min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b px-4 py-3">
         <div className="flex flex-wrap items-center gap-4">
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
@@ -188,19 +188,19 @@ export function DashboardRfqTable({
         </div>
       </div>
 
-      <Table>
+      <Table className="table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead>Type</TableHead>
-            <TableHead>Material</TableHead>
-            <TableHead>Finish</TableHead>
-            <TableHead>Shape</TableHead>
-            <TableHead>Dimensions</TableHead>
-            <TableHead>Quantity</TableHead>
-            <TableHead>Customer</TableHead>
-            <TableHead>Requested by</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Date & time</TableHead>
+            <TableHead className="w-[9%]">Type</TableHead>
+            <TableHead className="w-[9%]">Material</TableHead>
+            <TableHead className="w-[7%]">Finish</TableHead>
+            <TableHead className="w-[8%]">Shape</TableHead>
+            <TableHead className="w-[13%]">Dimensions</TableHead>
+            <TableHead className="w-[6%]">Qty</TableHead>
+            <TableHead className="w-[12%]">Customer</TableHead>
+            <TableHead className="w-[12%]">Req. by</TableHead>
+            <TableHead className="w-[14%]">Status</TableHead>
+            <TableHead className="w-[10%]">Date</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -209,6 +209,9 @@ export function DashboardRfqTable({
               label: rfq.status,
               color: 'bg-muted text-muted-foreground',
             };
+            const customer = rfq.customer_name || '-';
+            const requestedBy = creatorEmailById[rfq.created_by] ?? 'Unknown';
+            const dimensions = formatRfqDimensions(rfq);
 
             return (
               <TableRow
@@ -224,22 +227,34 @@ export function DashboardRfqTable({
                 role="button"
                 tabIndex={0}
               >
-                <TableCell className="text-muted-foreground">{rfq.product_type || '-'}</TableCell>
-                <TableCell className="font-medium text-primary">{rfq.material}</TableCell>
-                <TableCell className="text-muted-foreground">{rfq.finish || '-'}</TableCell>
-                <TableCell className="text-muted-foreground">{rfq.shape}</TableCell>
-                <TableCell className="text-muted-foreground">{formatRfqDimensions(rfq)}</TableCell>
-                <TableCell className="text-muted-foreground">{rfq.quantity}</TableCell>
-                <TableCell className="text-muted-foreground">{rfq.customer_name || '-'}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {creatorEmailById[rfq.created_by] ?? 'Unknown'}
+                <TableCell className="truncate text-muted-foreground" title={String(rfq.product_type || '-')}>
+                  {rfq.product_type || '-'}
                 </TableCell>
-                <TableCell>
-                  <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${status.color}`}>
+                <TableCell className="truncate font-medium text-primary" title={rfq.material}>
+                  {rfq.material}
+                </TableCell>
+                <TableCell className="truncate text-muted-foreground" title={String(rfq.finish || '-')}>
+                  {rfq.finish || '-'}
+                </TableCell>
+                <TableCell className="truncate text-muted-foreground" title={rfq.shape}>
+                  {rfq.shape}
+                </TableCell>
+                <TableCell className="truncate text-muted-foreground" title={dimensions}>
+                  {dimensions}
+                </TableCell>
+                <TableCell className="text-muted-foreground">{rfq.quantity}</TableCell>
+                <TableCell className="truncate text-muted-foreground" title={customer}>
+                  {customer}
+                </TableCell>
+                <TableCell className="truncate text-muted-foreground" title={requestedBy}>
+                  {requestedBy}
+                </TableCell>
+                <TableCell className="truncate" title={status.label}>
+                  <span className={`inline-flex max-w-full items-center truncate rounded px-2 py-0.5 text-xs font-medium ${status.color}`}>
                     {status.label}
                   </span>
                 </TableCell>
-                <TableCell className="text-muted-foreground">
+                <TableCell className="truncate text-muted-foreground">
                   <FormattedDate
                     value={rfq.created_at}
                     locale="nl-NL"
@@ -252,6 +267,6 @@ export function DashboardRfqTable({
           })}
         </TableBody>
       </Table>
-    </>
+    </div>
   );
 }

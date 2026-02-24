@@ -144,7 +144,7 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
             {detail ? `${detail.rfq.material} - ${detail.rfq.shape}` : 'RFQ details'}
           </DialogTitle>
           <DialogDescription>
-            View RFQ details, attachments, status, and supplier responses.
+            Here you can see all the details of the pricing request
           </DialogDescription>
         </DialogHeader>
 

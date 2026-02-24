@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSuppliersForMaterial } from '@/actions/materials';
-import { sendRfq, closeRfq, replaceRfqInvites } from '@/actions/rfq';
+import { closeRfq, replaceRfqInvites, sendRfq, sendToPricingTeam } from '@/actions/rfq';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -21,10 +21,13 @@ interface RfqActionsProps {
   rfqId: string;
   status: RfqStatus;
   materialId?: string | null;
+  /** When true, only "Send to supplier" is shown for draft (e.g. when modal has its own "Send to pricing team" button). */
+  hidePricingTeamButton?: boolean;
 }
 
-export function RfqActions({ rfqId, status, materialId = null }: RfqActionsProps) {
+export function RfqActions({ rfqId, status, materialId = null, hidePricingTeamButton = false }: RfqActionsProps) {
   const [loading, setLoading] = useState(false);
+  const [pricingLoading, setPricingLoading] = useState(false);
   const [saveAndSendLoading, setSaveAndSendLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
@@ -82,14 +85,14 @@ export function RfqActions({ rfqId, status, materialId = null }: RfqActionsProps
   }, [materialId, pickerOpen]);
 
   const canSaveAndSend = useMemo(() => {
-    if (!materialId || suppliersLoading || saveAndSendLoading) {
+    if (!materialId || suppliersLoading || saveAndSendLoading || pricingLoading) {
       return false;
     }
     if (suppliers.length === 0) {
       return false;
     }
     return selectedSupplierIds.length > 0;
-  }, [materialId, saveAndSendLoading, selectedSupplierIds.length, suppliers.length, suppliersLoading]);
+  }, [materialId, pricingLoading, saveAndSendLoading, selectedSupplierIds.length, suppliers.length, suppliersLoading]);
 
   const formatActionError = (error: unknown) =>
     typeof error === 'string' ? error : JSON.stringify(error);
@@ -183,20 +186,58 @@ export function RfqActions({ rfqId, status, materialId = null }: RfqActionsProps
     }
   }
 
+  async function handleSendToPricing() {
+    setPricingLoading(true);
+    setResult(null);
+
+    try {
+      const res = await sendToPricingTeam(rfqId);
+      if ('error' in res) {
+        setResult(`Error: ${formatActionError(res.error)}`);
+      } else {
+        setResult(`Sent to pricing team (${res.data.sent}/${res.data.total})`);
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Failed to send RFQ to pricing team:', error);
+      setResult('Error: Failed to notify pricing team');
+    } finally {
+      setPricingLoading(false);
+    }
+  }
+
   return (
     <>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {status === 'draft' && (
-          <Button onClick={handleSend} disabled={loading || saveAndSendLoading}>
-            {loading ? 'Loading...' : 'Send to supplier'}
-          </Button>
+          <>
+            {!hidePricingTeamButton && (
+              <Button
+                key="send-to-pricing-team"
+                onClick={handleSendToPricing}
+                disabled={loading || pricingLoading || saveAndSendLoading}
+                variant="secondary"
+                className="shrink-0"
+              >
+                {pricingLoading ? 'Loading...' : 'Send to pricing team'}
+              </Button>
+            )}
+            <Button
+              key="send-to-supplier"
+              onClick={handleSend}
+              disabled={loading || pricingLoading || saveAndSendLoading}
+              className="shrink-0"
+            >
+              {loading ? 'Loading...' : 'Send to supplier'}
+            </Button>
+          </>
         )}
-        {status === 'sent_to_supplier' && (
-          <Button onClick={handleClose} disabled={loading || saveAndSendLoading} variant="secondary">
+        {(status === 'sent_to_supplier' || status === 'quotes_received') && (
+          <Button onClick={handleClose} disabled={loading || pricingLoading || saveAndSendLoading} variant="secondary">
             {loading ? 'Loading...' : 'Close'}
           </Button>
         )}
-        {result && <span className="text-sm text-muted-foreground">{result}</span>}
+        {result && <span className="min-w-0 shrink text-sm text-muted-foreground">{result}</span>}
       </div>
 
       <Dialog

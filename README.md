@@ -20,6 +20,15 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Supplier Magic Links
+
+Supplier invite links depend on a stable `TOKEN_HASH_SECRET` value.
+
+- Set `TOKEN_HASH_SECRET` in every environment that sends or validates invite links.
+- Keep the same `TOKEN_HASH_SECRET` value between sending an invite and opening that invite link.
+- `NEXT_PUBLIC_APP_URL` must point to the environment where suppliers open links.
+- Sending an RFQ refreshes invite tokens. Older email links for that RFQ become invalid.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

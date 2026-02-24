@@ -10,7 +10,7 @@ import {
   hashToken,
   isTokenHashingConfigError,
 } from '@/lib/tokens';
-import { sendSupplierInviteEmail } from '@/lib/mailer';
+import { sendPricingTeamRfqNotification, sendSupplierInviteEmail } from '@/lib/mailer';
 import { formatRfqDimensionsWithOptions } from '@/lib/rfq-format';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput } from '@/lib/validation';
@@ -18,6 +18,12 @@ import type { Rfq, RfqAttachment, RfqInvite, RfqQuote, Supplier } from '@/types'
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
 const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function getPricingTeamEmailsFromEnv(): string[] {
+  const raw = process.env.PRICING_TEAM_EMAIL ?? '';
+
+  return [...new Set(raw.split(',').map((email) => email.trim()).filter(Boolean))];
+}
 
 type ReplaceRfqInvitesResult = { data: { created: number } } | { error: string };
 
@@ -409,15 +415,40 @@ export async function sendRfq(rfqId: string) {
       continue;
     }
 
-    // Generate new token for sending (if needed)
+    // Generate a fresh token for this send.
     const token = generateToken();
     const tokenHash = hashToken(token);
+    const expiresAt = new Date(Date.now() + INVITE_EXPIRATION_MS).toISOString();
 
-    // Update the invite with new token if needed
-    await supabase
+    // Refresh invite state before emailing. If this fails, don't send a broken link.
+    const { data: refreshedInvite, error: refreshInviteError } = await supabase
       .from('rfq_invites')
-      .update({ token_hash: tokenHash })
-      .eq('id', invite.id);
+      .update({
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+        revoked_at: null,
+        used_at: null,
+        last_access_at: null,
+      })
+      .eq('id', invite.id)
+      .select('id')
+      .single();
+
+    if (refreshInviteError || !refreshedInvite) {
+      const reason = refreshInviteError?.message ?? 'Unknown invite update error';
+      console.error('Failed to refresh supplier invite before send:', {
+        rfqId,
+        inviteId: invite.id,
+        supplierId: invite.supplier.id,
+        reason,
+      });
+      results.push({
+        supplier: invite.supplier.name,
+        success: false,
+        error: `Failed to refresh invite token: ${reason}`,
+      });
+      continue;
+    }
 
     await logAuditEvent({
       actorType: user.role,
@@ -501,6 +532,77 @@ export async function sendRfq(rfqId: string) {
   return { data: { sent: sentCount, total: totalCount, results } };
 }
 
+export async function sendToPricingTeam(rfqId: string) {
+  const user = await requireAuth();
+  if (user.role !== 'sales' && user.role !== 'admin') {
+    return { error: 'Unauthorized' };
+  }
+
+  const supabase = await createClient();
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select('id, material, shape, finish, quantity, customer_name, product_type, status')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    return { error: 'RFQ not found' };
+  }
+
+  if (rfq.status !== 'draft') {
+    return { error: 'Only draft RFQs can be sent to pricing team' };
+  }
+
+  const pricingEmails = getPricingTeamEmailsFromEnv();
+  if (pricingEmails.length === 0) {
+    return { error: 'PRICING_TEAM_EMAIL is not configured' };
+  }
+
+  const rfqSummary = [
+    rfq.product_type ? `Type: ${rfq.product_type}` : null,
+    `Material: ${rfq.material}`,
+    `Shape: ${rfq.shape}`,
+    rfq.finish ? `Finish: ${rfq.finish}` : null,
+    `Quantity: ${Number(rfq.quantity ?? 1)}`,
+    rfq.customer_name ? `Customer: ${rfq.customer_name}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  const emailResult = await sendPricingTeamRfqNotification({
+    pricingEmails,
+    rfqId,
+    rfqSummary,
+  });
+
+  if (emailResult.sent === 0) {
+    const firstFailure = emailResult.results.find((result) => !result.success)?.error;
+    return {
+      error: firstFailure
+        ? `Failed to notify pricing team: ${firstFailure}`
+        : 'Failed to notify pricing team',
+    };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_SENT_TO_PRICING',
+    entityType: 'rfq',
+    entityId: rfqId,
+    metadata: {
+      recipients: pricingEmails,
+      sent: emailResult.sent,
+      total: emailResult.total,
+      results: emailResult.results,
+    },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return { data: { sent: emailResult.sent, total: emailResult.total } };
+}
+
 export async function closeRfq(rfqId: string) {
   const user = await requireAuth();
   const supabase = await createClient();
@@ -509,7 +611,7 @@ export async function closeRfq(rfqId: string) {
     .from('rfqs')
     .update({ status: 'closed' })
     .eq('id', rfqId)
-    .eq('status', 'sent_to_supplier');
+    .in('status', ['sent_to_supplier', 'quotes_received']);
 
   if (error) {
     return { error: error.message };

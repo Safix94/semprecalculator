@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
+import { Providers } from "@/components/providers";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -19,8 +20,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={outfit.variable}>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body className={outfit.variable}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

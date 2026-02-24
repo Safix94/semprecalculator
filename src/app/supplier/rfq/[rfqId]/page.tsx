@@ -3,50 +3,79 @@ import { SupplierQuoteForm } from '@/components/supplier-quote-form';
 import { SupplierQuoteReadOnly } from '@/components/supplier-quote-readonly';
 import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
 import { Card, CardContent } from '@/components/ui/card';
+import Image from 'next/image';
+import type { ReactNode } from 'react';
 
 interface PageProps {
   params: Promise<{ rfqId: string }>;
-  searchParams: Promise<{ t?: string }>;
+  searchParams: Promise<{ t?: string; token?: string }>;
+}
+
+function SupplierPageShell({ children, centered = false }: { children: ReactNode; centered?: boolean }) {
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur">
+        <div className="mx-auto flex h-14 w-full max-w-2xl items-center px-4">
+          <Image
+            src="/sempre-logo-word.svg"
+            alt="Sempre"
+            width={130}
+            height={17}
+            className="h-5 w-auto"
+            priority
+          />
+        </div>
+      </header>
+      <main
+        className={`mx-auto w-full max-w-2xl px-4 py-8 ${
+          centered ? 'flex min-h-[calc(100vh-3.5rem)] items-center justify-center' : ''
+        }`}
+      >
+        {children}
+      </main>
+    </div>
+  );
+}
+
+function SupplierMessageCard({ title, message }: { title: string; message: string }) {
+  return (
+    <SupplierPageShell centered>
+      <Card className="w-full max-w-md">
+        <CardContent className="p-8 text-center">
+          <h1 className="mb-2 text-xl font-bold text-destructive">{title}</h1>
+          <p className="text-muted-foreground">{message}</p>
+        </CardContent>
+      </Card>
+    </SupplierPageShell>
+  );
 }
 
 export default async function SupplierRfqPage({ params, searchParams }: PageProps) {
   const { rfqId } = await params;
-  const { t: token } = await searchParams;
+  const { t, token } = await searchParams;
+  const supplierToken = (t ?? token)?.trim();
 
-  if (!token) {
+  if (!supplierToken) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <h1 className="mb-2 text-xl font-bold text-destructive">Invalid link</h1>
-            <p className="text-muted-foreground">This link is invalid. Check the link in your email.</p>
-          </CardContent>
-        </Card>
-      </div>
+      <SupplierMessageCard
+        title="Invalid link"
+        message="This link does not include an access token. Open the latest email invite and try again."
+      />
     );
   }
 
-  const result = await validateSupplierToken(rfqId, token);
+  const result = await validateSupplierToken(rfqId, supplierToken);
 
   if (result.error) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <h1 className="mb-2 text-xl font-bold text-destructive">Access denied</h1>
-            <p className="text-muted-foreground">{result.error}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <SupplierMessageCard title="Access denied" message={result.error} />;
   }
 
   const { rfq, supplier, existingQuote } = result.data!;
   const isRound = isRoundShape(rfq.shape);
 
   return (
-    <div className="min-h-screen bg-background py-8">
-      <div className="mx-auto max-w-2xl px-4">
+    <SupplierPageShell>
+      <div>
         <Card className="mb-6">
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
@@ -107,9 +136,9 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
         {existingQuote ? (
           <SupplierQuoteReadOnly quote={existingQuote} />
         ) : (
-          <SupplierQuoteForm rfqId={rfqId} token={token} />
+          <SupplierQuoteForm rfqId={rfqId} token={supplierToken} />
         )}
       </div>
-    </div>
+    </SupplierPageShell>
   );
 }

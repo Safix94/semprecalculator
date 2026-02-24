@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -30,12 +32,14 @@ interface DashboardRfqTableProps {
   totalPages: number;
   selectedRfqId: string | null;
   productTypeFilter: string | null;
+  searchQuery: string | null;
 }
 
 const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
   sent_to_supplier: { label: 'Sent to supplier', color: 'bg-primary/15 text-primary' },
   waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
+  quotes_received: { label: 'Supplier replied', color: 'bg-chart-2/15 text-chart-2' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
@@ -46,10 +50,12 @@ export function DashboardRfqTable({
   totalPages,
   selectedRfqId,
   productTypeFilter,
+  searchQuery,
 }: DashboardRfqTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
 
@@ -84,6 +90,22 @@ export function DashboardRfqTable({
 
     const query = params.toString();
     return query ? `${pathname}?${query}` : pathname;
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const value = searchInputRef.current?.value?.trim() ?? '';
+    const params = new URLSearchParams(searchParamsString);
+    if (value) {
+      params.set('search', value);
+      params.set('page', '1');
+    } else {
+      params.delete('search');
+      params.delete('page');
+    }
+    if (selectedRfqId) params.set('rfq', selectedRfqId);
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
   };
 
   const openRfq = (rfqId: string) => {
@@ -163,6 +185,25 @@ export function DashboardRfqTable({
 
       <div className="flex flex-wrap items-center justify-between gap-4 border-t px-4 py-3">
         <div className="flex flex-wrap items-center gap-4">
+          <form onSubmit={handleSearchSubmit} className="flex items-center gap-2">
+            <Label htmlFor="customer-search" className="text-sm text-muted-foreground whitespace-nowrap sr-only">
+              Zoek op klant
+            </Label>
+            <Input
+              key={`search-${searchQuery ?? ''}`}
+              id="customer-search"
+              ref={searchInputRef}
+              type="search"
+              name="search"
+              defaultValue={searchQuery ?? ''}
+              placeholder="Zoek op klant..."
+              className="w-[200px]"
+              aria-label="Zoek op klant"
+            />
+            <Button type="submit" variant="secondary" size="sm">
+              Zoeken
+            </Button>
+          </form>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground whitespace-nowrap">Filter op soort</span>
             <Select

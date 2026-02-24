@@ -1,6 +1,5 @@
 import { requireAuth } from '@/lib/auth';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
-import { RfqCreateWizard } from '@/components/rfq-create-wizard';
 import { DashboardRfqTable } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,6 +11,7 @@ interface DashboardPageProps {
     page?: string | string[];
     rfq?: string | string[];
     product_type?: string | string[];
+    search?: string | string[];
   }>;
 }
 
@@ -31,6 +31,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const selectedRfqId = getStringParam(params.rfq) ?? null;
   const productTypeParam = getStringParam(params.product_type) ?? null;
   const productTypeFilter = productTypeParam && isProductType(productTypeParam) ? productTypeParam : null;
+  const searchQuery = getStringParam(params.search)?.trim() ?? null;
 
   const parsedPage = Number.parseInt(pageParam, 10);
   const requestedPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
@@ -39,6 +40,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let countQuery = supabase.from('rfqs').select('id', { count: 'exact', head: true });
   if (productTypeFilter) {
     countQuery = countQuery.eq('product_type', productTypeFilter);
+  }
+  if (searchQuery) {
+    countQuery = countQuery.ilike('customer_name', `%${searchQuery}%`);
   }
   const { count, error: countError } = await countQuery;
 
@@ -59,6 +63,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     .range(from, to);
   if (productTypeFilter) {
     rfqsQuery = rfqsQuery.eq('product_type', productTypeFilter);
+  }
+  if (searchQuery) {
+    rfqsQuery = rfqsQuery.ilike('customer_name', `%${searchQuery}%`);
   }
   const { data: rfqsData, error: rfqsError } = await rfqsQuery;
 
@@ -91,9 +98,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Prijs request</h1>
-        <RfqCreateWizard />
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold tracking-tight">Price request</h1>
       </div>
 
       {rfqs.length === 0 ? (
@@ -113,6 +119,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               totalPages={totalPages}
               selectedRfqId={selectedRfqId}
               productTypeFilter={productTypeFilter}
+              searchQuery={searchQuery}
             />
           </CardContent>
         </Card>

@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getRfqDetail } from '@/actions/rfq';
+import { getRfqDetail, sendToPricingTeam } from '@/actions/rfq';
 import { AttachmentUpload } from '@/components/attachment-upload';
+import { Button } from '@/components/ui/button';
 import { FormattedDate } from '@/components/formatted-date';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { RfqActions } from '@/components/rfq-actions';
@@ -35,6 +36,7 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
   sent_to_supplier: { label: 'Sent to supplier', color: 'bg-primary/15 text-primary' },
   waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
+  quotes_received: { label: 'Supplier replied', color: 'bg-chart-2/15 text-chart-2' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
@@ -42,6 +44,8 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RfqDetailData | null>(null);
+  const [pricingTeamLoading, setPricingTeamLoading] = useState(false);
+  const [pricingTeamResult, setPricingTeamResult] = useState<string | null>(null);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -129,6 +133,26 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
 
   const isRound = detail ? isRoundShape(detail.rfq.shape) : false;
 
+  const handleSendToPricingTeam = useCallback(async () => {
+    if (!detail?.rfq.id) return;
+    setPricingTeamLoading(true);
+    setPricingTeamResult(null);
+    try {
+      const res = await sendToPricingTeam(detail.rfq.id);
+      if ('error' in res) {
+        setPricingTeamResult(`Error: ${typeof res.error === 'string' ? res.error : JSON.stringify(res.error)}`);
+      } else {
+        setPricingTeamResult(`Sent to pricing team (${res.data.sent}/${res.data.total})`);
+        router.refresh();
+      }
+    } catch (err) {
+      console.error('Send to pricing team failed:', err);
+      setPricingTeamResult('Error: Failed to notify pricing team');
+    } finally {
+      setPricingTeamLoading(false);
+    }
+  }, [detail?.rfq.id, router]);
+
   return (
     <Dialog
       open={open}
@@ -158,7 +182,7 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
 
         {!loading && !error && detail && (
           <div className="space-y-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">
                   Created on{' '}
@@ -182,19 +206,36 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                   )}
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
                 {status && (
                   <span
-                    className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${status.color}`}
+                    className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-sm font-medium ${status.color}`}
                   >
                     {status.label}
                   </span>
                 )}
-                <RfqActions
-                  rfqId={detail.rfq.id}
-                  status={detail.rfq.status}
-                  materialId={detail.rfq.material_id}
-                />
+                {detail.rfq.status === 'draft' && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSendToPricingTeam}
+                    disabled={pricingTeamLoading}
+                    className="shrink-0"
+                  >
+                    {pricingTeamLoading ? 'Loading...' : 'Send to pricing team'}
+                  </Button>
+                )}
+                <div className="flex w-full flex-shrink-0 flex-wrap items-center gap-2 sm:w-auto">
+                  <RfqActions
+                    rfqId={detail.rfq.id}
+                    status={detail.rfq.status}
+                    materialId={detail.rfq.material_id}
+                    hidePricingTeamButton
+                  />
+                </div>
+                {pricingTeamResult && (
+                  <span className="min-w-0 shrink text-sm text-muted-foreground">{pricingTeamResult}</span>
+                )}
               </div>
             </div>
 

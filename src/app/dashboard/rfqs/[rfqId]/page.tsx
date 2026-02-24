@@ -16,6 +16,7 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   draft: { label: 'Draft', color: 'bg-secondary text-secondary-foreground' },
   sent_to_supplier: { label: 'Sent to supplier', color: 'bg-primary/15 text-primary' },
   waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
+  quotes_received: { label: 'Supplier replied', color: 'bg-chart-2/15 text-chart-2' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 

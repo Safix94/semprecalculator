@@ -64,7 +64,9 @@ export async function sendSupplierInviteEmail(params: {
   dimensionsText?: string;
   quantity?: number;
 }) {
-  const link = `${APP_URL}/supplier/rfq/${params.rfqId}?t=${params.token}`;
+  const link = new URL(`/supplier/rfq/${params.rfqId}`, APP_URL);
+  link.searchParams.set('t', params.token);
+  const inviteLink = link.toString();
   const finishText = params.finish ? ` with finish "${params.finish}"` : '';
   const detailLines = [
     `<li><strong>Material:</strong> ${params.material}</li>`,
@@ -85,7 +87,7 @@ export async function sendSupplierInviteEmail(params: {
       <p>There is a new request for quotation for <strong>${params.material}</strong> (${params.shape})${finishText}.</p>
       <ul>${detailLines}</ul>
       <p>Click the link below to view the request and submit a quote:</p>
-      <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Submit quote</a></p>
+      <p><a href="${inviteLink}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Submit quote</a></p>
       <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
     `,
   });
@@ -112,4 +114,38 @@ export async function sendSalesQuoteReceivedEmail(params: {
       <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">View quotes</a></p>
     `,
   });
+}
+
+/**
+ * Notify pricing team members that a draft RFQ is ready for review.
+ */
+export async function sendPricingTeamRfqNotification(params: {
+  pricingEmails: string[];
+  rfqId: string;
+  rfqSummary: string;
+}) {
+  const link = `${APP_URL}/dashboard/rfqs/${params.rfqId}`;
+
+  const results = await Promise.all(
+    params.pricingEmails.map(async (email) => {
+      const emailResult = await sendEmail({
+        to: { email },
+        subject: 'New price request ready for review',
+        htmlContent: `
+          <h2>New price request ready for review</h2>
+          <p>A new draft request is available for pricing review.</p>
+          <p><strong>Summary:</strong> ${params.rfqSummary}</p>
+          <p><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Open request</a></p>
+        `,
+      });
+
+      return { email, ...emailResult };
+    })
+  );
+
+  return {
+    sent: results.filter((result) => result.success).length,
+    total: results.length,
+    results,
+  };
 }

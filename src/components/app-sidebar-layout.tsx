@@ -103,6 +103,7 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
           <p className="text-sidebar-foreground/70 truncate px-2 text-xs group-data-[collapsible=icon]:hidden">
             {user.email}
           </p>
+          <SidebarTrigger className="mt-2 w-full justify-center" />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
@@ -111,7 +112,6 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
         <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30 border-b backdrop-blur">
           <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-2">
-              <SidebarTrigger />
               <span className="text-sm font-medium text-muted-foreground sm:hidden">Sempre</span>
             </div>
             <div className="flex items-center gap-2 sm:gap-3">

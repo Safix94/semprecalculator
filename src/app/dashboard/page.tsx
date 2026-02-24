@@ -2,6 +2,7 @@ import { requireAuth } from '@/lib/auth';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { DashboardRfqTable } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { isProductType } from '@/lib/product-types';
 import type { Rfq } from '@/types';
@@ -12,6 +13,7 @@ interface DashboardPageProps {
     rfq?: string | string[];
     product_type?: string | string[];
     search?: string | string[];
+    admin_required?: string | string[];
   }>;
 }
 
@@ -25,9 +27,10 @@ function getStringParam(value?: string | string[]) {
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  await requireAuth();
+  const user = await requireAuth();
   const params = searchParams ? await searchParams : {};
   const pageParam = getStringParam(params.page) ?? '1';
+  const adminRequired = getStringParam(params.admin_required) === '1';
   const selectedRfqId = getStringParam(params.rfq) ?? null;
   const productTypeParam = getStringParam(params.product_type) ?? null;
   const productTypeFilter = productTypeParam && isProductType(productTypeParam) ? productTypeParam : null;
@@ -98,6 +101,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   return (
     <div>
+      {adminRequired && (
+        <Alert variant="default" className="mb-6 border-amber-500/50 bg-amber-500/10">
+          <AlertDescription>
+            Je hebt geen adminrechten voor Management of Audit Logs. Jouw rol is nu{' '}
+            <strong>{user.role === 'sales' ? 'Sales' : user.role ?? 'onbekend'}</strong>. Vraag een
+            beheerder om je rol onder Management → Users te wijzigen, of zet in Supabase in de
+            tabel <code className="rounded bg-muted px-1">user_roles</code> je <code className="rounded bg-muted px-1">user_id</code> op{' '}
+            <code className="rounded bg-muted px-1">role = &apos;admin&apos;</code>.
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Price request</h1>
       </div>

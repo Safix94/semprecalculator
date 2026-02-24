@@ -54,8 +54,8 @@ export async function requireAuth(): Promise<AuthUser> {
 export async function requireRole(role: UserRole): Promise<AuthUser> {
   const user = await requireAuth();
   if (user.role !== role && user.role !== 'admin') {
-    // Admin can access everything, otherwise must match role
-    redirect('/dashboard');
+    // Admin can access everything, otherwise redirect with hint so dashboard can show a message
+    redirect('/dashboard?admin_required=1');
   }
   return user;
 }

@@ -51,7 +51,8 @@ function isNavItemActive(pathname: string, href: string): boolean {
 
 export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
   const pathname = usePathname();
-  const visibleNavItems = navItems.filter((item) => !item.adminOnly || user.role === 'admin');
+  // Show all nav items so everyone can see Management/Audit Logs; admin-only pages redirect non-admins
+  const visibleNavItems = navItems;
 
   return (
     <SidebarProvider>

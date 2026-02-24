@@ -10,6 +10,7 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Sempre Calculator - RFQ Platform",
   description: "Request for quotation platform for Sempre",
+  icons: { icon: "/icon.svg" },
 };
 
 export default function RootLayout({

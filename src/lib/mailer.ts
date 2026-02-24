@@ -6,7 +6,25 @@
 const BREVO_API_KEY = process.env.BREVO_API_KEY!;
 const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'noreply@sempre.com';
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Sempre';
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const FALLBACK_APP_URL = 'http://localhost:3000';
+
+function resolveAppUrl(rawValue: string | undefined): string {
+  const trimmed = (rawValue ?? '').trim();
+  if (!trimmed) {
+    return FALLBACK_APP_URL;
+  }
+
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    return parsed.toString();
+  } catch {
+    return FALLBACK_APP_URL;
+  }
+}
+
+const APP_URL = resolveAppUrl(process.env.NEXT_PUBLIC_APP_URL);
 
 /** Button style matching app primary (oklch(0.5251 0.0369 140.9133) → hex for email clients). */
 const EMAIL_BUTTON_STYLE =
@@ -33,6 +51,20 @@ function toExcerpt(text: string, maxLength = 240): string {
     return normalized;
   }
   return `${normalized.slice(0, maxLength - 1).trimEnd()}\u2026`;
+}
+
+function buildSupplierRfqLink(rfqId: string, token: string): string {
+  const path = `/supplier/rfq/${rfqId}`;
+
+  try {
+    const link = new URL(path, APP_URL);
+    link.searchParams.set('t', token);
+    return link.toString();
+  } catch {
+    const fallbackLink = new URL(path, FALLBACK_APP_URL);
+    fallbackLink.searchParams.set('t', token);
+    return fallbackLink.toString();
+  }
 }
 
 export function getPricingTeamEmailsFromEnv(): string[] {
@@ -95,9 +127,7 @@ export async function sendSupplierInviteEmail(params: {
   dimensionsText?: string;
   quantity?: number;
 }) {
-  const link = new URL(`/supplier/rfq/${params.rfqId}`, APP_URL);
-  link.searchParams.set('t', params.token);
-  const inviteLink = link.toString();
+  const inviteLink = buildSupplierRfqLink(params.rfqId, params.token);
   const invitePart = params.invitePart ?? 'default';
   const topMaterial = params.materialTableTop || 'Table top';
   const footMaterial = params.materialTableFoot || 'Table foot';
@@ -267,8 +297,7 @@ export async function sendSupplierThreadReplyEmail(params: {
   messageExcerpt: string;
   requestUpdatedQuote: boolean;
 }) {
-  const link = new URL(`/supplier/rfq/${params.rfqId}`, APP_URL);
-  link.searchParams.set('t', params.token);
+  const link = buildSupplierRfqLink(params.rfqId, params.token);
   const replyText = escapeHtml(toExcerpt(params.messageExcerpt));
   const updateNote = params.requestUpdatedQuote
     ? '<p><strong>You can now submit an updated quote using this fresh link.</strong></p>'
@@ -284,7 +313,7 @@ export async function sendSupplierThreadReplyEmail(params: {
       <p><strong>Message:</strong> ${replyText}</p>
       ${updateNote}
       <p>Open the link to view full history.</p>
-      <p><a href="${link.toString()}" style="${EMAIL_BUTTON_STYLE}">Open RFQ thread</a></p>
+      <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open RFQ thread</a></p>
       <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
     `,
   });

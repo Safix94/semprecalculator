@@ -608,11 +608,12 @@ export async function sendRfq(rfqId: string) {
   const supabase = await createClient();
 
   try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    console.error('RFQ token setup validation failed:', error);
-    return { error: TOKEN_CONFIG_ERROR_MESSAGE };
-  }
+    try {
+      assertTokenHashingConfigured();
+    } catch (error) {
+      console.error('RFQ token setup validation failed:', error);
+      return { error: TOKEN_CONFIG_ERROR_MESSAGE };
+    }
 
   // Fetch the RFQ (allow resend when already sent_to_supplier, e.g. after adding attachments)
   const { data: rfq, error: rfqError } = await supabase
@@ -795,9 +796,14 @@ export async function sendRfq(rfqId: string) {
     metadata: { supplierCount: invites.length, results },
   });
 
-  revalidatePath('/dashboard');
-  revalidatePath(`/dashboard/rfqs/${rfqId}`);
-  return { data: { sent: sentCount, total: totalCount, results } };
+    revalidatePath('/dashboard');
+    revalidatePath(`/dashboard/rfqs/${rfqId}`);
+    return { data: { sent: sentCount, total: totalCount, results } };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unexpected error';
+    console.error('sendRfq: unexpected error', { rfqId, message });
+    return { error: `Failed to send RFQ: ${message}` };
+  }
 }
 
 export async function sendToPricingTeam(rfqId: string) {

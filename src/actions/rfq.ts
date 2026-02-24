@@ -720,7 +720,10 @@ export async function sendRfq(rfqId: string) {
     });
 
     // Send email
-    const materialName = rfq.material_details?.name || rfq.material;
+    const materialDetails = Array.isArray(rfq.material_details)
+      ? rfq.material_details[0]
+      : rfq.material_details;
+    const materialName = materialDetails?.name || rfq.material;
     const emailResult = await sendSupplierInviteEmail({
       supplierEmail: invite.supplier.email,
       supplierName: invite.supplier.name,

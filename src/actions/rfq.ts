@@ -722,7 +722,7 @@ export async function sendRfq(rfqId: string) {
       return { error: TOKEN_CONFIG_ERROR_MESSAGE };
     }
 
-  // Fetch the RFQ (allow resend when already sent_to_supplier, e.g. after adding attachments)
+  // Fetch the RFQ (allow resend when already supplier-facing, e.g. after adding attachments)
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(`
@@ -731,7 +731,7 @@ export async function sendRfq(rfqId: string) {
       material_details:materials!material_id(name)
     `)
     .eq('id', rfqId)
-    .in('status', ['draft', 'sent_to_pricing', 'sent_to_supplier'])
+    .in('status', ['draft', 'sent_to_pricing', 'sent_to_supplier', 'supplier_replied'])
     .single();
 
   if (rfqError || !rfq) {
@@ -1018,7 +1018,7 @@ export async function closeRfq(rfqId: string) {
     .from('rfqs')
     .update({ status: 'closed' })
     .eq('id', rfqId)
-    .in('status', ['sent_to_pricing', 'sent_to_supplier', 'quotes_received']);
+    .in('status', ['sent_to_pricing', 'sent_to_supplier', 'supplier_replied', 'quotes_received']);
 
   if (error) {
     return { error: error.message };

@@ -1,5 +1,6 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { assertTokenHashingConfigured, hashToken, isTokenHashingConfigError } from '@/lib/tokens';
 import { getPricingTeamEmailsFromEnv, sendInternalSupplierCommentEmail } from '@/lib/mailer';
@@ -126,10 +127,30 @@ export async function addSupplierComment(
       .single(),
     supabase
       .from('rfqs')
-      .select('created_by')
+      .select('created_by, status')
       .eq('id', rfqId)
       .single(),
   ]);
+
+  if (rfq?.status === 'sent_to_supplier') {
+    const { error: rfqStatusError } = await supabase
+      .from('rfqs')
+      .update({ status: 'supplier_replied' })
+      .eq('id', rfqId)
+      .eq('status', 'sent_to_supplier');
+
+    if (rfqStatusError) {
+      console.warn('Failed to update RFQ status to supplier_replied after supplier comment.', {
+        rfqId,
+        supplierId: invite.supplier_id,
+        commentId: comment.id,
+        error: rfqStatusError.message,
+      });
+    } else {
+      revalidatePath('/dashboard');
+      revalidatePath(`/dashboard/rfqs/${rfqId}`);
+    }
+  }
 
   const recipients = new Set(getPricingTeamEmailsFromEnv());
   if (rfq?.created_by) {

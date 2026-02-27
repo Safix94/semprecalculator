@@ -346,12 +346,12 @@ export async function submitQuote(
   }
 
   // Move RFQ to quotes_received once the first quote arrives.
-  if (rfqForPricing.status === 'sent_to_supplier') {
+  if (rfqForPricing.status === 'sent_to_supplier' || rfqForPricing.status === 'supplier_replied') {
     const { error: rfqStatusError } = await supabase
       .from('rfqs')
       .update({ status: 'quotes_received' })
       .eq('id', rfqId)
-      .eq('status', 'sent_to_supplier');
+      .in('status', ['sent_to_supplier', 'supplier_replied']);
 
     if (rfqStatusError) {
       console.warn('Failed to update RFQ status to quotes_received after quote submission.', {

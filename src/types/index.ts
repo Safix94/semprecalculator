@@ -4,6 +4,7 @@ export type RfqStatus =
   | 'draft'
   | 'sent_to_pricing'
   | 'sent_to_supplier'
+  | 'supplier_replied'
   | 'waiting_for_technical_drawing'
   | 'quotes_received'
   | 'closed';

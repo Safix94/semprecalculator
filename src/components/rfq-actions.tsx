@@ -416,7 +416,7 @@ export function RfqActions({
             {loading ? 'Loading...' : 'Send to supplier'}
           </Button>
         )}
-        {(status === 'sent_to_supplier' || status === 'quotes_received') && (
+        {(status === 'sent_to_supplier' || status === 'supplier_replied' || status === 'quotes_received') && (
           <Button onClick={handleClose} disabled={loading || pricingLoading || saveAndSendLoading} variant="secondary">
             {loading ? 'Loading...' : 'Close'}
           </Button>

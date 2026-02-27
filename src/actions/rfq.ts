@@ -3,7 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { requireAuth, requireRole } from '@/lib/auth';
-import { createRfqSchema, updateRfqSchema, updateRfqNotesSchema } from '@/lib/validation';
+import {
+  createRfqSchema,
+  updateRfqSchema,
+  updateRfqDetailsSchema,
+  updateRfqNotesSchema,
+} from '@/lib/validation';
 import {
   assertTokenHashingConfigured,
   generateToken,
@@ -17,7 +22,7 @@ import {
 } from '@/lib/mailer';
 import { formatRfqDimensionsWithOptions } from '@/lib/rfq-format';
 import { logAuditEvent } from './audit';
-import type { CreateRfqInput } from '@/lib/validation';
+import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } from '@/types';
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
@@ -406,6 +411,73 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
   return { data: rfq };
 }
 
+export async function updateRfqDetails(rfqId: string, input: UpdateRfqDetailsInput) {
+  const user = await requireAuth();
+  if (user.role !== 'admin' && user.role !== 'sales') {
+    return { error: 'Unauthorized' };
+  }
+
+  const supabase = await createClient();
+  const { data: existingRfq, error: existingRfqError } = await supabase
+    .from('rfqs')
+    .select('id, shape')
+    .eq('id', rfqId)
+    .single();
+
+  if (existingRfqError || !existingRfq) {
+    return { error: { _form: [existingRfqError?.message ?? 'RFQ not found'] } };
+  }
+
+  const parsed = updateRfqDetailsSchema.safeParse({
+    ...input,
+    shape: existingRfq.shape,
+  });
+
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  const updateData: UpdateRfqDetailsInput = {};
+  if (parsed.data.length !== undefined) {
+    updateData.length = parsed.data.length;
+  }
+  if (parsed.data.width !== undefined) {
+    updateData.width = parsed.data.width;
+  }
+  if (parsed.data.height !== undefined) {
+    updateData.height = parsed.data.height;
+  }
+  if (parsed.data.thickness !== undefined) {
+    updateData.thickness = parsed.data.thickness;
+  }
+
+  const { data: rfq, error: updateError } = await supabase
+    .from('rfqs')
+    .update(updateData)
+    .eq('id', rfqId)
+    .select()
+    .single();
+
+  if (updateError || !rfq) {
+    return { error: { _form: [updateError?.message ?? 'Could not update RFQ details'] } };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_UPDATED',
+    entityType: 'rfq',
+    entityId: rfqId,
+    metadata: {
+      fields: Object.keys(updateData),
+    },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return { data: rfq };
+}
+
 interface RfqDetailData {
   rfq: Rfq;
   attachments: RfqAttachment[];
@@ -491,6 +563,41 @@ export async function getRfqDetail(rfqId: string): Promise<{ data: RfqDetailData
   } catch (error) {
     console.error('Unexpected error while loading RFQ detail:', error);
     return { error: 'Could not load RFQ details.' };
+  }
+}
+
+export async function getInternalAttachmentUrl(rfqId: string, attachmentId: string) {
+  const user = await requireAuth();
+  if (user.role !== 'admin' && user.role !== 'sales') {
+    return { error: 'Unauthorized' };
+  }
+
+  const supabase = await createClient();
+  const { data: attachment, error: attachmentError } = await supabase
+    .from('rfq_attachments')
+    .select('id, storage_path')
+    .eq('id', attachmentId)
+    .eq('rfq_id', rfqId)
+    .single();
+
+  if (attachmentError || !attachment) {
+    return { error: 'Attachment not found' };
+  }
+
+  try {
+    const serviceRoleSupabase = createServiceRoleClient();
+    const { data, error: signedUrlError } = await serviceRoleSupabase.storage
+      .from('rfq-attachments')
+      .createSignedUrl(attachment.storage_path, 3600);
+
+    if (signedUrlError || !data?.signedUrl) {
+      return { error: signedUrlError?.message ?? 'Failed to generate URL' };
+    }
+
+    return { url: data.signedUrl };
+  } catch (error) {
+    console.error('Failed to generate internal attachment URL:', error);
+    return { error: 'Failed to generate URL' };
   }
 }
 

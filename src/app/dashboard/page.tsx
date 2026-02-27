@@ -147,7 +147,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </Card>
       )}
 
-      <RfqDetailModal rfqId={selectedRfqId} refreshToken={new Date().toISOString()} />
+      <RfqDetailModal rfqId={selectedRfqId} refreshToken={new Date().toISOString()} userRole={user.role} />
     </div>
   );
 }

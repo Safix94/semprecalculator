@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getRfqDetail, sendToPricingTeam } from '@/actions/rfq';
+import { getRfqDetail, sendToPricingTeam, updateRfqDetails } from '@/actions/rfq';
 import { AttachmentUpload } from '@/components/attachment-upload';
+import { RfqAttachmentList } from '@/components/rfq-attachment-list';
 import { RfqNotesEditor } from '@/components/rfq-notes-editor';
 import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { FormattedDate } from '@/components/formatted-date';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { RfqActions } from '@/components/rfq-actions';
@@ -20,11 +22,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
+import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier, UserRole } from '@/types';
 
 interface RfqDetailModalProps {
   rfqId: string | null;
   refreshToken: string;
+  userRole: UserRole;
 }
 
 interface RfqDetailData {
@@ -44,12 +47,22 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
-export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
+export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RfqDetailData | null>(null);
   const [pricingTeamLoading, setPricingTeamLoading] = useState(false);
   const [pricingTeamResult, setPricingTeamResult] = useState<string | null>(null);
+  const [detailsEditing, setDetailsEditing] = useState(false);
+  const [detailsSaving, setDetailsSaving] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+  const [detailsResult, setDetailsResult] = useState<string | null>(null);
+  const [detailsForm, setDetailsForm] = useState({
+    length: '',
+    width: '',
+    height: '',
+    thickness: '',
+  });
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -67,6 +80,9 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
     if (!open || !rfqId) {
       setError(null);
       setDetail(null);
+      setDetailsEditing(false);
+      setDetailsError(null);
+      setDetailsResult(null);
       return;
     }
 
@@ -135,8 +151,40 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
       }
     : null;
 
+  const canManageRfq = userRole === 'admin' || userRole === 'sales';
   const isRound = detail ? isRoundShape(detail.rfq.shape) : false;
   const isTablesType = detail?.rfq.product_type === 'Tables';
+
+  useEffect(() => {
+    if (!detail || detailsEditing) {
+      return;
+    }
+
+    setDetailsForm({
+      length: String(detail.rfq.length),
+      width: String(detail.rfq.width),
+      height: String(detail.rfq.height),
+      thickness: String(detail.rfq.thickness),
+    });
+  }, [detail, detailsEditing]);
+
+  const parseActionError = (actionError: unknown): string => {
+    if (typeof actionError === 'string') {
+      return actionError;
+    }
+
+    if (actionError && typeof actionError === 'object') {
+      const firstFieldError = Object.values(actionError as Record<string, unknown>)
+        .flatMap((value) => (Array.isArray(value) ? value : []))
+        .find((value): value is string => typeof value === 'string');
+
+      if (firstFieldError) {
+        return firstFieldError;
+      }
+    }
+
+    return 'Could not update RFQ details';
+  };
 
   const handleSendToPricingTeam = useCallback(async () => {
     if (!detail?.rfq.id) return;
@@ -157,6 +205,107 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
       setPricingTeamLoading(false);
     }
   }, [detail?.rfq.id, router]);
+
+  const startDetailsEdit = useCallback(() => {
+    if (!detail) {
+      return;
+    }
+
+    setDetailsForm({
+      length: String(detail.rfq.length),
+      width: String(detail.rfq.width),
+      height: String(detail.rfq.height),
+      thickness: String(detail.rfq.thickness),
+    });
+    setDetailsError(null);
+    setDetailsResult(null);
+    setDetailsEditing(true);
+  }, [detail]);
+
+  const cancelDetailsEdit = useCallback(() => {
+    if (!detail) {
+      return;
+    }
+
+    setDetailsForm({
+      length: String(detail.rfq.length),
+      width: String(detail.rfq.width),
+      height: String(detail.rfq.height),
+      thickness: String(detail.rfq.thickness),
+    });
+    setDetailsError(null);
+    setDetailsResult(null);
+    setDetailsEditing(false);
+  }, [detail]);
+
+  const handleDetailsSave = useCallback(async () => {
+    if (!detail) {
+      return;
+    }
+
+    const parsedLength = Number.parseFloat(detailsForm.length);
+    const parsedWidth = Number.parseFloat(detailsForm.width);
+    const parsedHeight = Number.parseFloat(detailsForm.height);
+    const parsedThickness = Number.parseFloat(detailsForm.thickness);
+
+    const updateInput: {
+      length?: number;
+      width?: number;
+      height?: number;
+      thickness?: number;
+    } = {};
+
+    if (!Number.isNaN(parsedLength) && parsedLength !== detail.rfq.length) {
+      updateInput.length = parsedLength;
+    }
+    if (!isRound && !Number.isNaN(parsedWidth) && parsedWidth !== detail.rfq.width) {
+      updateInput.width = parsedWidth;
+    }
+    if (!Number.isNaN(parsedHeight) && parsedHeight !== detail.rfq.height) {
+      updateInput.height = parsedHeight;
+    }
+    if (!Number.isNaN(parsedThickness) && parsedThickness !== detail.rfq.thickness) {
+      updateInput.thickness = parsedThickness;
+    }
+
+    if (Object.keys(updateInput).length === 0) {
+      setDetailsResult('No changes to save.');
+      setDetailsError(null);
+      setDetailsEditing(false);
+      return;
+    }
+
+    setDetailsSaving(true);
+    setDetailsError(null);
+    setDetailsResult(null);
+
+    try {
+      const result = await updateRfqDetails(detail.rfq.id, updateInput);
+      if ('error' in result) {
+        setDetailsError(parseActionError(result.error));
+        return;
+      }
+
+      setDetail((currentDetail) => {
+        if (!currentDetail) {
+          return currentDetail;
+        }
+
+        return {
+          ...currentDetail,
+          rfq: result.data,
+        };
+      });
+      setDetailsEditing(false);
+      setDetailsResult('Details saved.');
+      router.refresh();
+    } catch (saveError) {
+      console.error('Failed to update RFQ details:', saveError);
+      setDetailsError('Could not update RFQ details.');
+    } finally {
+      setDetailsSaving(false);
+    }
+  }, [detail, detailsForm.height, detailsForm.length, detailsForm.thickness, detailsForm.width, isRound, router]);
 
   return (
     <Dialog
@@ -249,7 +398,14 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
 
             <Card>
               <CardHeader>
-                <CardTitle>Details</CardTitle>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <CardTitle>Details</CardTitle>
+                  {canManageRfq && !detailsEditing && (
+                    <Button type="button" variant="outline" size="sm" onClick={startDetailsEdit}>
+                      Edit
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -291,6 +447,7 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                     <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.customer_name || '-'}</dd>
                   </div>
+                  {!detailsEditing && (
                   <div>
                     <dt className="text-xs uppercase text-muted-foreground">
                       {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
@@ -299,17 +456,102 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                       {formatRfqDimensionsWithOptions(detail.rfq, { includeThickness: false })}
                     </dd>
                   </div>
+                  )}
                   <div>
                     <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.quantity}</dd>
                   </div>
-                  {(!isRound || detail.rfq.thickness > 0) && (
+                  {!detailsEditing && (!isRound || detail.rfq.thickness > 0 || canManageRfq) && (
                     <div>
                       <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
                       <dd className="mt-1 text-sm font-medium">{detail.rfq.thickness} cm</dd>
                     </div>
                   )}
+                  {detailsEditing && canManageRfq && (
+                    <div className="col-span-2 rounded-md border p-3 md:col-span-4">
+                      <p className="mb-3 text-xs uppercase text-muted-foreground">Edit dimensions and thickness</p>
+                      <div className={`grid gap-3 ${isRound ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
+                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                          <span>{isRound ? 'Diameter (cm)' : 'Length (cm)'}</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={detailsForm.length}
+                            onChange={(event) =>
+                              setDetailsForm((current) => ({ ...current, length: event.target.value }))
+                            }
+                            disabled={detailsSaving}
+                          />
+                        </label>
+                        {!isRound && (
+                          <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                            <span>Width (cm)</span>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="any"
+                              value={detailsForm.width}
+                              onChange={(event) =>
+                                setDetailsForm((current) => ({ ...current, width: event.target.value }))
+                              }
+                              disabled={detailsSaving}
+                            />
+                          </label>
+                        )}
+                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                          <span>Height (cm)</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={detailsForm.height}
+                            onChange={(event) =>
+                              setDetailsForm((current) => ({ ...current, height: event.target.value }))
+                            }
+                            disabled={detailsSaving}
+                          />
+                        </label>
+                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                          <span>Thickness (cm)</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={detailsForm.thickness}
+                            onChange={(event) =>
+                              setDetailsForm((current) => ({ ...current, thickness: event.target.value }))
+                            }
+                            disabled={detailsSaving}
+                          />
+                        </label>
+                      </div>
+                      {detailsError && <p className="mt-3 text-sm text-destructive">{detailsError}</p>}
+                      {detailsResult && <p className="mt-3 text-sm text-muted-foreground">{detailsResult}</p>}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button type="button" size="sm" onClick={handleDetailsSave} disabled={detailsSaving}>
+                          {detailsSaving ? 'Saving...' : 'Save details'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={cancelDetailsEdit}
+                          disabled={detailsSaving}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </dl>
+
+                {!detailsEditing && detailsResult && (
+                  <p className="mt-3 text-sm text-muted-foreground">{detailsResult}</p>
+                )}
+                {!detailsEditing && detailsError && (
+                  <p className="mt-3 text-sm text-destructive">{detailsError}</p>
+                )}
 
                 <div className="mt-4 border-t pt-4">
                   <h3 className="mb-2 text-xs uppercase text-muted-foreground">Notes</h3>
@@ -328,18 +570,11 @@ export function RfqDetailModal({ rfqId, refreshToken }: RfqDetailModalProps) {
                 <CardTitle>Attachments</CardTitle>
               </CardHeader>
               <CardContent>
-                {detail.attachments.length > 0 ? (
-                  <ul className="space-y-2">
-                    {detail.attachments.map((attachment) => (
-                      <li key={attachment.id} className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-medium">{attachment.file_name}</span>
-                        <span className="text-xs text-muted-foreground">({attachment.mime_type})</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No attachments.</p>
-                )}
+                <RfqAttachmentList
+                  rfqId={detail.rfq.id}
+                  attachments={detail.attachments}
+                  canOpen={canManageRfq}
+                />
 
                 {detail.rfq.status !== 'closed' && (
                   <div className="mt-4">

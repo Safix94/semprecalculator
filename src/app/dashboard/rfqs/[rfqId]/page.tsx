@@ -6,6 +6,7 @@ import { RfqNotesEditor } from '@/components/rfq-notes-editor';
 import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
+import { RfqAttachmentList } from '@/components/rfq-attachment-list';
 import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
 import type { Rfq, RfqAttachment, RfqComment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,7 +25,7 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
 };
 
 export default async function RfqDetailPage({ params }: PageProps) {
-  await requireAuth();
+  const user = await requireAuth();
   const { rfqId } = await params;
   const supabase = await createClient();
 
@@ -67,6 +68,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
   const typedRfq = rfq as Rfq;
   const isRound = isRoundShape(typedRfq.shape);
   const isTablesType = typedRfq.product_type === 'Tables';
+  const canManageRfq = user.role === 'admin' || user.role === 'sales';
   const status = statusLabels[typedRfq.status] ?? {
     label: typedRfq.status,
     color: 'bg-muted text-muted-foreground',
@@ -174,18 +176,11 @@ export default async function RfqDetailPage({ params }: PageProps) {
           <CardTitle>Attachments</CardTitle>
         </CardHeader>
         <CardContent>
-          {attachments && attachments.length > 0 ? (
-            <ul className="space-y-2">
-              {(attachments as RfqAttachment[]).map((att) => (
-                <li key={att.id} className="flex items-center gap-2 text-sm">
-                  <span>{att.file_name}</span>
-                  <span className="text-xs text-muted-foreground">({att.mime_type})</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">No attachments.</p>
-          )}
+          <RfqAttachmentList
+            rfqId={rfqId}
+            attachments={(attachments as RfqAttachment[]) ?? []}
+            canOpen={canManageRfq}
+          />
           {typedRfq.status !== 'closed' && (
             <div className="mt-4">
               <AttachmentUpload rfqId={rfqId} />

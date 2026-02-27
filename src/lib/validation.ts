@@ -148,6 +148,31 @@ export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) =
   validateTableSuppliers(data, ctx);
 });
 
+export const updateRfqDetailsSchema = z
+  .object({
+    length: z.coerce.number().positive('Length must be positive').optional(),
+    width: z.coerce.number().positive('Width must be positive').optional(),
+    height: z.coerce.number().positive('Height must be positive').optional(),
+    thickness: z.coerce.number().min(0, 'Thickness must be zero or positive').optional(),
+    shape: z.string().optional().nullable(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.length === undefined &&
+      data.width === undefined &&
+      data.height === undefined &&
+      data.thickness === undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['_form'],
+        message: 'Provide at least one field to update',
+      });
+    }
+
+    validateShapeThickness(data, ctx);
+  });
+
 export const submitQuoteSchema = z.object({
   basePrice: z.coerce
     .number()
@@ -188,6 +213,8 @@ export const linkMaterialSupplierSchema = z.object({
 
 export type CreateRfqInput = z.infer<typeof createRfqSchema>;
 export type UpdateRfqInput = z.infer<typeof updateRfqSchema>;
+type UpdateRfqDetailsSchemaInput = z.infer<typeof updateRfqDetailsSchema>;
+export type UpdateRfqDetailsInput = Omit<UpdateRfqDetailsSchemaInput, 'shape'>;
 export type SubmitQuoteInput = z.infer<typeof submitQuoteSchema>;
 export type UpdateRfqNotesInput = z.infer<typeof updateRfqNotesSchema>;
 export type CreateMaterialInput = z.infer<typeof createMaterialSchema>;

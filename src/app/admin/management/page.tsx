@@ -10,13 +10,13 @@ import { UserRoleManagement } from '@/components/user-role-management';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default async function ManagementPage() {
-  const currentUser = await requireRole('admin');
+  const currentUser = await requireRole('sales');
 
-  const [materials, suppliers, users, productTypesResult] = await Promise.all([
+  const [materials, suppliers, productTypesResult, users] = await Promise.all([
     getMaterials(),
     getSuppliers(),
-    listUsersWithRoles(),
     getProductTypes(),
+    currentUser.role === 'admin' ? listUsersWithRoles() : Promise.resolve([]),
   ]);
   const productTypes = 'data' in productTypesResult ? productTypesResult.data : [];
 
@@ -24,7 +24,9 @@ export default async function ManagementPage() {
     <>
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Management</h1>
-        <p className="text-muted-foreground">Manage materials, suppliers, product types, and user roles.</p>
+        <p className="text-muted-foreground">
+          Manage materials, suppliers, product types, and (admin only) user roles.
+        </p>
       </div>
 
       <Tabs defaultValue="materials">
@@ -32,7 +34,7 @@ export default async function ManagementPage() {
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="product-types">Product types</TabsTrigger>
-          <TabsTrigger value="users">Users</TabsTrigger>
+          {currentUser.role === 'admin' && <TabsTrigger value="users">Users</TabsTrigger>}
         </TabsList>
         <TabsContent value="materials">
           <MaterialManagement materials={materials} suppliers={suppliers} />
@@ -43,9 +45,11 @@ export default async function ManagementPage() {
         <TabsContent value="product-types">
           <ProductTypeManagement productTypes={productTypes} />
         </TabsContent>
-        <TabsContent value="users">
-          <UserRoleManagement users={users} currentUserId={currentUser.id} />
-        </TabsContent>
+        {currentUser.role === 'admin' && (
+          <TabsContent value="users">
+            <UserRoleManagement users={users} currentUserId={currentUser.id} />
+          </TabsContent>
+        )}
       </Tabs>
     </>
   );

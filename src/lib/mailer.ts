@@ -124,6 +124,9 @@ export async function sendSupplierInviteEmail(params: {
   finishTableTop?: string | null;
   materialTableFoot?: string | null;
   finishTableFoot?: string | null;
+  finishTop?: string | null;
+  finishEdge?: string | null;
+  finishColor?: string | null;
   dimensionsText?: string;
   quantity?: number;
 }) {
@@ -172,6 +175,9 @@ export async function sendSupplierInviteEmail(params: {
       `<li><strong>Material:</strong> ${params.material}</li>`,
       `<li><strong>Shape:</strong> ${params.shape}</li>`,
       params.finish ? `<li><strong>Finish:</strong> ${params.finish}</li>` : null,
+      params.finishTop ? `<li><strong>Top finish:</strong> ${params.finishTop}</li>` : null,
+      params.finishEdge ? `<li><strong>Edge finish:</strong> ${params.finishEdge}</li>` : null,
+      params.finishColor ? `<li><strong>Color finish:</strong> ${params.finishColor}</li>` : null,
     ].filter(Boolean) as string[];
   }
 
@@ -240,6 +246,86 @@ export async function sendPricingTeamRfqNotification(params: {
           <h2>New price request ready for review</h2>
           <p>A new draft request is available for pricing review.</p>
           <p><strong>Summary:</strong> ${params.rfqSummary}</p>
+          <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open request</a></p>
+        `,
+      });
+
+      return { email, ...emailResult };
+    })
+  );
+
+  return {
+    sent: results.filter((result) => result.success).length,
+    total: results.length,
+    results,
+  };
+}
+
+/**
+ * Notify pricing team members that an RFQ with received quotes is ready for CRM creation.
+ */
+export async function sendPricingTeamRfqCrmNotification(params: {
+  pricingEmails: string[];
+  rfqId: string;
+  rfqSummary: string;
+  attachmentCount?: number;
+  quotes: Array<{
+    supplierName: string;
+    basePrice: number;
+    finalPrice: number;
+    leadTimeDays: number | null;
+    comment: string | null;
+  }>;
+}) {
+  const link = `${APP_URL}/dashboard/rfqs/${params.rfqId}`;
+  const attachmentCount = Number.isFinite(params.attachmentCount) ? Number(params.attachmentCount) : 0;
+
+  const quoteRows =
+    params.quotes.length === 0
+      ? '<p>No quotes are available yet.</p>'
+      : `
+      <table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse;border-color:#ddd;">
+        <thead>
+          <tr>
+            <th align="left">Supplier</th>
+            <th align="right">Base price</th>
+            <th align="right">Final price</th>
+            <th align="right">Lead time</th>
+            <th align="left">Comment</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${params.quotes
+            .map((quote) => {
+              const supplierName = escapeHtml(quote.supplierName);
+              const leadTime = quote.leadTimeDays ? `${quote.leadTimeDays} days` : '-';
+              const comment = quote.comment ? escapeHtml(toExcerpt(quote.comment, 120)) : '-';
+              return `
+                <tr>
+                  <td>${supplierName}</td>
+                  <td align="right">€${quote.basePrice.toFixed(2)}</td>
+                  <td align="right">€${quote.finalPrice.toFixed(2)}</td>
+                  <td align="right">${leadTime}</td>
+                  <td>${comment}</td>
+                </tr>
+              `;
+            })
+            .join('')}
+        </tbody>
+      </table>
+    `;
+
+  const results = await Promise.all(
+    params.pricingEmails.map(async (email) => {
+      const emailResult = await sendEmail({
+        to: { email },
+        subject: 'RFQ ready for CRM creation',
+        htmlContent: `
+          <h2>RFQ ready for CRM creation</h2>
+          <p>An RFQ with received supplier quotes is ready to be created in CRM.</p>
+          <p><strong>Summary:</strong> ${escapeHtml(params.rfqSummary)}</p>
+          <p><strong>Attachments:</strong> ${attachmentCount}</p>
+          ${quoteRows}
           <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open request</a></p>
         `,
       });

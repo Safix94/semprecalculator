@@ -42,7 +42,7 @@ export async function getProductTypes(): Promise<{ data: ProductType[] } | { err
 }
 
 export async function createProductType(input: CreateProductTypeInput) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const name = input.name.trim();
@@ -80,7 +80,7 @@ export async function createProductType(input: CreateProductTypeInput) {
 }
 
 export async function deleteProductType(productTypeId: string) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const { data: productType, error: productTypeError } = await supabase

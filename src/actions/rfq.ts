@@ -17,10 +17,15 @@ import {
 } from '@/lib/tokens';
 import {
   getPricingTeamEmailsFromEnv,
+  sendPricingTeamRfqCrmNotification,
   sendPricingTeamRfqNotification,
   sendSupplierInviteEmail,
 } from '@/lib/mailer';
-import { formatRfqDimensionsWithOptions } from '@/lib/rfq-format';
+import {
+  formatRfqDimensionsWithOptions,
+  isTableTopsProductType,
+  isTablesProductType,
+} from '@/lib/rfq-format';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } from '@/types';
@@ -60,10 +65,6 @@ async function productTypeExists(
 }
 
 type ReplaceRfqInvitesResult = { data: { created: number } } | { error: string };
-
-function isTablesProductType(productType: string | null | undefined): boolean {
-  return productType?.trim().toLowerCase() === 'tables';
-}
 
 function normalizeSupplierIds(ids?: string[]): string[] {
   return [...new Set((ids ?? []).map((id) => id.trim()).filter(Boolean))];
@@ -238,6 +239,9 @@ export async function createRfq(input: CreateRfqInput) {
       product_type: normalizedProductType,
       material_table_top: rfqData.material_table_top?.trim() || null,
       material_table_foot: rfqData.material_table_foot?.trim() || null,
+      finish_top: rfqData.finish_top?.trim() || null,
+      finish_edge: rfqData.finish_edge?.trim() || null,
+      finish_color: rfqData.finish_color?.trim() || null,
       finish_table_top: rfqData.finish_table_top?.trim() || null,
       finish_table_foot: rfqData.finish_table_foot?.trim() || null,
     };
@@ -267,6 +271,9 @@ export async function createRfq(input: CreateRfqInput) {
         finish: rfq.finish,
         tableTopMaterialId: rfq.material_id_table_top,
         tableFootMaterialId: rfq.material_id_table_foot,
+        finishTop: rfq.finish_top,
+        finishEdge: rfq.finish_edge,
+        finishColor: rfq.finish_color,
         tableTopFinish: rfq.finish_table_top,
         tableFootFinish: rfq.finish_table_foot,
         quantity: rfq.quantity,
@@ -377,6 +384,18 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
       parsed.data.material_table_foot === undefined
         ? undefined
         : parsed.data.material_table_foot?.trim() || null,
+    finish_top:
+      parsed.data.finish_top === undefined
+        ? undefined
+        : parsed.data.finish_top?.trim() || null,
+    finish_edge:
+      parsed.data.finish_edge === undefined
+        ? undefined
+        : parsed.data.finish_edge?.trim() || null,
+    finish_color:
+      parsed.data.finish_color === undefined
+        ? undefined
+        : parsed.data.finish_color?.trim() || null,
     finish_table_top:
       parsed.data.finish_table_top === undefined
         ? undefined
@@ -726,7 +745,7 @@ export async function sendRfq(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(`
-      id, material, material_id, shape, finish, length, width, height, thickness, quantity,
+      id, material, material_id, product_type, shape, finish, finish_top, finish_edge, finish_color, length, width, height, thickness, quantity,
       material_table_top, material_table_foot, finish_table_top, finish_table_foot,
       material_details:materials!material_id(name)
     `)
@@ -840,6 +859,9 @@ export async function sendRfq(rfqId: string) {
       material: materialName,
       shape: rfq.shape,
       finish: rfq.finish,
+      finishTop: rfq.finish_top,
+      finishEdge: rfq.finish_edge,
+      finishColor: rfq.finish_color,
       invitePart: invite.invite_part ?? 'default',
       materialTableTop: rfq.material_table_top,
       finishTableTop: rfq.finish_table_top,
@@ -923,7 +945,7 @@ export async function sendToPricingTeam(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(
-      'id, material, shape, finish, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+      'id, material, shape, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
     )
     .eq('id', rfqId)
     .single();
@@ -952,12 +974,15 @@ export async function sendToPricingTeam(rfqId: string) {
   const rfqSummary = [
     rfq.product_type ? `Type: ${rfq.product_type}` : null,
     `Material: ${rfq.material}`,
-    rfq.product_type === 'Tables' && rfq.material_table_top
+    isTablesProductType(rfq.product_type) && rfq.material_table_top
       ? `Table top: ${rfq.material_table_top}${rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}`
       : null,
-    rfq.product_type === 'Tables' && rfq.material_table_foot
+    isTablesProductType(rfq.product_type) && rfq.material_table_foot
       ? `Table foot: ${rfq.material_table_foot}${rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}`
       : null,
+    isTableTopsProductType(rfq.product_type) && rfq.finish_top ? `Top finish: ${rfq.finish_top}` : null,
+    isTableTopsProductType(rfq.product_type) && rfq.finish_edge ? `Edge finish: ${rfq.finish_edge}` : null,
+    isTableTopsProductType(rfq.product_type) && rfq.finish_color ? `Color finish: ${rfq.finish_color}` : null,
     `Shape: ${rfq.shape}`,
     rfq.finish ? `Finish: ${rfq.finish}` : null,
     `Quantity: ${Number(rfq.quantity ?? 1)}`,
@@ -1010,6 +1035,145 @@ export async function sendToPricingTeam(rfqId: string) {
   return { data: { sent: emailResult.sent, total: emailResult.total } };
 }
 
+export async function sendToPricingCrm(rfqId: string) {
+  const user = await requireAuth();
+  if (user.role !== 'sales' && user.role !== 'admin') {
+    return { error: 'Unauthorized' };
+  }
+
+  const supabase = await createClient();
+
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select(
+      'id, material, shape, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+    )
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    if (rfqError) {
+      console.error('sendToPricingCrm: failed to fetch RFQ', {
+        rfqId,
+        code: rfqError.code,
+        message: rfqError.message,
+      });
+    }
+    return { error: rfqError?.message ?? 'RFQ not found' };
+  }
+
+  if (rfq.status !== 'quotes_received') {
+    return { error: 'Only RFQs in quotes_received can be sent to pricing CRM' };
+  }
+
+  const [{ data: quotes, error: quotesError }, { count: attachmentCount, error: attachmentCountError }] = await Promise.all([
+    supabase
+      .from('rfq_quotes')
+      .select('base_price, final_price_calculated, lead_time_days, comment, supplier:suppliers(name)')
+      .eq('rfq_id', rfqId)
+      .order('final_price_calculated', { ascending: true }),
+    supabase
+      .from('rfq_attachments')
+      .select('id', { count: 'exact', head: true })
+      .eq('rfq_id', rfqId),
+  ]);
+
+  if (quotesError) {
+    return { error: `Failed to load quote overview: ${quotesError.message}` };
+  }
+
+  if (attachmentCountError) {
+    console.warn('sendToPricingCrm: failed to count RFQ attachments', {
+      rfqId,
+      message: attachmentCountError.message,
+    });
+  }
+
+  const quoteSummary = (quotes ?? []).map((quote) => {
+    const supplierData = Array.isArray(quote.supplier) ? quote.supplier[0] : quote.supplier;
+    return {
+      supplierName: supplierData?.name ?? 'Unknown supplier',
+      basePrice: Number(quote.base_price),
+      finalPrice: Number(quote.final_price_calculated),
+      leadTimeDays: quote.lead_time_days as number | null,
+      comment: quote.comment as string | null,
+    };
+  });
+
+  const pricingEmails = getPricingTeamEmailsFromEnv();
+  if (pricingEmails.length === 0) {
+    return { error: 'PRICING_TEAM_EMAIL is not configured' };
+  }
+
+  const rfqSummary = [
+    rfq.product_type ? `Type: ${rfq.product_type}` : null,
+    `Material: ${rfq.material}`,
+    isTableTopsProductType(rfq.product_type) && rfq.finish_top ? `Top finish: ${rfq.finish_top}` : null,
+    isTableTopsProductType(rfq.product_type) && rfq.finish_edge ? `Edge finish: ${rfq.finish_edge}` : null,
+    isTableTopsProductType(rfq.product_type) && rfq.finish_color ? `Color finish: ${rfq.finish_color}` : null,
+    isTablesProductType(rfq.product_type) && rfq.material_table_top
+      ? `Table top: ${rfq.material_table_top}${rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}`
+      : null,
+    isTablesProductType(rfq.product_type) && rfq.material_table_foot
+      ? `Table foot: ${rfq.material_table_foot}${rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}`
+      : null,
+    `Shape: ${rfq.shape}`,
+    rfq.finish ? `Finish: ${rfq.finish}` : null,
+    `Quantity: ${Number(rfq.quantity ?? 1)}`,
+    rfq.customer_name ? `Customer: ${rfq.customer_name}` : null,
+  ]
+    .filter(Boolean)
+    .join(' | ');
+
+  const emailResult = await sendPricingTeamRfqCrmNotification({
+    pricingEmails,
+    rfqId,
+    rfqSummary,
+    attachmentCount: attachmentCount ?? 0,
+    quotes: quoteSummary,
+  });
+
+  if (emailResult.sent === 0) {
+    const firstFailure = emailResult.results.find((result) => !result.success)?.error;
+    return {
+      error: firstFailure
+        ? `Failed to notify pricing team: ${firstFailure}`
+        : 'Failed to notify pricing team',
+    };
+  }
+
+  const { error: updateError } = await supabase
+    .from('rfqs')
+    .update({ status: 'sent_to_pricing_crm' })
+    .eq('id', rfqId)
+    .eq('status', 'quotes_received');
+
+  if (updateError) {
+    console.error('Failed to update RFQ status to sent_to_pricing_crm:', updateError);
+    return { error: 'Pricing team notified but status could not be updated' };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_SENT_TO_PRICING_CRM',
+    entityType: 'rfq',
+    entityId: rfqId,
+    metadata: {
+      recipients: pricingEmails,
+      sent: emailResult.sent,
+      total: emailResult.total,
+      results: emailResult.results,
+      quoteCount: quoteSummary.length,
+      attachmentCount: attachmentCount ?? 0,
+    },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return { data: { sent: emailResult.sent, total: emailResult.total } };
+}
+
 export async function closeRfq(rfqId: string) {
   const user = await requireAuth();
   const supabase = await createClient();
@@ -1018,7 +1182,7 @@ export async function closeRfq(rfqId: string) {
     .from('rfqs')
     .update({ status: 'closed' })
     .eq('id', rfqId)
-    .in('status', ['sent_to_pricing', 'sent_to_supplier', 'supplier_replied', 'quotes_received']);
+    .in('status', ['sent_to_pricing', 'sent_to_supplier', 'supplier_replied', 'quotes_received', 'sent_to_pricing_crm']);
 
   if (error) {
     return { error: error.message };

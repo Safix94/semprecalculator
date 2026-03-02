@@ -7,7 +7,12 @@ import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
 import { RfqAttachmentList } from '@/components/rfq-attachment-list';
-import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
+import {
+  formatRfqDimensionsWithOptions,
+  isRoundShape,
+  isTableTopsProductType,
+  isTablesProductType,
+} from '@/lib/rfq-format';
 import type { Rfq, RfqAttachment, RfqComment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -22,6 +27,7 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   supplier_replied: { label: 'Supplier replied', color: 'bg-chart-2/15 text-chart-2' },
   waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
   quotes_received: { label: 'Quotes received', color: 'bg-chart-2/15 text-chart-2' },
+  sent_to_pricing_crm: { label: 'Sent to pricing (CRM)', color: 'bg-chart-4/15 text-chart-4' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
@@ -68,7 +74,8 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
   const typedRfq = rfq as Rfq;
   const isRound = isRoundShape(typedRfq.shape);
-  const isTablesType = typedRfq.product_type === 'Tables';
+  const isTablesType = isTablesProductType(typedRfq.product_type);
+  const isTableTopsType = isTableTopsProductType(typedRfq.product_type);
   const canManageRfq = user.role === 'admin' || user.role === 'sales';
   const status = statusLabels[typedRfq.status] ?? {
     label: typedRfq.status,
@@ -113,6 +120,22 @@ export default async function RfqDetailPage({ params }: PageProps) {
                 <dt className="text-xs uppercase text-muted-foreground">Material</dt>
                 <dd className="mt-1 text-sm font-medium">{typedRfq.material}</dd>
               </div>
+            )}
+            {isTableTopsType && (
+              <>
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">Top finish</dt>
+                  <dd className="mt-1 text-sm font-medium">{typedRfq.finish_top || '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">Edge finish</dt>
+                  <dd className="mt-1 text-sm font-medium">{typedRfq.finish_edge || '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs uppercase text-muted-foreground">Color finish</dt>
+                  <dd className="mt-1 text-sm font-medium">{typedRfq.finish_color || '-'}</dd>
+                </div>
+              </>
             )}
             {isTablesType && typedRfq.material_table_top && (
               <div>

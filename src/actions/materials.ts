@@ -144,10 +144,10 @@ export async function getSuppliersForMaterial(
 }
 
 /**
- * Create a new material (admin only)
+ * Create a new material (sales/admin)
  */
 export async function createMaterial(input: CreateMaterialInput) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const { data: material, error } = await supabase
@@ -193,10 +193,10 @@ export async function createMaterial(input: CreateMaterialInput) {
 }
 
 /**
- * Update a material (admin only)
+ * Update a material (sales/admin)
  */
 export async function updateMaterial(materialId: string, input: UpdateMaterialInput) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
   const { supplier_ids, ...materialFields } = input;
   const hasMaterialFieldUpdates = Object.keys(materialFields).length > 0;
@@ -292,10 +292,10 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
 }
 
 /**
- * Link a supplier to a material (admin only)
+ * Link a supplier to a material (sales/admin)
  */
 export async function linkSupplierToMaterial(materialId: string, supplierId: string) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -325,10 +325,10 @@ export async function linkSupplierToMaterial(materialId: string, supplierId: str
 }
 
 /**
- * Unlink a supplier from a material (admin only)
+ * Unlink a supplier from a material (sales/admin)
  */
 export async function unlinkSupplierFromMaterial(materialId: string, supplierId: string) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const { data, error } = await supabase
@@ -357,10 +357,10 @@ export async function unlinkSupplierFromMaterial(materialId: string, supplierId:
 }
 
 /**
- * Delete a material (admin only) - sets is_active to false
+ * Delete a material (sales/admin) - sets is_active to false
  */
 export async function deleteMaterial(materialId: string) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const { data: material, error } = await supabase

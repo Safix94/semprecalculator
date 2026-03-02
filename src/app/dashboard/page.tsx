@@ -111,7 +111,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {adminRequired && (
         <Alert variant="default" className="mb-6 border-amber-500/50 bg-amber-500/10">
           <AlertDescription>
-            Je hebt geen adminrechten voor Management of Audit Logs. Jouw rol is nu{' '}
+            Je hebt geen adminrechten voor Audit Logs en Users-beheer. Jouw rol is nu{' '}
             <strong>{user.role === 'sales' ? 'Sales' : user.role ?? 'onbekend'}</strong>. Vraag een
             beheerder om je rol onder Management → Users te wijzigen, of zet in Supabase in de
             tabel <code className="rounded bg-muted px-1">user_roles</code> je <code className="rounded bg-muted px-1">user_id</code> op{' '}

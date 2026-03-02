@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
 
 const rfqSchemaBase = z.object({
   customer_name: z.string().optional().nullable(),
@@ -10,6 +11,9 @@ const rfqSchemaBase = z.object({
   material_table_top: z.string().optional().nullable(),
   material_table_foot: z.string().optional().nullable(),
   finish: z.string().min(1, 'Finish is required'),
+  finish_top: z.string().optional().nullable(),
+  finish_edge: z.string().optional().nullable(),
+  finish_color: z.string().optional().nullable(),
   finish_table_top: z.string().optional().nullable(),
   finish_table_foot: z.string().optional().nullable(),
   length: z.coerce.number().positive('Length must be positive'),
@@ -75,7 +79,7 @@ const validateTableMaterials = (
   },
   ctx: z.RefinementCtx
 ) => {
-  const isTablesType = data.product_type?.trim().toLowerCase() === 'tables';
+  const isTablesType = isTablesProductType(data.product_type);
   if (!isTablesType) {
     return;
   }
@@ -106,7 +110,7 @@ const validateTableSuppliers = (
   ctx: z.RefinementCtx,
   options?: { requireForCreate?: boolean }
 ) => {
-  const isTablesType = data.product_type?.trim().toLowerCase() === 'tables';
+  const isTablesType = isTablesProductType(data.product_type);
   if (!isTablesType) {
     return;
   }
@@ -136,16 +140,49 @@ const validateTableSuppliers = (
   }
 };
 
+const validateTableTopsFinishes = (
+  data: {
+    product_type?: string | null;
+    finish_top?: string | null;
+    finish_edge?: string | null;
+    finish_color?: string | null;
+  },
+  ctx: z.RefinementCtx
+) => {
+  if (!isTableTopsProductType(data.product_type)) {
+    return;
+  }
+
+  const finishFields: Array<{ key: 'finish_top' | 'finish_edge' | 'finish_color'; label: string }> = [
+    { key: 'finish_top', label: 'Top finish' },
+    { key: 'finish_edge', label: 'Edge finish' },
+    { key: 'finish_color', label: 'Color finish' },
+  ];
+
+  for (const field of finishFields) {
+    const value = data[field.key];
+    if (!value || value.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [field.key],
+        message: `${field.label} is required for Table tops`,
+      });
+    }
+  }
+};
+
 export const createRfqSchema = rfqSchemaBase.superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
   validateTableMaterials(data, ctx);
   validateTableSuppliers(data, ctx, { requireForCreate: true });
+  validateTableTopsFinishes(data, ctx);
 });
 
 export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
   validateTableMaterials(data, ctx);
   validateTableSuppliers(data, ctx);
+  validateTableTopsFinishes(data, ctx);
 });
 
 export const updateRfqDetailsSchema = z

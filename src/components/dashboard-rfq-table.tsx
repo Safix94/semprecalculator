@@ -42,6 +42,7 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   supplier_replied: { label: 'Supplier replied', color: 'bg-chart-2/15 text-chart-2' },
   waiting_for_technical_drawing: { label: 'Waiting for technical drawing', color: 'bg-chart-4/15 text-chart-4' },
   quotes_received: { label: 'Quotes received', color: 'bg-chart-2/15 text-chart-2' },
+  sent_to_pricing_crm: { label: 'Sent to pricing (CRM)', color: 'bg-chart-4/15 text-chart-4' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 

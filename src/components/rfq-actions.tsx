@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSuppliersForMaterial } from '@/actions/materials';
-import { closeRfq, replaceRfqInvites, sendRfq, sendToPricingTeam } from '@/actions/rfq';
+import { closeRfq, replaceRfqInvites, sendRfq, sendToPricingCrm, sendToPricingTeam } from '@/actions/rfq';
+import { isTablesProductType } from '@/lib/rfq-format';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -39,6 +40,7 @@ export function RfqActions({
 }: RfqActionsProps) {
   const [loading, setLoading] = useState(false);
   const [pricingLoading, setPricingLoading] = useState(false);
+  const [pricingCrmLoading, setPricingCrmLoading] = useState(false);
   const [saveAndSendLoading, setSaveAndSendLoading] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerError, setPickerError] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function RfqActions({
   const [selectedTableFootSupplierIds, setSelectedTableFootSupplierIds] = useState<string[]>([]);
 
   const router = useRouter();
-  const isTablesType = productType?.trim().toLowerCase() === 'tables';
+  const isTablesType = isTablesProductType(productType);
 
   useEffect(() => {
     if (!pickerOpen) {
@@ -162,7 +164,7 @@ export function RfqActions({
   }, [isTablesType, materialId, materialIdTableFoot, materialIdTableTop, pickerOpen]);
 
   const canSaveAndSend = useMemo(() => {
-    if (saveAndSendLoading || pricingLoading) {
+    if (saveAndSendLoading || pricingLoading || pricingCrmLoading) {
       return false;
     }
 
@@ -184,6 +186,7 @@ export function RfqActions({
     isTablesType,
     materialId,
     pricingLoading,
+    pricingCrmLoading,
     saveAndSendLoading,
     selectedSupplierIds.length,
     selectedTableFootSupplierIds.length,
@@ -335,6 +338,26 @@ export function RfqActions({
     }
   }
 
+  async function handleSendToPricingCrm() {
+    setPricingCrmLoading(true);
+    setResult(null);
+
+    try {
+      const res = await sendToPricingCrm(rfqId);
+      if ('error' in res) {
+        setResult(`Error: ${formatActionError(res.error)}`);
+      } else {
+        setResult(`Sent to pricing (CRM) (${res.data.sent}/${res.data.total})`);
+        router.refresh();
+      }
+    } catch (error) {
+      console.error('Failed to send RFQ to pricing CRM:', error);
+      setResult('Error: Failed to notify pricing team');
+    } finally {
+      setPricingCrmLoading(false);
+    }
+  }
+
   function renderSupplierSelector(params: {
     title: string;
     loading: boolean;
@@ -389,7 +412,7 @@ export function RfqActions({
               <Button
                 key="send-to-pricing-team"
                 onClick={handleSendToPricing}
-                disabled={loading || pricingLoading || saveAndSendLoading}
+                disabled={loading || pricingLoading || pricingCrmLoading || saveAndSendLoading}
                 variant="secondary"
                 className="shrink-0"
               >
@@ -399,7 +422,7 @@ export function RfqActions({
             <Button
               key="send-to-supplier"
               onClick={handleSend}
-              disabled={loading || pricingLoading || saveAndSendLoading}
+              disabled={loading || pricingLoading || pricingCrmLoading || saveAndSendLoading}
               className="shrink-0"
             >
               {loading ? 'Loading...' : 'Send to supplier'}
@@ -410,14 +433,31 @@ export function RfqActions({
           <Button
             key="send-to-supplier"
             onClick={handleSend}
-            disabled={loading || pricingLoading || saveAndSendLoading}
+            disabled={loading || pricingLoading || pricingCrmLoading || saveAndSendLoading}
             className="shrink-0"
           >
             {loading ? 'Loading...' : 'Send to supplier'}
           </Button>
         )}
-        {(status === 'sent_to_supplier' || status === 'supplier_replied' || status === 'quotes_received') && (
-          <Button onClick={handleClose} disabled={loading || pricingLoading || saveAndSendLoading} variant="secondary">
+        {status === 'quotes_received' && (
+          <Button
+            key="send-to-pricing-crm"
+            onClick={handleSendToPricingCrm}
+            disabled={loading || pricingLoading || pricingCrmLoading || saveAndSendLoading}
+            className="shrink-0"
+          >
+            {pricingCrmLoading ? 'Loading...' : 'Send to pricing (CRM)'}
+          </Button>
+        )}
+        {(status === 'sent_to_supplier' ||
+          status === 'supplier_replied' ||
+          status === 'quotes_received' ||
+          status === 'sent_to_pricing_crm') && (
+          <Button
+            onClick={handleClose}
+            disabled={loading || pricingLoading || pricingCrmLoading || saveAndSendLoading}
+            variant="secondary"
+          >
             {loading ? 'Loading...' : 'Close'}
           </Button>
         )}

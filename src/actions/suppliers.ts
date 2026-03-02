@@ -76,10 +76,10 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
 }
 
 /**
- * Create a new supplier (admin only)
+ * Create a new supplier (sales/admin)
  */
 export async function createSupplier(input: CreateSupplierInput) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
   const materialIds = [...new Set(input.material_ids ?? [])];
 
@@ -139,10 +139,10 @@ export async function createSupplier(input: CreateSupplierInput) {
 }
 
 /**
- * Update a supplier (admin only)
+ * Update a supplier (sales/admin)
  */
 export async function updateSupplier(supplierId: string, input: UpdateSupplierInput) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
   const { material_ids, ...supplierFields } = input;
   const hasSupplierFieldUpdates = Object.keys(supplierFields).length > 0;
@@ -236,10 +236,10 @@ export async function updateSupplier(supplierId: string, input: UpdateSupplierIn
 }
 
 /**
- * Delete a supplier (admin only) - sets is_active to false
+ * Delete a supplier (sales/admin) - sets is_active to false
  */
 export async function deleteSupplier(supplierId: string) {
-  const user = await requireRole('admin');
+  const user = await requireRole('sales');
   const supabase = await createClient();
 
   const { data: supplier, error } = await supabase

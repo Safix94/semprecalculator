@@ -3,7 +3,11 @@ import { listSupplierComments } from '@/actions/rfq-comments';
 import { SupplierCommentThread } from '@/components/supplier-comment-thread';
 import { SupplierQuoteForm } from '@/components/supplier-quote-form';
 import { SupplierQuoteReadOnly } from '@/components/supplier-quote-readonly';
-import { formatRfqDimensionsWithOptions, isRoundShape } from '@/lib/rfq-format';
+import {
+  formatRfqDimensionsWithOptions,
+  isRoundShape,
+  isTableTopsProductType,
+} from '@/lib/rfq-format';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -77,6 +81,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const initialComments = 'data' in commentResult ? commentResult.data : [];
   const isRound = isRoundShape(rfq.shape);
   const isTablesType = rfq.product_type?.trim().toLowerCase() === 'tables';
+  const isTableTopsType = isTableTopsProductType(rfq.product_type);
   const invitePart = invite.invite_part ?? 'default';
   const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
   const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
@@ -106,6 +111,22 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                   <dt className="text-xs uppercase text-muted-foreground">Material</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
                 </div>
+              )}
+              {isTableTopsType && (
+                <>
+                  <div>
+                    <dt className="text-xs uppercase text-muted-foreground">Top finish</dt>
+                    <dd className="mt-1 text-sm font-medium">{rfq.finish_top || 'N/A'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs uppercase text-muted-foreground">Edge finish</dt>
+                    <dd className="mt-1 text-sm font-medium">{rfq.finish_edge || 'N/A'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs uppercase text-muted-foreground">Color finish</dt>
+                    <dd className="mt-1 text-sm font-medium">{rfq.finish_color || 'N/A'}</dd>
+                  </div>
+                </>
               )}
               {showTableTop && (
                 <div>

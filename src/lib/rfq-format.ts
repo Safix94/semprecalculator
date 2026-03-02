@@ -6,6 +6,19 @@ interface RfqDimensionInput {
   thickness: number;
 }
 
+export function normalizeProductType(productType: string | null | undefined): string {
+  return (productType ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function isTablesProductType(productType: string | null | undefined): boolean {
+  return normalizeProductType(productType) === 'tables';
+}
+
+export function isTableTopsProductType(productType: string | null | undefined): boolean {
+  const normalized = normalizeProductType(productType);
+  return normalized === 'table tops' || normalized === 'tabletops';
+}
+
 export function isRoundShape(shape: string | null | undefined): boolean {
   return (shape ?? '').trim().toLowerCase() === 'round';
 }

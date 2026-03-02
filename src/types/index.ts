@@ -3,6 +3,7 @@ export type UserRole = 'sales' | 'admin';
 export type RfqStatus =
   | 'draft'
   | 'sent_to_pricing'
+  | 'sent_to_pricing_crm'
   | 'sent_to_supplier'
   | 'supplier_replied'
   | 'waiting_for_technical_drawing'
@@ -14,6 +15,7 @@ export type AuditAction =
   | 'RFQ_UPDATED'
   | 'RFQ_SENT'
   | 'RFQ_SENT_TO_PRICING'
+  | 'RFQ_SENT_TO_PRICING_CRM'
   | 'INVITE_CREATED'
   | 'INVITE_OPENED'
   | 'INVITE_REVOKED'
@@ -71,6 +73,9 @@ export interface Rfq {
   material_table_top: string | null;
   material_table_foot: string | null;
   finish: string | null;
+  finish_top: string | null;
+  finish_edge: string | null;
+  finish_color: string | null;
   finish_table_top: string | null;
   finish_table_foot: string | null;
   length: number;

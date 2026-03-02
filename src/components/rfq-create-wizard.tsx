@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getActiveMaterials, getSuppliersForMaterial } from '@/actions/materials';
 import { getProductTypes } from '@/actions/product-types';
 import { createRfq, uploadAttachment } from '@/actions/rfq';
+import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -39,6 +40,9 @@ interface WizardData {
   material_id: string;
   material_name: string;
   finish: string;
+  finish_top: string;
+  finish_edge: string;
+  finish_color: string;
   material_id_table_top: string;
   material_table_top: string;
   finish_table_top: string;
@@ -64,6 +68,9 @@ const initialData: WizardData = {
   material_id: '',
   material_name: '',
   finish: '',
+  finish_top: '',
+  finish_edge: '',
+  finish_color: '',
   material_id_table_top: '',
   material_table_top: '',
   finish_table_top: '',
@@ -122,7 +129,8 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const router = useRouter();
-  const isTablesType = data.product_type === 'Tables';
+  const isTablesType = isTablesProductType(data.product_type);
+  const isTableTopsType = isTableTopsProductType(data.product_type);
 
   const selectedMaterial = useMemo(
     () => materials.find((item) => item.id === data.material_id) ?? null,
@@ -319,6 +327,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('supplier_ids', []);
     updateData('supplier_ids_table_top', []);
     updateData('supplier_ids_table_foot', []);
+    updateData('finish_top', '');
+    updateData('finish_edge', '');
+    updateData('finish_color', '');
     setSuppliers([]);
     setSuppliersError(null);
     setSuppliersLoading(false);
@@ -329,7 +340,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setTableFootSuppliersError(null);
     setTableFootSuppliersLoading(false);
 
-    if (productType === 'Tables') {
+    if (isTablesProductType(productType)) {
       updateData('material_id', '');
       updateData('material_name', '');
       updateData('finish', '');
@@ -354,7 +365,15 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
     updateData('material_id', materialId);
     updateData('material_name', material.name);
-    updateData('finish', materialFinishOptions.length === 0 ? 'N.v.t.' : '');
+    if (isTableTopsType) {
+      const defaultFinishValue = materialFinishOptions.length === 0 ? 'N.v.t.' : '';
+      updateData('finish_top', defaultFinishValue);
+      updateData('finish_edge', defaultFinishValue);
+      updateData('finish_color', defaultFinishValue);
+      updateData('finish', '');
+    } else {
+      updateData('finish', materialFinishOptions.length === 0 ? 'N.v.t.' : '');
+    }
     updateData('supplier_ids', []);
   };
 
@@ -438,7 +457,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
     const invalidFile = selectedFiles.find((file) => !isAllowedAttachment(file));
     if (invalidFile) {
-      setErrors({ _form: [`Ongeldig bestandstype voor ${invalidFile.name}. Gebruik SKP, PDF, JPG, PNG of DWG.`] });
+      setErrors({ _form: [`Invalid file type for ${invalidFile.name}. Allowed types: SKP, PDF, JPG, PNG, DWG.`] });
       event.target.value = '';
       return;
     }
@@ -479,7 +498,17 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         if (!data.material_id) {
           stepErrors.material_id = ['Material is required'];
         }
-        if (availableFinishOptions.length > 0 && !data.finish) {
+        if (isTableTopsType) {
+          if (availableFinishOptions.length > 0 && !data.finish_top) {
+            stepErrors.finish_top = ['Top finish is required'];
+          }
+          if (availableFinishOptions.length > 0 && !data.finish_edge) {
+            stepErrors.finish_edge = ['Edge finish is required'];
+          }
+          if (availableFinishOptions.length > 0 && !data.finish_color) {
+            stepErrors.finish_color = ['Color finish is required'];
+          }
+        } else if (availableFinishOptions.length > 0 && !data.finish) {
           stepErrors.finish = ['Finish is required'];
         }
       }
@@ -563,7 +592,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       : data.material_name;
     const finishSummary = isTablesType
       ? [data.finish_table_top, data.finish_table_foot].filter(Boolean).join(' / ')
-      : data.finish;
+      : isTableTopsType
+        ? [data.finish_top, data.finish_edge, data.finish_color].filter(Boolean).join(' / ')
+        : data.finish;
 
     const input = {
       customer_name: data.customer_name || null,
@@ -575,6 +606,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       material_table_top: isTablesType ? data.material_table_top || null : null,
       material_table_foot: isTablesType ? data.material_table_foot || null : null,
       finish: finishSummary || 'N.v.t.',
+      finish_top: isTableTopsType ? data.finish_top || null : null,
+      finish_edge: isTableTopsType ? data.finish_edge || null : null,
+      finish_color: isTableTopsType ? data.finish_color || null : null,
       finish_table_top: isTablesType ? data.finish_table_top || null : null,
       finish_table_foot: isTablesType ? data.finish_table_foot || null : null,
       length: isRound ? diameter : Number(data.length),
@@ -756,7 +790,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     {errors.material_id && <p className="text-destructive text-xs">{errors.material_id[0]}</p>}
                   </div>
 
-                  {selectedMaterial && availableFinishOptions.length > 0 && (
+                  {selectedMaterial && !isTableTopsType && availableFinishOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <Label htmlFor="finish">Finish *</Label>
                       <Select value={data.finish} onValueChange={(value) => updateData('finish', value)}>
@@ -773,6 +807,59 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                       </Select>
                       {errors.finish && <p className="text-destructive text-xs">{errors.finish[0]}</p>}
                     </div>
+                  )}
+
+                  {selectedMaterial && isTableTopsType && availableFinishOptions.length > 0 && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-top">Top finish *</Label>
+                        <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
+                          <SelectTrigger className="w-full" id="finish-top">
+                            <SelectValue placeholder="Select a finish" />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            {availableFinishOptions.map((finish) => (
+                              <SelectItem key={`top-${finish}`} value={finish}>
+                                {finish}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-edge">Edge finish *</Label>
+                        <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
+                          <SelectTrigger className="w-full" id="finish-edge">
+                            <SelectValue placeholder="Select a finish" />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            {availableFinishOptions.map((finish) => (
+                              <SelectItem key={`edge-${finish}`} value={finish}>
+                                {finish}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-color">Color finish *</Label>
+                        <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
+                          <SelectTrigger className="w-full" id="finish-color">
+                            <SelectValue placeholder="Select a finish" />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            {availableFinishOptions.map((finish) => (
+                              <SelectItem key={`color-${finish}`} value={finish}>
+                                {finish}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
+                      </div>
+                    </>
                   )}
 
                   {selectedMaterial && availableFinishOptions.length === 0 && (
@@ -1205,7 +1292,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               </div>
 
               <div className="space-y-2">
-                <Label>Bijlagen (optioneel)</Label>
+                <Label>Attachments (optional)</Label>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1219,7 +1306,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  Bestanden toevoegen
+                  Add files
                 </Button>
                 {attachments.length > 0 && (
                   <div className="space-y-1">
@@ -1232,7 +1319,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                           size="sm"
                           onClick={() => removeAttachment(index)}
                         >
-                          Verwijderen
+                          Remove
                         </Button>
                       </div>
                     ))}

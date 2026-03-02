@@ -41,7 +41,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Price request', href: '/dashboard', icon: FileText },
-  { label: 'Management', href: '/admin/management', icon: Settings, adminOnly: true },
+  { label: 'Management', href: '/admin/management', icon: Settings },
   { label: 'Audit Logs', href: '/admin/logs', icon: ScrollText, adminOnly: true },
 ];
 
@@ -51,8 +51,7 @@ function isNavItemActive(pathname: string, href: string): boolean {
 
 export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
   const pathname = usePathname();
-  // Show all nav items so everyone can see Management/Audit Logs; admin-only pages redirect non-admins
-  const visibleNavItems = navItems;
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || user.role === 'admin');
 
   return (
     <SidebarProvider>
@@ -70,9 +69,13 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
               className="h-5 w-auto group-data-[collapsible=icon]:hidden"
               priority
             />
-            <span className="bg-primary text-primary-foreground hidden size-7 items-center justify-center rounded-md text-xs font-semibold group-data-[collapsible=icon]:inline-flex">
-              S
-            </span>
+            <Image
+              src="/favicon.ico"
+              alt="Sempre"
+              width={28}
+              height={28}
+              className="hidden size-7 rounded-md object-contain group-data-[collapsible=icon]:block"
+            />
           </Link>
         </SidebarHeader>
         <SidebarSeparator />

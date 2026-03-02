@@ -499,13 +499,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           stepErrors.material_id = ['Material is required'];
         }
         if (isTableTopsType) {
-          if (availableFinishOptions.length > 0 && !data.finish_top) {
+          if (tableTopFinishOptions.length > 0 && !data.finish_top) {
             stepErrors.finish_top = ['Top finish is required'];
           }
-          if (availableFinishOptions.length > 0 && !data.finish_edge) {
+          if (tableTopFinishOptions.length > 0 && !data.finish_edge) {
             stepErrors.finish_edge = ['Edge finish is required'];
           }
-          if (availableFinishOptions.length > 0 && !data.finish_color) {
+          if (tableTopFinishOptions.length > 0 && !data.finish_color) {
             stepErrors.finish_color = ['Color finish is required'];
           }
         } else if (availableFinishOptions.length > 0 && !data.finish) {
@@ -809,7 +809,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </div>
                   )}
 
-                  {selectedMaterial && isTableTopsType && availableFinishOptions.length > 0 && (
+                  {isTableTopsType && selectedTableTopMaterial && tableTopFinishOptions.length > 0 && (
                     <>
                       <div className="space-y-1.5">
                         <Label htmlFor="finish-top">Top finish *</Label>
@@ -818,7 +818,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             <SelectValue placeholder="Select a finish" />
                           </SelectTrigger>
                           <SelectContent className="z-[70]">
-                            {availableFinishOptions.map((finish) => (
+                            {tableTopFinishOptions.map((finish) => (
                               <SelectItem key={`top-${finish}`} value={finish}>
                                 {finish}
                               </SelectItem>
@@ -834,7 +834,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             <SelectValue placeholder="Select a finish" />
                           </SelectTrigger>
                           <SelectContent className="z-[70]">
-                            {availableFinishOptions.map((finish) => (
+                            {tableTopFinishOptions.map((finish) => (
                               <SelectItem key={`edge-${finish}`} value={finish}>
                                 {finish}
                               </SelectItem>
@@ -850,7 +850,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             <SelectValue placeholder="Select a finish" />
                           </SelectTrigger>
                           <SelectContent className="z-[70]">
-                            {availableFinishOptions.map((finish) => (
+                            {tableTopFinishOptions.map((finish) => (
                               <SelectItem key={`color-${finish}`} value={finish}>
                                 {finish}
                               </SelectItem>

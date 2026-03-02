@@ -41,6 +41,14 @@ interface InviteSelectionInput {
   supplierIdsTableFoot?: string[];
 }
 
+function formatRfqStatusUpdateError(rawMessage: string, targetStatus: string): string {
+  const message = rawMessage.toLowerCase();
+  if (message.includes('rfqs_status_check') || message.includes('violates check constraint')) {
+    return `Database schema does not allow status "${targetStatus}". Apply the RFQ status migration and try again. (${rawMessage})`;
+  }
+  return rawMessage;
+}
+
 async function productTypeExists(
   supabase: SupabaseServerClient,
   productType: string
@@ -1009,11 +1017,19 @@ export async function sendToPricingTeam(rfqId: string) {
   const { error: updateError } = await supabase
     .from('rfqs')
     .update({ status: 'sent_to_pricing' })
-    .eq('id', rfqId);
+    .eq('id', rfqId)
+    .eq('status', 'draft')
+    .select('id')
+    .single();
 
   if (updateError) {
     console.error('Failed to update RFQ status to sent_to_pricing:', updateError);
-    return { error: 'Pricing team notified but status could not be updated' };
+    return {
+      error: `Pricing team notified but status could not be updated: ${formatRfqStatusUpdateError(
+        updateError.message,
+        'sent_to_pricing'
+      )}`,
+    };
   }
 
   await logAuditEvent({
@@ -1142,15 +1158,46 @@ export async function sendToPricingCrm(rfqId: string) {
     };
   }
 
-  const { error: updateError } = await supabase
+  const { data: updatedRfq, error: updateError } = await supabase
     .from('rfqs')
     .update({ status: 'sent_to_pricing_crm' })
     .eq('id', rfqId)
-    .eq('status', 'quotes_received');
+    .eq('status', 'quotes_received')
+    .select('id, status')
+    .maybeSingle();
 
   if (updateError) {
     console.error('Failed to update RFQ status to sent_to_pricing_crm:', updateError);
-    return { error: 'Pricing team notified but status could not be updated' };
+    return {
+      error: `Pricing team notified but status could not be updated: ${formatRfqStatusUpdateError(
+        updateError.message,
+        'sent_to_pricing_crm'
+      )}`,
+    };
+  }
+
+  if (!updatedRfq) {
+    const { data: currentRfq, error: currentRfqError } = await supabase
+      .from('rfqs')
+      .select('status')
+      .eq('id', rfqId)
+      .maybeSingle();
+
+    if (currentRfqError) {
+      return {
+        error: `Pricing team notified but status could not be verified: ${currentRfqError.message}`,
+      };
+    }
+
+    if (currentRfq?.status === 'sent_to_pricing_crm') {
+      revalidatePath('/dashboard');
+      revalidatePath(`/dashboard/rfqs/${rfqId}`);
+      return { data: { sent: emailResult.sent, total: emailResult.total } };
+    }
+
+    return {
+      error: `Pricing team notified but RFQ status did not change (current: ${currentRfq?.status ?? 'unknown'}).`,
+    };
   }
 
   await logAuditEvent({

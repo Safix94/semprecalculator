@@ -390,6 +390,9 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               <Label htmlFor="finish-options">
                 Finish options (comma-separated) (optional)
               </Label>
+              <p className="text-muted-foreground text-xs">
+                Voor table-top materialen: gebruikt voor Top finish, Edge finish en Color finish.
+              </p>
               <Input
                 id="finish-options"
                 value={formData.finish_options}

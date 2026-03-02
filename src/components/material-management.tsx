@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Plus, Edit, Trash2, Link, Unlink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -57,6 +58,7 @@ const initialFormData: MaterialFormData = {
 const MATERIALS_PER_PAGE = 5;
 
 export function MaterialManagement({ materials: initialMaterials, suppliers }: MaterialManagementProps) {
+  const router = useRouter();
   const [materials, setMaterials] = useState(initialMaterials);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialWithSuppliers | null>(null);
   const [editingMaterial, setEditingMaterial] = useState<MaterialWithSuppliers | null>(null);
@@ -67,6 +69,21 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+
+  const getErrorMessage = (value: unknown, fallback: string) => {
+    if (value instanceof Error && value.message) {
+      return value.message;
+    }
+
+    if (typeof value === 'object' && value !== null && 'message' in value) {
+      const message = (value as { message?: unknown }).message;
+      if (typeof message === 'string' && message.length > 0) {
+        return message;
+      }
+    }
+
+    return fallback;
+  };
 
   const updateFormData = <K extends keyof MaterialFormData>(field: K, value: MaterialFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -121,28 +138,64 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
       supplier_ids: formData.supplier_ids,
     };
 
-    let result;
-    if (editingMaterial) {
-      result = await updateMaterial(editingMaterial.id, {
-        name: input.name,
-        finish_options: input.finish_options,
-        finish_options_top: input.finish_options_top,
-        finish_options_edge: input.finish_options_edge,
-        finish_options_color: input.finish_options_color,
-        supplier_ids: input.supplier_ids,
-      });
-    } else {
-      result = await createMaterial(input);
-    }
+    try {
+      let result;
+      if (editingMaterial) {
+        result = await updateMaterial(editingMaterial.id, {
+          name: input.name,
+          finish_options: input.finish_options,
+          finish_options_top: input.finish_options_top,
+          finish_options_edge: input.finish_options_edge,
+          finish_options_color: input.finish_options_color,
+          supplier_ids: input.supplier_ids,
+        });
+      } else {
+        result = await createMaterial(input);
+      }
 
-    if (result.error) {
-      setError(result.error._form?.[0] || 'An error occurred');
-    } else {
-      // Refresh materials list
-      window.location.reload();
-    }
+      if (result.error) {
+        setError(result.error._form?.[0] || 'An error occurred');
+        return;
+      }
 
-    setLoading(false);
+      const selectedSuppliers = suppliers.filter((supplier) => input.supplier_ids.includes(supplier.id));
+
+      if (editingMaterial && result.data) {
+        setMaterials((prev) =>
+          prev.map((material) =>
+            material.id === editingMaterial.id
+              ? {
+                  ...material,
+                  ...result.data,
+                  finish_options_top: result.data.finish_options_top ?? [],
+                  finish_options_edge: result.data.finish_options_edge ?? [],
+                  finish_options_color: result.data.finish_options_color ?? [],
+                  suppliers: selectedSuppliers,
+                }
+              : material
+          )
+        );
+      } else if (result.data) {
+        setMaterials((prev) => [
+          {
+            ...result.data,
+            finish_options_top: result.data.finish_options_top ?? [],
+            finish_options_edge: result.data.finish_options_edge ?? [],
+            finish_options_color: result.data.finish_options_color ?? [],
+            suppliers: selectedSuppliers,
+          },
+          ...prev,
+        ]);
+      }
+
+      setDialogOpen(false);
+      resetForm();
+      router.refresh();
+    } catch (submitError) {
+      setError(getErrorMessage(submitError, 'Saving material failed. Please try again.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDelete = async (materialId: string) => {
@@ -151,16 +204,20 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     }
 
     setLoading(true);
-    const result = await deleteMaterial(materialId);
-    
-    if (result.error) {
-      setError(result.error._form?.[0] || 'An error occurred');
-    } else {
-      // Remove from local state
-      setMaterials(prev => prev.filter(m => m.id !== materialId));
+    try {
+      const result = await deleteMaterial(materialId);
+      if (result.error) {
+        setError(result.error._form?.[0] || 'An error occurred');
+      } else {
+        // Remove from local state
+        setMaterials(prev => prev.filter(m => m.id !== materialId));
+        router.refresh();
+      }
+    } catch (deleteError) {
+      setError(getErrorMessage(deleteError, 'Deleting material failed. Please try again.'));
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleSupplierToggle = (supplierId: string, checked: boolean) => {
@@ -174,16 +231,30 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     if (!selectedMaterial) return;
 
     setLoading(true);
-    const result = await linkSupplierToMaterial(selectedMaterial.id, supplierId);
-    
-    if (result.error) {
-      setError(result.error._form?.[0] || 'An error occurred');
-    } else {
-      // Refresh the page to show updated data
-      window.location.reload();
+    try {
+      const result = await linkSupplierToMaterial(selectedMaterial.id, supplierId);
+      if (result.error) {
+        setError(result.error._form?.[0] || 'An error occurred');
+      } else {
+        const supplier = suppliers.find((item) => item.id === supplierId);
+        if (supplier) {
+          setMaterials((prev) =>
+            prev.map((material) =>
+              material.id === selectedMaterial.id
+                ? { ...material, suppliers: [...(material.suppliers ?? []), supplier] }
+                : material
+            )
+          );
+        }
+        setLinkDialogOpen(false);
+        setSelectedMaterial(null);
+        router.refresh();
+      }
+    } catch (linkError) {
+      setError(getErrorMessage(linkError, 'Linking supplier failed. Please try again.'));
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleUnlinkSupplier = async (materialId: string, supplierId: string) => {
@@ -192,23 +263,27 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     }
 
     setLoading(true);
-    const result = await unlinkSupplierFromMaterial(materialId, supplierId);
-    
-    if (result.error) {
-      setError(result.error._form?.[0] || 'An error occurred');
-    } else {
-      // Update local state
-      setMaterials(prev => prev.map(material => 
-        material.id === materialId
-          ? {
-              ...material,
-              suppliers: material.suppliers?.filter(s => s.id !== supplierId) || []
-            }
-          : material
-      ));
+    try {
+      const result = await unlinkSupplierFromMaterial(materialId, supplierId);
+      if (result.error) {
+        setError(result.error._form?.[0] || 'An error occurred');
+      } else {
+        // Update local state
+        setMaterials(prev => prev.map(material =>
+          material.id === materialId
+            ? {
+                ...material,
+                suppliers: material.suppliers?.filter(s => s.id !== supplierId) || []
+              }
+            : material
+        ));
+        router.refresh();
+      }
+    } catch (unlinkError) {
+      setError(getErrorMessage(unlinkError, 'Unlinking supplier failed. Please try again.'));
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const availableSuppliers = selectedMaterial

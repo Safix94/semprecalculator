@@ -552,7 +552,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           stepErrors.material_id_table_top = ['Table top material is required'];
         }
 
-        if (tableTopFinishOptions.length > 0 && !data.finish_table_top) {
+        if (showTableFoot && tableTopFinishOptions.length > 0 && !data.finish_table_top) {
           stepErrors.finish_table_top = ['Table top finish is required'];
         }
 
@@ -709,7 +709,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       finish_top: isTableTopsType ? data.finish_top || null : null,
       finish_edge: isTableTopsType ? data.finish_edge || null : null,
       finish_color: isTableTopsType ? data.finish_color || null : null,
-      finish_table_top: isTablesType ? data.finish_table_top || null : null,
+      finish_table_top: isTablesType
+        ? (isTableTopsType ? (finishSummary || null) : data.finish_table_top || null)
+        : null,
       finish_table_foot: showTableFoot ? data.finish_table_foot || null : null,
       length: isRound ? diameter : Number(data.length),
       width: isRound ? diameter : Number(data.width),
@@ -950,7 +952,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     )}
                   </div>
 
-                  {selectedTableTopMaterial && tableTopFinishOptions.length > 0 && (
+                  {selectedTableTopMaterial && showTableFoot && tableTopFinishOptions.length > 0 && (
                     <div className="space-y-1.5">
                       <Label htmlFor="finish-table-top">Finish (Table top) *</Label>
                       <Select
@@ -974,7 +976,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </div>
                   )}
 
-                  {selectedTableTopMaterial && tableTopFinishOptions.length === 0 && (
+                  {selectedTableTopMaterial && showTableFoot && tableTopFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
                       No finishes are configured for the table top material.
                     </p>

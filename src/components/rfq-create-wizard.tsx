@@ -151,6 +151,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const router = useRouter();
   const isTablesType = isTablesProductType(data.product_type);
   const isTableTopsType = isTableTopsProductType(data.product_type);
+  const showTableFoot = isTablesType && !isTableTopsType;
 
   const selectedMaterial = useMemo(
     () => materials.find((item) => item.id === data.material_id) ?? null,
@@ -167,16 +168,16 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
   const availableFinishOptions = normalizeFinishOptions(selectedMaterial?.finish_options);
   const tableTopFinishOptions = normalizeFinishOptions(selectedTableTopMaterial?.finish_options);
-  const tableTopsFinishTopOptions = getMaterialFinishOptionsWithFallback(
-    selectedMaterial,
+  const tableTopMaterialTopOptions = getMaterialFinishOptionsWithFallback(
+    selectedTableTopMaterial,
     'finish_options_top'
   );
-  const tableTopsFinishEdgeOptions = getMaterialFinishOptionsWithFallback(
-    selectedMaterial,
+  const tableTopMaterialEdgeOptions = getMaterialFinishOptionsWithFallback(
+    selectedTableTopMaterial,
     'finish_options_edge'
   );
-  const tableTopsFinishColorOptions = getMaterialFinishOptionsWithFallback(
-    selectedMaterial,
+  const tableTopMaterialColorOptions = getMaterialFinishOptionsWithFallback(
+    selectedTableTopMaterial,
     'finish_options_color'
   );
   const tableFootFinishOptions = normalizeFinishOptions(selectedTableFootMaterial?.finish_options);
@@ -313,7 +314,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   }, [data.material_id_table_top, isTablesType, loadSuppliersForMaterial]);
 
   useEffect(() => {
-    if (!isTablesType || !data.material_id_table_foot) {
+    if (!showTableFoot || !data.material_id_table_foot) {
       setTableFootSuppliers([]);
       setTableFootSuppliersError(null);
       setTableFootSuppliersLoading(false);
@@ -339,7 +340,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     return () => {
       active = false;
     };
-  }, [data.material_id_table_foot, isTablesType, loadSuppliersForMaterial]);
+  }, [data.material_id_table_foot, showTableFoot, loadSuppliersForMaterial]);
 
   const updateData = <K extends keyof WizardData>(field: K, value: WizardData[K]) => {
     setData((prev) => ({ ...prev, [field]: value }));
@@ -370,9 +371,32 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       updateData('material_id', '');
       updateData('material_name', '');
       updateData('finish', '');
-      updateData('finish_top', '');
-      updateData('finish_edge', '');
-      updateData('finish_color', '');
+
+      if (nextIsTableTopsType) {
+        updateData('material_id_table_foot', '');
+        updateData('material_table_foot', '');
+        updateData('finish_table_foot', '');
+
+        const tableTopMaterial = materials.find((item) => item.id === data.material_id_table_top) ?? null;
+        if (!tableTopMaterial) {
+          updateData('finish_top', '');
+          updateData('finish_edge', '');
+          updateData('finish_color', '');
+          return;
+        }
+
+        const topOptions = getMaterialFinishOptionsWithFallback(tableTopMaterial, 'finish_options_top');
+        const edgeOptions = getMaterialFinishOptionsWithFallback(tableTopMaterial, 'finish_options_edge');
+        const colorOptions = getMaterialFinishOptionsWithFallback(tableTopMaterial, 'finish_options_color');
+
+        updateData('finish_top', topOptions.length > 0 ? '' : 'N.v.t.');
+        updateData('finish_edge', edgeOptions.length > 0 ? '' : 'N.v.t.');
+        updateData('finish_color', colorOptions.length > 0 ? '' : 'N.v.t.');
+      } else {
+        updateData('finish_top', '');
+        updateData('finish_edge', '');
+        updateData('finish_color', '');
+      }
       return;
     }
 
@@ -382,27 +406,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_id_table_foot', '');
     updateData('material_table_foot', '');
     updateData('finish_table_foot', '');
-
-    if (nextIsTableTopsType) {
-      const material = materials.find((item) => item.id === data.material_id) ?? null;
-      if (!material) {
-        updateData('finish_top', '');
-        updateData('finish_edge', '');
-        updateData('finish_color', '');
-        updateData('finish', '');
-        return;
-      }
-
-      const topOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_top');
-      const edgeOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_edge');
-      const colorOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_color');
-
-      updateData('finish_top', topOptions.length > 0 ? '' : 'N.v.t.');
-      updateData('finish_edge', edgeOptions.length > 0 ? '' : 'N.v.t.');
-      updateData('finish_color', colorOptions.length > 0 ? '' : 'N.v.t.');
-      updateData('finish', '');
-      return;
-    }
 
     updateData('finish_top', '');
     updateData('finish_edge', '');
@@ -442,6 +445,18 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_id_table_top', materialId);
     updateData('material_table_top', material.name);
     updateData('finish_table_top', finishOptions.length === 0 ? 'N.v.t.' : '');
+    if (isTableTopsType) {
+      const topOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_top');
+      const edgeOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_edge');
+      const colorOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_color');
+      updateData('finish_top', topOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish_edge', edgeOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish_color', colorOptions.length > 0 ? '' : 'N.v.t.');
+    } else {
+      updateData('finish_top', '');
+      updateData('finish_edge', '');
+      updateData('finish_color', '');
+    }
     updateData('supplier_ids_table_top', []);
   };
 
@@ -529,7 +544,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
   const validateCurrentStep = (): boolean => {
     const stepErrors: Record<string, string[]> = {};
-    const detailsStepIndex = isTablesType ? 3 : 2;
+    const detailsStepIndex = showTableFoot ? 3 : 2;
 
     if (currentStep === 0) {
       if (isTablesType) {
@@ -537,32 +552,34 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           stepErrors.material_id_table_top = ['Table top material is required'];
         }
 
-        if (!data.material_id_table_foot) {
-          stepErrors.material_id_table_foot = ['Table foot material is required'];
-        }
-
         if (tableTopFinishOptions.length > 0 && !data.finish_table_top) {
           stepErrors.finish_table_top = ['Table top finish is required'];
         }
 
-        if (tableFootFinishOptions.length > 0 && !data.finish_table_foot) {
+        if (isTableTopsType) {
+          if (tableTopMaterialTopOptions.length > 0 && !data.finish_top) {
+            stepErrors.finish_top = ['Top finish is required'];
+          }
+          if (tableTopMaterialEdgeOptions.length > 0 && !data.finish_edge) {
+            stepErrors.finish_edge = ['Edge finish is required'];
+          }
+          if (tableTopMaterialColorOptions.length > 0 && !data.finish_color) {
+            stepErrors.finish_color = ['Color finish is required'];
+          }
+        }
+
+        if (showTableFoot && !data.material_id_table_foot) {
+          stepErrors.material_id_table_foot = ['Table foot material is required'];
+        }
+
+        if (showTableFoot && tableFootFinishOptions.length > 0 && !data.finish_table_foot) {
           stepErrors.finish_table_foot = ['Table foot finish is required'];
         }
       } else {
         if (!data.material_id) {
           stepErrors.material_id = ['Material is required'];
         }
-        if (isTableTopsType) {
-          if (tableTopsFinishTopOptions.length > 0 && !data.finish_top) {
-            stepErrors.finish_top = ['Top finish is required'];
-          }
-          if (tableTopsFinishEdgeOptions.length > 0 && !data.finish_edge) {
-            stepErrors.finish_edge = ['Edge finish is required'];
-          }
-          if (tableTopsFinishColorOptions.length > 0 && !data.finish_color) {
-            stepErrors.finish_color = ['Color finish is required'];
-          }
-        } else if (availableFinishOptions.length > 0 && !data.finish) {
+        if (availableFinishOptions.length > 0 && !data.finish) {
           stepErrors.finish = ['Finish is required'];
         }
       }
@@ -574,7 +591,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       } else if (data.supplier_ids.length === 0) {
         stepErrors.supplier_ids = ['Select at least one supplier'];
       }
-    } else if (isTablesType && currentStep === 2) {
+    } else if (showTableFoot && currentStep === 2) {
       if (data.supplier_ids_table_foot.length === 0) {
         stepErrors.supplier_ids_table_foot = ['Select at least one table foot supplier'];
       }
@@ -640,7 +657,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   };
 
   const nextStep = () => {
-    const maxStep = isTablesType ? 3 : 2;
+    const maxStep = showTableFoot ? 3 : 2;
     if (validateCurrentStep()) {
       setCurrentStep((prev) => Math.min(prev + 1, maxStep));
     }
@@ -666,15 +683,17 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       tableTopsFinishValues.length === 3 &&
       tableTopsFinishValues.every((finish) => finish.toLowerCase() === 'n.v.t.');
 
-    const materialSummary = isTablesType
+    const materialSummary = showTableFoot
       ? [data.material_table_top, data.material_table_foot].filter(Boolean).join(' / ')
-      : data.material_name;
-    const finishSummary = isTablesType
-      ? [data.finish_table_top, data.finish_table_foot].filter(Boolean).join(' / ')
-      : isTableTopsType
-        ? areAllTableTopsFinishesNotApplicable
-          ? 'N.v.t.'
-          : tableTopsFinishValues.join(' / ')
+      : isTablesType
+        ? data.material_table_top
+        : data.material_name;
+    const finishSummary = isTableTopsType
+      ? areAllTableTopsFinishesNotApplicable
+        ? 'N.v.t.'
+        : tableTopsFinishValues.join(' / ')
+      : showTableFoot
+        ? [data.finish_table_top, data.finish_table_foot].filter(Boolean).join(' / ')
         : data.finish;
 
     const input = {
@@ -683,15 +702,15 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       material: materialSummary,
       material_id: isTablesType ? data.material_id_table_top || null : data.material_id,
       material_id_table_top: isTablesType ? data.material_id_table_top || null : null,
-      material_id_table_foot: isTablesType ? data.material_id_table_foot || null : null,
+      material_id_table_foot: showTableFoot ? data.material_id_table_foot || null : null,
       material_table_top: isTablesType ? data.material_table_top || null : null,
-      material_table_foot: isTablesType ? data.material_table_foot || null : null,
+      material_table_foot: showTableFoot ? data.material_table_foot || null : null,
       finish: finishSummary || 'N.v.t.',
       finish_top: isTableTopsType ? data.finish_top || null : null,
       finish_edge: isTableTopsType ? data.finish_edge || null : null,
       finish_color: isTableTopsType ? data.finish_color || null : null,
       finish_table_top: isTablesType ? data.finish_table_top || null : null,
-      finish_table_foot: isTablesType ? data.finish_table_foot || null : null,
+      finish_table_foot: showTableFoot ? data.finish_table_foot || null : null,
       length: isRound ? diameter : Number(data.length),
       width: isRound ? diameter : Number(data.width),
       height: isTableTopsType ? (Number(data.height) || 0) : Number(data.height),
@@ -701,7 +720,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       notes: data.notes || null,
       supplier_ids: isTablesType ? undefined : data.supplier_ids,
       supplier_ids_table_top: isTablesType ? data.supplier_ids_table_top : undefined,
-      supplier_ids_table_foot: isTablesType ? data.supplier_ids_table_foot : undefined,
+      supplier_ids_table_foot: showTableFoot ? data.supplier_ids_table_foot : undefined,
     };
 
     try {
@@ -761,10 +780,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setProductTypesError(null);
     setAttachments([]);
   };
-  const stepTitles = isTablesType
+  const stepTitles = showTableFoot
     ? ['Material & finish', 'Suppliers - table top', 'Suppliers - table foot', 'Details & dimensions']
     : ['Material & finish', 'Suppliers', 'Details & dimensions'];
-  const detailsStepIndex = isTablesType ? 3 : 2;
+  const detailsStepIndex = showTableFoot ? 3 : 2;
 
   return (
     <Dialog
@@ -890,77 +909,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </div>
                   )}
 
-                  {selectedMaterial && isTableTopsType && (
-                    <div className="space-y-3">
-                      <div className="space-y-1.5">
-                        <Label htmlFor="finish-top">Top finish {tableTopsFinishTopOptions.length > 0 ? '*' : ''}</Label>
-                        {tableTopsFinishTopOptions.length > 0 ? (
-                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
-                            <SelectTrigger className="w-full" id="finish-top">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopsFinishTopOptions.map((finish) => (
-                                <SelectItem key={`table-tops-top-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">Top finish: N.v.t. (no options configured)</p>
-                        )}
-                        {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="finish-edge">
-                          Edge finish {tableTopsFinishEdgeOptions.length > 0 ? '*' : ''}
-                        </Label>
-                        {tableTopsFinishEdgeOptions.length > 0 ? (
-                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
-                            <SelectTrigger className="w-full" id="finish-edge">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopsFinishEdgeOptions.map((finish) => (
-                                <SelectItem key={`table-tops-edge-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">Edge finish: N.v.t. (no options configured)</p>
-                        )}
-                        {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="finish-color">
-                          Color finish {tableTopsFinishColorOptions.length > 0 ? '*' : ''}
-                        </Label>
-                        {tableTopsFinishColorOptions.length > 0 ? (
-                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
-                            <SelectTrigger className="w-full" id="finish-color">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopsFinishColorOptions.map((finish) => (
-                                <SelectItem key={`table-tops-color-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <p className="text-muted-foreground text-sm">Color finish: N.v.t. (no options configured)</p>
-                        )}
-                        {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
-                      </div>
-                    </div>
-                  )}
-
                   {selectedMaterial && !isTableTopsType && availableFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
                       No finishes are configured for this material.
@@ -1032,65 +980,142 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </p>
                   )}
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="material-table-foot">Material (Table foot) *</Label>
-                    <Select
-                      value={data.material_id_table_foot}
-                      onValueChange={handleTableFootMaterialChange}
-                      disabled={materialsLoading || materials.length === 0}
-                    >
-                      <SelectTrigger className="w-full" id="material-table-foot">
-                        <SelectValue
-                          placeholder={
-                            materialsLoading
-                              ? 'Loading materials...'
-                              : materials.length === 0
-                                ? 'No materials available'
-                                : 'Select table foot material'
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent className="z-[70]">
-                        {materials.map((material) => (
-                          <SelectItem key={material.id} value={material.id}>
-                            {material.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {errors.material_id_table_foot && (
-                      <p className="text-destructive text-xs">{errors.material_id_table_foot[0]}</p>
-                    )}
-                  </div>
+                  {selectedTableTopMaterial && isTableTopsType && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-top">
+                          Top finish {tableTopMaterialTopOptions.length > 0 ? '*' : ''}
+                        </Label>
+                        {tableTopMaterialTopOptions.length > 0 ? (
+                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
+                            <SelectTrigger className="w-full" id="finish-top">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopMaterialTopOptions.map((finish) => (
+                                <SelectItem key={`table-top-material-top-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">Top finish: N.v.t. (no options configured)</p>
+                        )}
+                        {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
+                      </div>
 
-                  {selectedTableFootMaterial && tableFootFinishOptions.length > 0 && (
-                    <div className="space-y-1.5">
-                      <Label htmlFor="finish-table-foot">Finish (Table foot) *</Label>
-                      <Select
-                        value={data.finish_table_foot}
-                        onValueChange={(value) => updateData('finish_table_foot', value)}
-                      >
-                        <SelectTrigger className="w-full" id="finish-table-foot">
-                          <SelectValue placeholder="Select a finish" />
-                        </SelectTrigger>
-                        <SelectContent className="z-[70]">
-                          {tableFootFinishOptions.map((finish) => (
-                            <SelectItem key={finish} value={finish}>
-                              {finish}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {errors.finish_table_foot && (
-                        <p className="text-destructive text-xs">{errors.finish_table_foot[0]}</p>
-                      )}
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-edge">
+                          Edge finish {tableTopMaterialEdgeOptions.length > 0 ? '*' : ''}
+                        </Label>
+                        {tableTopMaterialEdgeOptions.length > 0 ? (
+                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
+                            <SelectTrigger className="w-full" id="finish-edge">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopMaterialEdgeOptions.map((finish) => (
+                                <SelectItem key={`table-top-material-edge-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">Edge finish: N.v.t. (no options configured)</p>
+                        )}
+                        {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-color">
+                          Color finish {tableTopMaterialColorOptions.length > 0 ? '*' : ''}
+                        </Label>
+                        {tableTopMaterialColorOptions.length > 0 ? (
+                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
+                            <SelectTrigger className="w-full" id="finish-color">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopMaterialColorOptions.map((finish) => (
+                                <SelectItem key={`table-top-material-color-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">Color finish: N.v.t. (no options configured)</p>
+                        )}
+                        {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
+                      </div>
                     </div>
                   )}
 
-                  {selectedTableFootMaterial && tableFootFinishOptions.length === 0 && (
-                    <p className="text-muted-foreground text-xs">
-                      No finishes are configured for the table foot material.
-                    </p>
+                  {!isTableTopsType && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="material-table-foot">Material (Table foot) *</Label>
+                        <Select
+                          value={data.material_id_table_foot}
+                          onValueChange={handleTableFootMaterialChange}
+                          disabled={materialsLoading || materials.length === 0}
+                        >
+                          <SelectTrigger className="w-full" id="material-table-foot">
+                            <SelectValue
+                              placeholder={
+                                materialsLoading
+                                  ? 'Loading materials...'
+                                  : materials.length === 0
+                                    ? 'No materials available'
+                                    : 'Select table foot material'
+                              }
+                            />
+                          </SelectTrigger>
+                          <SelectContent className="z-[70]">
+                            {materials.map((material) => (
+                              <SelectItem key={material.id} value={material.id}>
+                                {material.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {errors.material_id_table_foot && (
+                          <p className="text-destructive text-xs">{errors.material_id_table_foot[0]}</p>
+                        )}
+                      </div>
+
+                      {selectedTableFootMaterial && tableFootFinishOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-table-foot">Finish (Table foot) *</Label>
+                          <Select
+                            value={data.finish_table_foot}
+                            onValueChange={(value) => updateData('finish_table_foot', value)}
+                          >
+                            <SelectTrigger className="w-full" id="finish-table-foot">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableFootFinishOptions.map((finish) => (
+                                <SelectItem key={finish} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_table_foot && (
+                            <p className="text-destructive text-xs">{errors.finish_table_foot[0]}</p>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedTableFootMaterial && tableFootFinishOptions.length === 0 && (
+                        <p className="text-muted-foreground text-xs">
+                          No finishes are configured for the table foot material.
+                        </p>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -1169,7 +1194,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
             </div>
           )}
 
-          {isTablesType && currentStep === 2 && (
+          {showTableFoot && currentStep === 2 && (
             <div className="space-y-4">
               <div>
                 <Label>Select suppliers *</Label>

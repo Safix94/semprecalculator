@@ -100,6 +100,26 @@ function isAllowedAttachment(file: File): boolean {
   return attachmentExtensions.has(extension);
 }
 
+function normalizeFinishOptions(options: string[] | null | undefined): string[] {
+  return (options ?? []).map((finish) => finish.trim()).filter((finish) => finish.length > 0);
+}
+
+function getMaterialFinishOptionsWithFallback(
+  material: Material | null,
+  field: 'finish_options_top' | 'finish_options_edge' | 'finish_options_color'
+): string[] {
+  if (!material) {
+    return [];
+  }
+
+  const specificOptions = normalizeFinishOptions(material[field]);
+  if (specificOptions.length > 0) {
+    return specificOptions;
+  }
+
+  return normalizeFinishOptions(material.finish_options);
+}
+
 export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [open, setOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -145,36 +165,21 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     [data.material_id_table_foot, materials]
   );
 
-  const availableFinishOptions = (selectedMaterial?.finish_options ?? [])
-    .map((finish) => finish.trim())
-    .filter((finish) => finish.length > 0);
-  const tableTopFinishOptions = (selectedTableTopMaterial?.finish_options ?? [])
-    .map((finish) => finish.trim())
-    .filter((finish) => finish.length > 0);
-  const tableTopFinishTopOptions = (
-    selectedTableTopMaterial?.finish_options_top?.length
-      ? selectedTableTopMaterial.finish_options_top
-      : selectedTableTopMaterial?.finish_options ?? []
-  )
-    .map((f) => f.trim())
-    .filter((f) => f.length > 0);
-  const tableTopFinishEdgeOptions = (
-    selectedTableTopMaterial?.finish_options_edge?.length
-      ? selectedTableTopMaterial.finish_options_edge
-      : selectedTableTopMaterial?.finish_options ?? []
-  )
-    .map((f) => f.trim())
-    .filter((f) => f.length > 0);
-  const tableTopFinishColorOptions = (
-    selectedTableTopMaterial?.finish_options_color?.length
-      ? selectedTableTopMaterial.finish_options_color
-      : selectedTableTopMaterial?.finish_options ?? []
-  )
-    .map((f) => f.trim())
-    .filter((f) => f.length > 0);
-  const tableFootFinishOptions = (selectedTableFootMaterial?.finish_options ?? [])
-    .map((finish) => finish.trim())
-    .filter((finish) => finish.length > 0);
+  const availableFinishOptions = normalizeFinishOptions(selectedMaterial?.finish_options);
+  const tableTopFinishOptions = normalizeFinishOptions(selectedTableTopMaterial?.finish_options);
+  const tableTopsFinishTopOptions = getMaterialFinishOptionsWithFallback(
+    selectedMaterial,
+    'finish_options_top'
+  );
+  const tableTopsFinishEdgeOptions = getMaterialFinishOptionsWithFallback(
+    selectedMaterial,
+    'finish_options_edge'
+  );
+  const tableTopsFinishColorOptions = getMaterialFinishOptionsWithFallback(
+    selectedMaterial,
+    'finish_options_color'
+  );
+  const tableFootFinishOptions = normalizeFinishOptions(selectedTableFootMaterial?.finish_options);
 
   const loadMaterials = useCallback(async () => {
     setMaterialsLoading(true);
@@ -344,13 +349,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   };
 
   const handleProductTypeChange = (productType: string) => {
+    const nextIsTablesType = isTablesProductType(productType);
+    const nextIsTableTopsType = isTableTopsProductType(productType);
+
     updateData('product_type', productType);
     updateData('supplier_ids', []);
     updateData('supplier_ids_table_top', []);
     updateData('supplier_ids_table_foot', []);
-    updateData('finish_top', '');
-    updateData('finish_edge', '');
-    updateData('finish_color', '');
     setSuppliers([]);
     setSuppliersError(null);
     setSuppliersLoading(false);
@@ -361,10 +366,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setTableFootSuppliersError(null);
     setTableFootSuppliersLoading(false);
 
-    if (isTablesProductType(productType)) {
+    if (nextIsTablesType) {
       updateData('material_id', '');
       updateData('material_name', '');
       updateData('finish', '');
+      updateData('finish_top', '');
+      updateData('finish_edge', '');
+      updateData('finish_color', '');
       return;
     }
 
@@ -374,23 +382,48 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     updateData('material_id_table_foot', '');
     updateData('material_table_foot', '');
     updateData('finish_table_foot', '');
+
+    if (nextIsTableTopsType) {
+      const material = materials.find((item) => item.id === data.material_id) ?? null;
+      if (!material) {
+        updateData('finish_top', '');
+        updateData('finish_edge', '');
+        updateData('finish_color', '');
+        updateData('finish', '');
+        return;
+      }
+
+      const topOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_top');
+      const edgeOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_edge');
+      const colorOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_color');
+
+      updateData('finish_top', topOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish_edge', edgeOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish_color', colorOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish', '');
+      return;
+    }
+
+    updateData('finish_top', '');
+    updateData('finish_edge', '');
+    updateData('finish_color', '');
   };
 
   const handleMaterialChange = (materialId: string) => {
     const material = materials.find((item) => item.id === materialId);
     if (!material) return;
 
-    const materialFinishOptions = material.finish_options
-      .map((finish) => finish.trim())
-      .filter((finish) => finish.length > 0);
+    const materialFinishOptions = normalizeFinishOptions(material.finish_options);
 
     updateData('material_id', materialId);
     updateData('material_name', material.name);
     if (isTableTopsType) {
-      const defaultFinishValue = materialFinishOptions.length === 0 ? 'N.v.t.' : '';
-      updateData('finish_top', defaultFinishValue);
-      updateData('finish_edge', defaultFinishValue);
-      updateData('finish_color', defaultFinishValue);
+      const topOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_top');
+      const edgeOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_edge');
+      const colorOptions = getMaterialFinishOptionsWithFallback(material, 'finish_options_color');
+      updateData('finish_top', topOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish_edge', edgeOptions.length > 0 ? '' : 'N.v.t.');
+      updateData('finish_color', colorOptions.length > 0 ? '' : 'N.v.t.');
       updateData('finish', '');
     } else {
       updateData('finish', materialFinishOptions.length === 0 ? 'N.v.t.' : '');
@@ -520,13 +553,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           stepErrors.material_id = ['Material is required'];
         }
         if (isTableTopsType) {
-          if (tableTopFinishTopOptions.length > 0 && !data.finish_top) {
+          if (tableTopsFinishTopOptions.length > 0 && !data.finish_top) {
             stepErrors.finish_top = ['Top finish is required'];
           }
-          if (tableTopFinishEdgeOptions.length > 0 && !data.finish_edge) {
+          if (tableTopsFinishEdgeOptions.length > 0 && !data.finish_edge) {
             stepErrors.finish_edge = ['Edge finish is required'];
           }
-          if (tableTopFinishColorOptions.length > 0 && !data.finish_color) {
+          if (tableTopsFinishColorOptions.length > 0 && !data.finish_color) {
             stepErrors.finish_color = ['Color finish is required'];
           }
         } else if (availableFinishOptions.length > 0 && !data.finish) {
@@ -626,6 +659,12 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     const isRound = data.shape === 'Round';
     const diameter = Number(data.diameter);
     const thicknessValue = data.thickness === '' ? 0 : Number(data.thickness);
+    const tableTopsFinishValues = [data.finish_top, data.finish_edge, data.finish_color]
+      .map((finish) => finish.trim())
+      .filter((finish) => finish.length > 0);
+    const areAllTableTopsFinishesNotApplicable =
+      tableTopsFinishValues.length === 3 &&
+      tableTopsFinishValues.every((finish) => finish.toLowerCase() === 'n.v.t.');
 
     const materialSummary = isTablesType
       ? [data.material_table_top, data.material_table_foot].filter(Boolean).join(' / ')
@@ -633,7 +672,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     const finishSummary = isTablesType
       ? [data.finish_table_top, data.finish_table_foot].filter(Boolean).join(' / ')
       : isTableTopsType
-        ? [data.finish_top, data.finish_edge, data.finish_color].filter(Boolean).join(' / ')
+        ? areAllTableTopsFinishesNotApplicable
+          ? 'N.v.t.'
+          : tableTopsFinishValues.join(' / ')
         : data.finish;
 
     const input = {
@@ -849,7 +890,78 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </div>
                   )}
 
-                  {selectedMaterial && availableFinishOptions.length === 0 && (
+                  {selectedMaterial && isTableTopsType && (
+                    <div className="space-y-3">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-top">Top finish {tableTopsFinishTopOptions.length > 0 ? '*' : ''}</Label>
+                        {tableTopsFinishTopOptions.length > 0 ? (
+                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
+                            <SelectTrigger className="w-full" id="finish-top">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopsFinishTopOptions.map((finish) => (
+                                <SelectItem key={`table-tops-top-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">Top finish: N.v.t. (no options configured)</p>
+                        )}
+                        {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-edge">
+                          Edge finish {tableTopsFinishEdgeOptions.length > 0 ? '*' : ''}
+                        </Label>
+                        {tableTopsFinishEdgeOptions.length > 0 ? (
+                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
+                            <SelectTrigger className="w-full" id="finish-edge">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopsFinishEdgeOptions.map((finish) => (
+                                <SelectItem key={`table-tops-edge-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">Edge finish: N.v.t. (no options configured)</p>
+                        )}
+                        {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-color">
+                          Color finish {tableTopsFinishColorOptions.length > 0 ? '*' : ''}
+                        </Label>
+                        {tableTopsFinishColorOptions.length > 0 ? (
+                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
+                            <SelectTrigger className="w-full" id="finish-color">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopsFinishColorOptions.map((finish) => (
+                                <SelectItem key={`table-tops-color-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <p className="text-muted-foreground text-sm">Color finish: N.v.t. (no options configured)</p>
+                        )}
+                        {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedMaterial && !isTableTopsType && availableFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
                       No finishes are configured for this material.
                     </p>
@@ -918,68 +1030,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     <p className="text-muted-foreground text-xs">
                       No finishes are configured for the table top material.
                     </p>
-                  )}
-
-                  {selectedTableTopMaterial &&
-                    (tableTopFinishTopOptions.length > 0 ||
-                      tableTopFinishEdgeOptions.length > 0 ||
-                      tableTopFinishColorOptions.length > 0) && (
-                    <>
-                      {tableTopFinishTopOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="finish-top">Top finish *</Label>
-                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
-                            <SelectTrigger className="w-full" id="finish-top">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopFinishTopOptions.map((finish) => (
-                                <SelectItem key={`top-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
-                        </div>
-                      )}
-                      {tableTopFinishEdgeOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="finish-edge">Edge finish *</Label>
-                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
-                            <SelectTrigger className="w-full" id="finish-edge">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopFinishEdgeOptions.map((finish) => (
-                                <SelectItem key={`edge-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
-                        </div>
-                      )}
-                      {tableTopFinishColorOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="finish-color">Color finish *</Label>
-                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
-                            <SelectTrigger className="w-full" id="finish-color">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopFinishColorOptions.map((finish) => (
-                                <SelectItem key={`color-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
-                        </div>
-                      )}
-                    </>
                   )}
 
                   <div className="space-y-1.5">

@@ -41,7 +41,6 @@ interface MaterialManagementProps {
 interface MaterialFormData {
   name: string;
   finish_options: string;
-  finish_options_top: string;
   finish_options_edge: string;
   finish_options_color: string;
   supplier_ids: string[];
@@ -50,7 +49,6 @@ interface MaterialFormData {
 const initialFormData: MaterialFormData = {
   name: '',
   finish_options: '',
-  finish_options_top: '',
   finish_options_edge: '',
   finish_options_color: '',
   supplier_ids: [],
@@ -90,7 +88,6 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     setFormData({
       name: material.name,
       finish_options: material.finish_options.join(', '),
-      finish_options_top: material.finish_options_top?.join(', ') ?? '',
       finish_options_edge: material.finish_options_edge?.join(', ') ?? '',
       finish_options_color: material.finish_options_color?.join(', ') ?? '',
       supplier_ids: material.suppliers?.map(s => s.id) || [],
@@ -112,14 +109,13 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
       s.split(',').map((x) => x.trim()).filter((x) => x.length > 0);
 
     const finishOptions = parseFinishOptions(formData.finish_options);
-    const finishOptionsTop = parseFinishOptions(formData.finish_options_top);
     const finishOptionsEdge = parseFinishOptions(formData.finish_options_edge);
     const finishOptionsColor = parseFinishOptions(formData.finish_options_color);
 
     const input = {
       name: formData.name,
       finish_options: finishOptions,
-      finish_options_top: finishOptionsTop,
+      finish_options_top: [] as string[],
       finish_options_edge: finishOptionsEdge,
       finish_options_color: finishOptionsColor,
       supplier_ids: formData.supplier_ids,
@@ -382,7 +378,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
 
       {/* Create/Edit Material Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingMaterial ? 'Edit material' : 'New material'}
@@ -404,64 +400,51 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="finish-options">
-                Finish options (comma-separated) (optional)
-              </Label>
-              <p className="text-muted-foreground text-xs">
-                Algemeen: o.a. voor het veld Finish (Table top) in de wizard.
-              </p>
-              <Input
-                id="finish-options"
-                value={formData.finish_options}
-                onChange={(e) => updateFormData('finish_options', e.target.value)}
-                placeholder="e.g. Polished, Matte, Frosted"
-              />
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="finish-options">
+                  Finish options (comma-separated) (optional)
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  Used for the Finish (Table top) field and for the Top finish dropdown in the wizard.
+                </p>
+                <Input
+                  id="finish-options"
+                  value={formData.finish_options}
+                  onChange={(e) => updateFormData('finish_options', e.target.value)}
+                  placeholder="e.g. Polished, Matte, Frosted"
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="finish-options-top">
-                Top finish options (comma-separated) (optional)
-              </Label>
-              <p className="text-muted-foreground text-xs">
-                Voor table-top: gebruikt voor de dropdown Top finish in de wizard.
-              </p>
-              <Input
-                id="finish-options-top"
-                value={formData.finish_options_top}
-                onChange={(e) => updateFormData('finish_options_top', e.target.value)}
-                placeholder="e.g. Polished, Matte"
-              />
-            </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="finish-options-edge">
+                  Edge finish options (comma-separated) (optional)
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  Used for the Edge finish dropdown when this material is selected as table top.
+                </p>
+                <Input
+                  id="finish-options-edge"
+                  value={formData.finish_options_edge}
+                  onChange={(e) => updateFormData('finish_options_edge', e.target.value)}
+                  placeholder="e.g. Straight, Beveled"
+                />
+              </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="finish-options-edge">
-                Edge finish options (comma-separated) (optional)
-              </Label>
-              <p className="text-muted-foreground text-xs">
-                Voor table-top: gebruikt voor de dropdown Edge finish in de wizard.
-              </p>
-              <Input
-                id="finish-options-edge"
-                value={formData.finish_options_edge}
-                onChange={(e) => updateFormData('finish_options_edge', e.target.value)}
-                placeholder="e.g. Straight, Beveled"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="finish-options-color">
-                Color finish options (comma-separated) (optional)
-              </Label>
-              <p className="text-muted-foreground text-xs">
-                Voor table-top: gebruikt voor de dropdown Color finish in de wizard.
-              </p>
-              <Input
-                id="finish-options-color"
-                value={formData.finish_options_color}
-                onChange={(e) => updateFormData('finish_options_color', e.target.value)}
-                placeholder="e.g. White, Black"
-              />
+              <div className="space-y-1.5">
+                <Label htmlFor="finish-options-color">
+                  Color finish options (comma-separated) (optional)
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  Used for the Color finish dropdown when this material is selected as table top.
+                </p>
+                <Input
+                  id="finish-options-color"
+                  value={formData.finish_options_color}
+                  onChange={(e) => updateFormData('finish_options_color', e.target.value)}
+                  placeholder="e.g. White, Black"
+                />
+              </div>
             </div>
 
             <div className="space-y-3">

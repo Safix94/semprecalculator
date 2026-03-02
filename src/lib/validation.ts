@@ -234,12 +234,18 @@ export const updateRfqNotesSchema = z.object({
 export const createMaterialSchema = z.object({
   name: z.string().min(1, 'Material name is required').max(100, 'Material name may be at most 100 characters'),
   finish_options: z.array(z.string().min(1, 'Finish may not be empty')),
+  finish_options_top: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
+  finish_options_edge: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
+  finish_options_color: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
   supplier_ids: z.array(z.string().uuid()).optional(),
 });
 
 export const updateMaterialSchema = z.object({
   name: z.string().min(1, 'Material name is required').max(100, 'Material name may be at most 100 characters').optional(),
   finish_options: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
+  finish_options_top: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
+  finish_options_edge: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
+  finish_options_color: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
   is_active: z.boolean().optional(),
 });
 

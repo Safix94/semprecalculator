@@ -151,6 +151,27 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const tableTopFinishOptions = (selectedTableTopMaterial?.finish_options ?? [])
     .map((finish) => finish.trim())
     .filter((finish) => finish.length > 0);
+  const tableTopFinishTopOptions = (
+    selectedTableTopMaterial?.finish_options_top?.length
+      ? selectedTableTopMaterial.finish_options_top
+      : selectedTableTopMaterial?.finish_options ?? []
+  )
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0);
+  const tableTopFinishEdgeOptions = (
+    selectedTableTopMaterial?.finish_options_edge?.length
+      ? selectedTableTopMaterial.finish_options_edge
+      : selectedTableTopMaterial?.finish_options ?? []
+  )
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0);
+  const tableTopFinishColorOptions = (
+    selectedTableTopMaterial?.finish_options_color?.length
+      ? selectedTableTopMaterial.finish_options_color
+      : selectedTableTopMaterial?.finish_options ?? []
+  )
+    .map((f) => f.trim())
+    .filter((f) => f.length > 0);
   const tableFootFinishOptions = (selectedTableFootMaterial?.finish_options ?? [])
     .map((finish) => finish.trim())
     .filter((finish) => finish.length > 0);
@@ -499,13 +520,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           stepErrors.material_id = ['Material is required'];
         }
         if (isTableTopsType) {
-          if (tableTopFinishOptions.length > 0 && !data.finish_top) {
+          if (tableTopFinishTopOptions.length > 0 && !data.finish_top) {
             stepErrors.finish_top = ['Top finish is required'];
           }
-          if (tableTopFinishOptions.length > 0 && !data.finish_edge) {
+          if (tableTopFinishEdgeOptions.length > 0 && !data.finish_edge) {
             stepErrors.finish_edge = ['Edge finish is required'];
           }
-          if (tableTopFinishOptions.length > 0 && !data.finish_color) {
+          if (tableTopFinishColorOptions.length > 0 && !data.finish_color) {
             stepErrors.finish_color = ['Color finish is required'];
           }
         } else if (availableFinishOptions.length > 0 && !data.finish) {
@@ -809,56 +830,66 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </div>
                   )}
 
-                  {isTableTopsType && selectedTableTopMaterial && tableTopFinishOptions.length > 0 && (
+                  {isTableTopsType &&
+                    selectedTableTopMaterial &&
+                    (tableTopFinishTopOptions.length > 0 ||
+                      tableTopFinishEdgeOptions.length > 0 ||
+                      tableTopFinishColorOptions.length > 0) && (
                     <>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="finish-top">Top finish *</Label>
-                        <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
-                          <SelectTrigger className="w-full" id="finish-top">
-                            <SelectValue placeholder="Select a finish" />
-                          </SelectTrigger>
-                          <SelectContent className="z-[70]">
-                            {tableTopFinishOptions.map((finish) => (
-                              <SelectItem key={`top-${finish}`} value={finish}>
-                                {finish}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="finish-edge">Edge finish *</Label>
-                        <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
-                          <SelectTrigger className="w-full" id="finish-edge">
-                            <SelectValue placeholder="Select a finish" />
-                          </SelectTrigger>
-                          <SelectContent className="z-[70]">
-                            {tableTopFinishOptions.map((finish) => (
-                              <SelectItem key={`edge-${finish}`} value={finish}>
-                                {finish}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label htmlFor="finish-color">Color finish *</Label>
-                        <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
-                          <SelectTrigger className="w-full" id="finish-color">
-                            <SelectValue placeholder="Select a finish" />
-                          </SelectTrigger>
-                          <SelectContent className="z-[70]">
-                            {tableTopFinishOptions.map((finish) => (
-                              <SelectItem key={`color-${finish}`} value={finish}>
-                                {finish}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
-                      </div>
+                      {tableTopFinishTopOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-top">Top finish *</Label>
+                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
+                            <SelectTrigger className="w-full" id="finish-top">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopFinishTopOptions.map((finish) => (
+                                <SelectItem key={`top-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
+                        </div>
+                      )}
+                      {tableTopFinishEdgeOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-edge">Edge finish *</Label>
+                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
+                            <SelectTrigger className="w-full" id="finish-edge">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopFinishEdgeOptions.map((finish) => (
+                                <SelectItem key={`edge-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
+                        </div>
+                      )}
+                      {tableTopFinishColorOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-color">Color finish *</Label>
+                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
+                            <SelectTrigger className="w-full" id="finish-color">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopFinishColorOptions.map((finish) => (
+                                <SelectItem key={`color-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
+                        </div>
+                      )}
                     </>
                   )}
 

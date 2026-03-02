@@ -9,12 +9,18 @@ import type { Material, MaterialWithSuppliers, Supplier } from '@/types';
 export interface CreateMaterialInput {
   name: string;
   finish_options: string[];
+  finish_options_top?: string[];
+  finish_options_edge?: string[];
+  finish_options_color?: string[];
   supplier_ids?: string[];
 }
 
 export interface UpdateMaterialInput {
   name?: string;
   finish_options?: string[];
+  finish_options_top?: string[];
+  finish_options_edge?: string[];
+  finish_options_color?: string[];
   is_active?: boolean;
   supplier_ids?: string[];
 }
@@ -52,6 +58,9 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
       id: string;
       name: string;
       finish_options: string[];
+      finish_options_top?: string[];
+      finish_options_edge?: string[];
+      finish_options_color?: string[];
       is_active: boolean;
       created_at: string;
       updated_at: string;
@@ -64,6 +73,9 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
         id: material.id,
         name: material.name,
         finish_options: material.finish_options,
+        finish_options_top: material.finish_options_top ?? [],
+        finish_options_edge: material.finish_options_edge ?? [],
+        finish_options_color: material.finish_options_color ?? [],
         is_active: material.is_active,
         created_at: material.created_at,
         updated_at: material.updated_at,
@@ -155,6 +167,9 @@ export async function createMaterial(input: CreateMaterialInput) {
     .insert({
       name: input.name,
       finish_options: input.finish_options,
+      finish_options_top: input.finish_options_top ?? [],
+      finish_options_edge: input.finish_options_edge ?? [],
+      finish_options_color: input.finish_options_color ?? [],
     })
     .select()
     .single();

@@ -162,7 +162,7 @@ export async function createMaterial(input: CreateMaterialInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
 
-  const { data: material, error } = await supabase
+  const { data: insertedMaterial, error } = await supabase
     .from('materials')
     .insert({
       name: input.name,
@@ -172,10 +172,42 @@ export async function createMaterial(input: CreateMaterialInput) {
       finish_options_color: input.finish_options_color ?? [],
     })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
-    return { error: { _form: [error.message] } };
+    return {
+      error: {
+        _form: [
+          error.code === 'PGRST116'
+            ? 'Material could not be read back as a single row after create. Please refresh and try again.'
+            : error.message,
+        ],
+      },
+    };
+  }
+
+  let material = insertedMaterial as Material | null;
+  if (!material) {
+    const { data: fetchedMaterial, error: fetchMaterialError } = await supabase
+      .from('materials')
+      .select('*')
+      .eq('name', input.name)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (fetchMaterialError || !fetchedMaterial) {
+      return {
+        error: {
+          _form: [
+            fetchMaterialError?.message ??
+              'Material was created but could not be read back. Please refresh the page.',
+          ],
+        },
+      };
+    }
+
+    material = fetchedMaterial as Material;
   }
 
   // Link suppliers if provided
@@ -223,13 +255,21 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
       .update(materialFields)
       .eq('id', materialId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (error) {
-      return { error: { _form: [error.message] } };
+      return {
+        error: {
+          _form: [
+            error.code === 'PGRST116'
+              ? 'Material could not be read back as a single row after update. Please refresh and try again.'
+              : error.message,
+          ],
+        },
+      };
     }
 
-    material = updatedMaterial as Material;
+    material = (updatedMaterial as Material | null) ?? null;
   }
 
   if (supplier_ids !== undefined) {
@@ -282,10 +322,16 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
       .from('materials')
       .select('*')
       .eq('id', materialId)
-      .single();
+      .maybeSingle();
 
-    if (fetchMaterialError) {
-      return { error: { _form: [fetchMaterialError.message] } };
+    if (fetchMaterialError || !currentMaterial) {
+      return {
+        error: {
+          _form: [
+            fetchMaterialError?.message ?? 'Material could not be found after update.',
+          ],
+        },
+      };
     }
 
     material = currentMaterial as Material;

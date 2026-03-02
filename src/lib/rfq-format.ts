@@ -11,7 +11,8 @@ export function normalizeProductType(productType: string | null | undefined): st
 }
 
 export function isTablesProductType(productType: string | null | undefined): boolean {
-  return normalizeProductType(productType) === 'tables';
+  const normalized = normalizeProductType(productType);
+  return normalized === 'tables' || normalized === 'table tops' || normalized === 'tabletops';
 }
 
 export function isTableTopsProductType(productType: string | null | undefined): boolean {

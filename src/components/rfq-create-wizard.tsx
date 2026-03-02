@@ -552,7 +552,26 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         stepErrors.shape = ['Shape is required'];
       }
 
-      if (isRound) {
+      if (isTableTopsType) {
+        if (isRound) {
+          if (!data.diameter || Number(data.diameter) <= 0) {
+            stepErrors.diameter = ['Diameter must be positive'];
+          }
+          if (!data.thickness || Number(data.thickness) <= 0) {
+            stepErrors.thickness = ['Thickness must be positive'];
+          }
+        } else {
+          if (!data.length || Number(data.length) <= 0) {
+            stepErrors.length = ['Length must be positive'];
+          }
+          if (!data.width || Number(data.width) <= 0) {
+            stepErrors.width = ['Width must be positive'];
+          }
+          if (!data.thickness || Number(data.thickness) <= 0) {
+            stepErrors.thickness = ['Thickness must be positive'];
+          }
+        }
+      } else if (isRound) {
         if (!data.diameter || Number(data.diameter) <= 0) {
           stepErrors.diameter = ['Diameter must be positive'];
         }
@@ -634,7 +653,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       finish_table_foot: isTablesType ? data.finish_table_foot || null : null,
       length: isRound ? diameter : Number(data.length),
       width: isRound ? diameter : Number(data.width),
-      height: Number(data.height),
+      height: isTableTopsType ? (Number(data.height) || 0) : Number(data.height),
       thickness: isRound ? thicknessValue : Number(data.thickness),
       quantity: Number(data.quantity),
       shape: data.shape,
@@ -830,69 +849,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     </div>
                   )}
 
-                  {isTableTopsType &&
-                    selectedTableTopMaterial &&
-                    (tableTopFinishTopOptions.length > 0 ||
-                      tableTopFinishEdgeOptions.length > 0 ||
-                      tableTopFinishColorOptions.length > 0) && (
-                    <>
-                      {tableTopFinishTopOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="finish-top">Top finish *</Label>
-                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
-                            <SelectTrigger className="w-full" id="finish-top">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopFinishTopOptions.map((finish) => (
-                                <SelectItem key={`top-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
-                        </div>
-                      )}
-                      {tableTopFinishEdgeOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="finish-edge">Edge finish *</Label>
-                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
-                            <SelectTrigger className="w-full" id="finish-edge">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopFinishEdgeOptions.map((finish) => (
-                                <SelectItem key={`edge-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
-                        </div>
-                      )}
-                      {tableTopFinishColorOptions.length > 0 && (
-                        <div className="space-y-1.5">
-                          <Label htmlFor="finish-color">Color finish *</Label>
-                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
-                            <SelectTrigger className="w-full" id="finish-color">
-                              <SelectValue placeholder="Select a finish" />
-                            </SelectTrigger>
-                            <SelectContent className="z-[70]">
-                              {tableTopFinishColorOptions.map((finish) => (
-                                <SelectItem key={`color-${finish}`} value={finish}>
-                                  {finish}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
-                        </div>
-                      )}
-                    </>
-                  )}
-
                   {selectedMaterial && availableFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
                       No finishes are configured for this material.
@@ -962,6 +918,68 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     <p className="text-muted-foreground text-xs">
                       No finishes are configured for the table top material.
                     </p>
+                  )}
+
+                  {selectedTableTopMaterial &&
+                    (tableTopFinishTopOptions.length > 0 ||
+                      tableTopFinishEdgeOptions.length > 0 ||
+                      tableTopFinishColorOptions.length > 0) && (
+                    <>
+                      {tableTopFinishTopOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-top">Top finish *</Label>
+                          <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
+                            <SelectTrigger className="w-full" id="finish-top">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopFinishTopOptions.map((finish) => (
+                                <SelectItem key={`top-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
+                        </div>
+                      )}
+                      {tableTopFinishEdgeOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-edge">Edge finish *</Label>
+                          <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
+                            <SelectTrigger className="w-full" id="finish-edge">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopFinishEdgeOptions.map((finish) => (
+                                <SelectItem key={`edge-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
+                        </div>
+                      )}
+                      {tableTopFinishColorOptions.length > 0 && (
+                        <div className="space-y-1.5">
+                          <Label htmlFor="finish-color">Color finish *</Label>
+                          <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
+                            <SelectTrigger className="w-full" id="finish-color">
+                              <SelectValue placeholder="Select a finish" />
+                            </SelectTrigger>
+                            <SelectContent className="z-[70]">
+                              {tableTopFinishColorOptions.map((finish) => (
+                                <SelectItem key={`color-${finish}`} value={finish}>
+                                  {finish}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
+                        </div>
+                      )}
+                    </>
                   )}
 
                   <div className="space-y-1.5">
@@ -1192,24 +1210,28 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                       />
                       {errors.diameter && <p className="text-destructive text-xs">{errors.diameter[0]}</p>}
                     </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="height">Height (cm) *</Label>
-                      <Input
-                        id="height"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.height}
-                        onChange={(e) => updateData('height', e.target.value)}
-                        aria-invalid={Boolean(errors.height)}
-                      />
-                      {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
-                    </div>
+                    {!isTableTopsType && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="height">Height (cm) *</Label>
+                        <Input
+                          id="height"
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={data.height}
+                          onChange={(e) => updateData('height', e.target.value)}
+                          aria-invalid={Boolean(errors.height)}
+                        />
+                        {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label htmlFor="thickness">Thickness (cm) (optional)</Label>
+                      <Label htmlFor="thickness">
+                        Thickness (cm) {isTableTopsType ? '*' : '(optional)'}
+                      </Label>
                       <Input
                         id="thickness"
                         type="number"
@@ -1268,19 +1290,21 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="height">Height (cm) *</Label>
-                      <Input
-                        id="height"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.height}
-                        onChange={(e) => updateData('height', e.target.value)}
-                        aria-invalid={Boolean(errors.height)}
-                      />
-                      {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
-                    </div>
+                    {!isTableTopsType && (
+                      <div className="space-y-1.5">
+                        <Label htmlFor="height">Height (cm) *</Label>
+                        <Input
+                          id="height"
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={data.height}
+                          onChange={(e) => updateData('height', e.target.value)}
+                          aria-invalid={Boolean(errors.height)}
+                        />
+                        {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
+                      </div>
+                    )}
                     <div className="space-y-1.5">
                       <Label htmlFor="thickness">Thickness (cm) *</Label>
                       <Input

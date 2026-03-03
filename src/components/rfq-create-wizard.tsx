@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Material, ProductType, Supplier } from '@/types';
+import type { Material, ProductType, Supplier, UsageEnvironment } from '@/types';
 
 interface RfqCreateWizardProps {
   children?: React.ReactNode;
@@ -59,7 +59,7 @@ interface WizardData {
   thickness: string;
   quantity: string;
   shape: string;
-  usage_environment: string;
+  usage_environment: UsageEnvironment | '';
   notes: string;
 }
 
@@ -541,6 +541,12 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       }
     }
     updateData('diameter', '');
+  };
+
+  const handleUsageEnvironmentChange = (value: string) => {
+    if (value === 'Indoor' || value === 'Outdoor') {
+      updateData('usage_environment', value);
+    }
   };
 
   const handleAttachmentChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1308,7 +1314,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   <Label htmlFor="usage-environment">Use *</Label>
                   <Select
                     value={data.usage_environment}
-                    onValueChange={(value) => updateData('usage_environment', value)}
+                    onValueChange={handleUsageEnvironmentChange}
                   >
                     <SelectTrigger id="usage-environment" className="w-full" aria-invalid={Boolean(errors.usage_environment)}>
                       <SelectValue placeholder="Select Indoor or Outdoor" />

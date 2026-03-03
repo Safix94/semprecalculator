@@ -278,17 +278,12 @@ export async function createRfq(input: CreateRfqInput) {
         (loweredMessage.includes('does not exist') || loweredMessage.includes('schema cache'));
 
       if (modelMissing || usageEnvironmentMissing) {
-        const fallbackPayload = {
-          ...insertPayload,
-        } as typeof insertPayload & {
-          model?: typeof insertPayload.model;
-          usage_environment?: typeof insertPayload.usage_environment;
-        };
+        const fallbackPayload: Record<string, unknown> = { ...insertPayload };
         if (modelMissing) {
-          fallbackPayload.model = undefined;
+          delete fallbackPayload.model;
         }
         if (usageEnvironmentMissing) {
-          fallbackPayload.usage_environment = undefined;
+          delete fallbackPayload.usage_environment;
         }
 
         const retryResult = await supabase

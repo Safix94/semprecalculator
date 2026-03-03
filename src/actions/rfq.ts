@@ -95,11 +95,21 @@ function buildInviteSelectionsForRfq(
   input: InviteSelectionInput
 ): { rows: { supplier_id: string; invite_part: InvitePart }[] } | { error: string } {
   if (isTablesProductType(productType)) {
+    const isTableTopsType = isTableTopsProductType(productType);
     const topSet = new Set(normalizeSupplierIds(input.supplierIdsTableTop));
     const footSet = new Set(normalizeSupplierIds(input.supplierIdsTableFoot));
 
     if (topSet.size === 0) {
       return { error: 'Select at least one supplier for the table top' };
+    }
+
+    if (isTableTopsType) {
+      return {
+        rows: [...topSet].map((supplierId) => ({
+          supplier_id: supplierId,
+          invite_part: 'table_top',
+        })),
+      };
     }
 
     if (footSet.size === 0) {

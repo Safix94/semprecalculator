@@ -255,21 +255,21 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
       .update(materialFields)
       .eq('id', materialId)
       .select()
-      .maybeSingle();
+      .single();
 
     if (error) {
       return {
         error: {
           _form: [
             error.code === 'PGRST116'
-              ? 'Material could not be read back as a single row after update. Please refresh and try again.'
+              ? 'No material row was updated. Check permissions/policies and try again.'
               : error.message,
           ],
         },
       };
     }
 
-    material = (updatedMaterial as Material | null) ?? null;
+    material = updatedMaterial as Material;
   }
 
   if (supplier_ids !== undefined) {

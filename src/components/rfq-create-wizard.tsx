@@ -682,9 +682,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
       }
 
-      if (shouldShowUsageEnvironment && !data.usage_environment) {
-        stepErrors.usage_environment = ['Use is required'];
-      }
     }
 
     setErrors(stepErrors);
@@ -765,6 +762,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       const result = await createRfq(input);
 
       if (result.error) {
+        console.error('Failed to create RFQ:', result.error);
         setErrors(result.error as Record<string, string[]>);
         return;
       }
@@ -1311,7 +1309,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
               {shouldShowUsageEnvironment && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="usage-environment">Use *</Label>
+                  <Label htmlFor="usage-environment">Use</Label>
                   <Select
                     value={data.usage_environment}
                     onValueChange={handleUsageEnvironmentChange}

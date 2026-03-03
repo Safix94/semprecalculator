@@ -65,6 +65,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
   const [detailsError, setDetailsError] = useState<string | null>(null);
   const [detailsResult, setDetailsResult] = useState<string | null>(null);
   const [detailsForm, setDetailsForm] = useState({
+    model: '',
     length: '',
     width: '',
     height: '',
@@ -169,6 +170,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     }
 
     setDetailsForm({
+      model: detail.rfq.model || '',
       length: String(detail.rfq.length),
       width: String(detail.rfq.width),
       height: String(detail.rfq.height),
@@ -220,6 +222,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     }
 
     setDetailsForm({
+      model: detail.rfq.model || '',
       length: String(detail.rfq.length),
       width: String(detail.rfq.width),
       height: String(detail.rfq.height),
@@ -236,6 +239,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     }
 
     setDetailsForm({
+      model: detail.rfq.model || '',
       length: String(detail.rfq.length),
       width: String(detail.rfq.width),
       height: String(detail.rfq.height),
@@ -255,14 +259,20 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     const parsedWidth = Number.parseFloat(detailsForm.width);
     const parsedHeight = Number.parseFloat(detailsForm.height);
     const parsedThickness = Number.parseFloat(detailsForm.thickness);
+    const normalizedModel = detailsForm.model.trim();
+    const currentModel = (detail.rfq.model ?? '').trim();
 
     const updateInput: {
+      model?: string | null;
       length?: number;
       width?: number;
       height?: number;
       thickness?: number;
     } = {};
 
+    if (isTablesType && normalizedModel !== currentModel) {
+      updateInput.model = normalizedModel.length > 0 ? normalizedModel : null;
+    }
     if (!Number.isNaN(parsedLength) && parsedLength !== detail.rfq.length) {
       updateInput.length = parsedLength;
     }
@@ -313,7 +323,17 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     } finally {
       setDetailsSaving(false);
     }
-  }, [detail, detailsForm.height, detailsForm.length, detailsForm.thickness, detailsForm.width, isRound, router]);
+  }, [
+    detail,
+    detailsForm.height,
+    detailsForm.length,
+    detailsForm.model,
+    detailsForm.thickness,
+    detailsForm.width,
+    isRound,
+    isTablesType,
+    router,
+  ]);
 
   return (
     <Dialog
@@ -471,6 +491,12 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                     <dt className="text-xs uppercase text-muted-foreground">Use</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.usage_environment || '-'}</dd>
                   </div>
+                  {detail.rfq.model && (
+                    <div>
+                      <dt className="text-xs uppercase text-muted-foreground">Model</dt>
+                      <dd className="mt-1 text-sm font-medium">{detail.rfq.model}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.customer_name || '-'}</dd>
@@ -497,7 +523,20 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                   )}
                   {detailsEditing && canManageRfq && (
                     <div className="col-span-2 rounded-md border p-3 md:col-span-4">
-                      <p className="mb-3 text-xs uppercase text-muted-foreground">Edit dimensions and thickness</p>
+                      <p className="mb-3 text-xs uppercase text-muted-foreground">Edit details</p>
+                      {isTablesType && (
+                        <label className="mb-3 block space-y-1 text-xs uppercase text-muted-foreground">
+                          <span>Model</span>
+                          <Input
+                            type="text"
+                            value={detailsForm.model}
+                            onChange={(event) =>
+                              setDetailsForm((current) => ({ ...current, model: event.target.value }))
+                            }
+                            disabled={detailsSaving}
+                          />
+                        </label>
+                      )}
                       <div className={`grid gap-3 ${isRound ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
                         <label className="space-y-1 text-xs uppercase text-muted-foreground">
                           <span>{isRound ? 'Diameter (cm)' : 'Length (cm)'}</span>

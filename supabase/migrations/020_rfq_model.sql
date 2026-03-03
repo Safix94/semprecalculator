@@ -1,0 +1,1 @@
+ALTER TABLE rfqs ADD COLUMN IF NOT EXISTS model text;

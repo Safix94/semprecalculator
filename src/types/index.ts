@@ -88,6 +88,7 @@ export interface Rfq {
   thickness: number;
   quantity: number;
   shape: string;
+  model: string | null;
   usage_environment: UsageEnvironment | null;
   notes: string | null;
   status: RfqStatus;

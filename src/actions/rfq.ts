@@ -245,6 +245,7 @@ export async function createRfq(input: CreateRfqInput) {
     const normalizedRfqData = {
       ...rfqData,
       product_type: normalizedProductType,
+      model: rfqData.model?.trim() || null,
       material_table_top: rfqData.material_table_top?.trim() || null,
       material_table_foot: rfqData.material_table_foot?.trim() || null,
       finish_top: rfqData.finish_top?.trim() || null,
@@ -384,6 +385,10 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
       parsed.data.product_type === undefined
         ? undefined
         : parsed.data.product_type?.trim() || null,
+    model:
+      parsed.data.model === undefined
+        ? undefined
+        : parsed.data.model?.trim() || null,
     material_table_top:
       parsed.data.material_table_top === undefined
         ? undefined
@@ -447,7 +452,7 @@ export async function updateRfqDetails(rfqId: string, input: UpdateRfqDetailsInp
   const supabase = await createClient();
   const { data: existingRfq, error: existingRfqError } = await supabase
     .from('rfqs')
-    .select('id, shape')
+    .select('id, shape, model')
     .eq('id', rfqId)
     .single();
 
@@ -476,6 +481,9 @@ export async function updateRfqDetails(rfqId: string, input: UpdateRfqDetailsInp
   }
   if (parsed.data.thickness !== undefined) {
     updateData.thickness = parsed.data.thickness;
+  }
+  if (parsed.data.model !== undefined) {
+    updateData.model = parsed.data.model?.trim() || null;
   }
 
   const { data: rfq, error: updateError } = await supabase
@@ -753,7 +761,7 @@ export async function sendRfq(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(`
-      id, material, material_id, product_type, shape, usage_environment, finish, finish_top, finish_edge, finish_color, length, width, height, thickness, quantity,
+      id, material, material_id, product_type, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, length, width, height, thickness, quantity,
       material_table_top, material_table_foot, finish_table_top, finish_table_foot,
       material_details:materials!material_id(name)
     `)
@@ -870,6 +878,7 @@ export async function sendRfq(rfqId: string) {
       finishTop: rfq.finish_top,
       finishEdge: rfq.finish_edge,
       finishColor: rfq.finish_color,
+      model: rfq.model,
       invitePart: invite.invite_part ?? 'default',
       materialTableTop: rfq.material_table_top,
       finishTableTop: rfq.finish_table_top,
@@ -954,7 +963,7 @@ export async function sendToPricingTeam(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(
-      'id, material, shape, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+      'id, material, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
     )
     .eq('id', rfqId)
     .single();
@@ -993,6 +1002,7 @@ export async function sendToPricingTeam(rfqId: string) {
     isTableTopsProductType(rfq.product_type) && rfq.finish_edge ? `Edge finish: ${rfq.finish_edge}` : null,
     isTableTopsProductType(rfq.product_type) && rfq.finish_color ? `Color finish: ${rfq.finish_color}` : null,
     `Shape: ${rfq.shape}`,
+    rfq.model ? `Model: ${rfq.model}` : null,
     rfq.usage_environment ? `Use: ${rfq.usage_environment}` : null,
     rfq.finish ? `Finish: ${rfq.finish}` : null,
     `Quantity: ${Number(rfq.quantity ?? 1)}`,
@@ -1064,7 +1074,7 @@ export async function sendToPricingCrm(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(
-      'id, material, shape, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+      'id, material, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
     )
     .eq('id', rfqId)
     .single();
@@ -1136,6 +1146,7 @@ export async function sendToPricingCrm(rfqId: string) {
       ? `Table foot: ${rfq.material_table_foot}${rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}`
       : null,
     `Shape: ${rfq.shape}`,
+    rfq.model ? `Model: ${rfq.model}` : null,
     rfq.usage_environment ? `Use: ${rfq.usage_environment}` : null,
     rfq.finish ? `Finish: ${rfq.finish}` : null,
     `Quantity: ${Number(rfq.quantity ?? 1)}`,

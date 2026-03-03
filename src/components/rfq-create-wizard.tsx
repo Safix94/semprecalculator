@@ -59,6 +59,7 @@ interface WizardData {
   thickness: string;
   quantity: string;
   shape: string;
+  model: string;
   usage_environment: UsageEnvironment | '';
   notes: string;
 }
@@ -88,6 +89,7 @@ const initialData: WizardData = {
   thickness: '',
   quantity: '1',
   shape: 'Rectangular',
+  model: '',
   usage_environment: '',
   notes: '',
 };
@@ -751,6 +753,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       thickness: isRound ? thicknessValue : Number(data.thickness),
       quantity: Number(data.quantity),
       shape: data.shape,
+      model: isTablesType ? data.model.trim() || null : null,
       usage_environment: shouldShowUsageEnvironment ? data.usage_environment || null : null,
       notes: data.notes || null,
       supplier_ids: isTablesType ? undefined : data.supplier_ids,
@@ -1291,6 +1294,17 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
           {currentStep === detailsStepIndex && (
             <>
+              {isTablesType && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="model">Model (optional)</Label>
+                  <Input
+                    id="model"
+                    value={data.model}
+                    onChange={(e) => updateData('model', e.target.value)}
+                  />
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label htmlFor="shape">Shape *</Label>
                 <Select value={data.shape} onValueChange={handleShapeChange}>

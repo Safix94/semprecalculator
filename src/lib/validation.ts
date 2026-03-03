@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
 
+const usageEnvironmentSchema = z.enum(['Indoor', 'Outdoor']);
+
 const rfqSchemaBase = z.object({
   customer_name: z.string().optional().nullable(),
   product_type: z.string().optional().nullable(),
@@ -22,6 +24,7 @@ const rfqSchemaBase = z.object({
   thickness: z.coerce.number().min(0, 'Thickness must be zero or positive'),
   quantity: z.coerce.number().int('Quantity must be a whole number').positive('Quantity must be at least 1').default(1),
   shape: z.string().min(1, 'Shape is required'),
+  usage_environment: usageEnvironmentSchema.optional().nullable(),
   notes: z.string().optional().nullable(),
   supplier_ids: z.array(z.string().uuid()).optional(),
   supplier_ids_table_top: z.array(z.string().uuid()).optional(),

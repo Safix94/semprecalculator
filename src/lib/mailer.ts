@@ -127,6 +127,7 @@ export async function sendSupplierInviteEmail(params: {
   finishTop?: string | null;
   finishEdge?: string | null;
   finishColor?: string | null;
+  usageEnvironment?: 'Indoor' | 'Outdoor' | null;
   dimensionsText?: string;
   quantity?: number;
 }) {
@@ -187,6 +188,10 @@ export async function sendSupplierInviteEmail(params: {
 
   if (params.quantity !== undefined) {
     detailLines.push(`<li><strong>Quantity:</strong> ${params.quantity}</li>`);
+  }
+
+  if (params.usageEnvironment) {
+    detailLines.push(`<li><strong>Use:</strong> ${params.usageEnvironment}</li>`);
   }
 
   return sendEmail({

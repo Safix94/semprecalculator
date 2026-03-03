@@ -151,6 +151,10 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                 <dd className="mt-1 text-sm font-medium">{rfq.shape}</dd>
               </div>
               <div>
+                <dt className="text-xs uppercase text-muted-foreground">Use</dt>
+                <dd className="mt-1 text-sm font-medium">{rfq.usage_environment || 'N/A'}</dd>
+              </div>
+              <div>
                 <dt className="text-xs uppercase text-muted-foreground">
                   {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
                 </dt>

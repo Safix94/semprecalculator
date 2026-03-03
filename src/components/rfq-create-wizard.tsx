@@ -59,6 +59,7 @@ interface WizardData {
   thickness: string;
   quantity: string;
   shape: string;
+  usage_environment: string;
   notes: string;
 }
 
@@ -87,6 +88,7 @@ const initialData: WizardData = {
   thickness: '',
   quantity: '1',
   shape: 'Rectangular',
+  usage_environment: '',
   notes: '',
 };
 
@@ -102,6 +104,10 @@ function isAllowedAttachment(file: File): boolean {
 
 function normalizeFinishOptions(options: string[] | null | undefined): string[] {
   return (options ?? []).map((finish) => finish.trim()).filter((finish) => finish.length > 0);
+}
+
+function isGlassMaterialName(materialName: string | null | undefined): boolean {
+  return materialName?.trim().toLowerCase() === 'glass';
 }
 
 function getMaterialFinishOptionsWithFallback(
@@ -152,6 +158,14 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const isTablesType = isTablesProductType(data.product_type);
   const isTableTopsType = isTableTopsProductType(data.product_type);
   const showTableFoot = isTablesType && !isTableTopsType;
+  const isGlassMaterialSelected = useMemo(() => {
+    if (isTablesType) {
+      return isGlassMaterialName(data.material_table_top);
+    }
+
+    return isGlassMaterialName(data.material_name);
+  }, [data.material_name, data.material_table_top, isTablesType]);
+  const shouldShowUsageEnvironment = !isGlassMaterialSelected;
 
   const selectedMaterial = useMemo(
     () => materials.find((item) => item.id === data.material_id) ?? null,
@@ -239,6 +253,17 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       return { suppliers: [] as Supplier[], error: 'Leveranciers konden niet geladen worden.' };
     }
   }, []);
+
+  useEffect(() => {
+    if (shouldShowUsageEnvironment || !data.usage_environment) {
+      return;
+    }
+
+    setData((prev) => ({ ...prev, usage_environment: '' }));
+    if (errors.usage_environment) {
+      setErrors((prev) => ({ ...prev, usage_environment: [] }));
+    }
+  }, [data.usage_environment, errors.usage_environment, shouldShowUsageEnvironment]);
 
   useEffect(() => {
     if (!open) {
@@ -650,6 +675,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       if (!data.quantity || !Number.isInteger(quantityValue) || quantityValue < 1) {
         stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
       }
+
+      if (shouldShowUsageEnvironment && !data.usage_environment) {
+        stepErrors.usage_environment = ['Use is required'];
+      }
     }
 
     setErrors(stepErrors);
@@ -719,6 +748,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       thickness: isRound ? thicknessValue : Number(data.thickness),
       quantity: Number(data.quantity),
       shape: data.shape,
+      usage_environment: shouldShowUsageEnvironment ? data.usage_environment || null : null,
       notes: data.notes || null,
       supplier_ids: isTablesType ? undefined : data.supplier_ids,
       supplier_ids_table_top: isTablesType ? data.supplier_ids_table_top : undefined,
@@ -829,7 +859,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               <div className="space-y-1.5">
                 <Label htmlFor="product_type">Type</Label>
                 <Select
-                  value={data.product_type || undefined}
+                  value={data.product_type ?? ''}
                   onValueChange={handleProductTypeChange}
                   disabled={productTypesLoading || productTypes.length === 0}
                 >
@@ -1266,10 +1296,33 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   <SelectContent className="z-[70]">
                     <SelectItem value="Rectangular">Rectangular</SelectItem>
                     <SelectItem value="Round">Round</SelectItem>
+                    <SelectItem value="Oval">Oval</SelectItem>
+                    <SelectItem value="Square">Square</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.shape && <p className="text-destructive text-xs">{errors.shape[0]}</p>}
               </div>
+
+              {shouldShowUsageEnvironment && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="usage-environment">Use *</Label>
+                  <Select
+                    value={data.usage_environment}
+                    onValueChange={(value) => updateData('usage_environment', value)}
+                  >
+                    <SelectTrigger id="usage-environment" className="w-full" aria-invalid={Boolean(errors.usage_environment)}>
+                      <SelectValue placeholder="Select Indoor or Outdoor" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[70]">
+                      <SelectItem value="Indoor">Indoor</SelectItem>
+                      <SelectItem value="Outdoor">Outdoor</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.usage_environment && (
+                    <p className="text-destructive text-xs">{errors.usage_environment[0]}</p>
+                  )}
+                </div>
+              )}
 
               {data.shape === 'Round' ? (
                 <>
@@ -1321,7 +1374,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                       {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
                     </div>
                     <div className="space-y-1.5">
-                      <Label htmlFor="quantity">Aantal stuks *</Label>
+                      <Label htmlFor="quantity">Number of pieces *</Label>
                       <Input
                         id="quantity"
                         type="number"
@@ -1398,7 +1451,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="quantity">Aantal stuks *</Label>
+                    <Label htmlFor="quantity">Number of pieces *</Label>
                     <Input
                       id="quantity"
                       type="number"

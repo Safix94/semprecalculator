@@ -28,6 +28,7 @@ export type AuditAction =
   | 'EMAIL_SENT';
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';
+export type UsageEnvironment = 'Indoor' | 'Outdoor';
 
 export interface Supplier {
   id: string;
@@ -87,6 +88,7 @@ export interface Rfq {
   thickness: number;
   quantity: number;
   shape: string;
+  usage_environment: UsageEnvironment | null;
   notes: string | null;
   status: RfqStatus;
   created_at: string;

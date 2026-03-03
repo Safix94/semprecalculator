@@ -468,6 +468,10 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.shape}</dd>
                   </div>
                   <div>
+                    <dt className="text-xs uppercase text-muted-foreground">Use</dt>
+                    <dd className="mt-1 text-sm font-medium">{detail.rfq.usage_environment || '-'}</dd>
+                  </div>
+                  <div>
                     <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
                     <dd className="mt-1 text-sm font-medium">{detail.rfq.customer_name || '-'}</dd>
                   </div>

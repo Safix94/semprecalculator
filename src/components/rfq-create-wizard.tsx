@@ -765,7 +765,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       const result = await createRfq(input);
 
       if (result.error) {
-        console.error('Failed to create RFQ:', result.error);
+        const firstErrorMessage = Object.values(result.error)
+          .flatMap((value) => value ?? [])
+          .find((value): value is string => typeof value === 'string');
+        console.error('Failed to create RFQ:', firstErrorMessage ?? result.error, result.error);
         setErrors(result.error as Record<string, string[]>);
         return;
       }

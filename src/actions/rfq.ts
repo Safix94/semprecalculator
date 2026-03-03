@@ -255,18 +255,62 @@ export async function createRfq(input: CreateRfqInput) {
       finish_table_foot: rfqData.finish_table_foot?.trim() || null,
     };
 
-    const { data: rfq, error } = await supabase
+    const insertPayload = {
+      ...normalizedRfqData,
+      created_by: user.id,
+      status: 'draft',
+    };
+
+    let { data: rfq, error } = await supabase
       .from('rfqs')
-      .insert({
-        ...normalizedRfqData,
-        created_by: user.id,
-        status: 'draft',
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
+    // Backward-compatible fallback when deployments run before DB schema/cache catches up.
     if (error) {
-      return { error: { _form: [error.message] } };
+      const loweredMessage = error.message.toLowerCase();
+      const modelMissing =
+        loweredMessage.includes('model') &&
+        (loweredMessage.includes('does not exist') || loweredMessage.includes('schema cache'));
+      const usageEnvironmentMissing =
+        loweredMessage.includes('usage_environment') &&
+        (loweredMessage.includes('does not exist') || loweredMessage.includes('schema cache'));
+
+      if (modelMissing || usageEnvironmentMissing) {
+        const fallbackPayload = {
+          ...insertPayload,
+        } as typeof insertPayload & {
+          model?: typeof insertPayload.model;
+          usage_environment?: typeof insertPayload.usage_environment;
+        };
+        if (modelMissing) {
+          fallbackPayload.model = undefined;
+        }
+        if (usageEnvironmentMissing) {
+          fallbackPayload.usage_environment = undefined;
+        }
+
+        const retryResult = await supabase
+          .from('rfqs')
+          .insert(fallbackPayload)
+          .select()
+          .single();
+
+        rfq = retryResult.data;
+        error = retryResult.error;
+
+        if (!error && rfq) {
+          console.warn('RFQ created with compatibility fallback; run pending migrations.', {
+            modelMissing,
+            usageEnvironmentMissing,
+          });
+        }
+      }
+    }
+
+    if (error || !rfq) {
+      return { error: { _form: [error?.message ?? 'Failed to create RFQ'] } };
     }
 
     await logAuditEvent({

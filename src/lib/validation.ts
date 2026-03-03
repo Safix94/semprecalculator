@@ -20,7 +20,7 @@ const rfqSchemaBase = z.object({
   finish_table_foot: z.string().optional().nullable(),
   length: z.coerce.number().positive('Length must be positive'),
   width: z.coerce.number().positive('Width must be positive'),
-  height: z.coerce.number().positive('Height must be positive'),
+  height: z.coerce.number().min(0, 'Height must be zero or positive'),
   thickness: z.coerce.number().min(0, 'Thickness must be zero or positive'),
   quantity: z.coerce.number().int('Quantity must be a whole number').positive('Quantity must be at least 1').default(1),
   shape: z.string().min(1, 'Shape is required'),
@@ -88,15 +88,17 @@ const validateTableMaterials = (
     return;
   }
 
+  const isTableTopsType = isTableTopsProductType(data.product_type);
+
   if (!data.material_id_table_top) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['material_id_table_top'],
-      message: 'Table top material is required for Tables',
+      message: 'Table top material is required',
     });
   }
 
-  if (!data.material_id_table_foot) {
+  if (!isTableTopsType && !data.material_id_table_foot) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['material_id_table_foot'],
@@ -118,12 +120,13 @@ const validateTableSuppliers = (
   if (!isTablesType) {
     return;
   }
+  const isTableTopsType = isTableTopsProductType(data.product_type);
 
   const requireForCreate = options?.requireForCreate === true;
   const topProvided = data.supplier_ids_table_top !== undefined;
   const footProvided = data.supplier_ids_table_foot !== undefined;
 
-  if (!requireForCreate && !topProvided && !footProvided) {
+  if (!requireForCreate && !topProvided && (!footProvided || isTableTopsType)) {
     return;
   }
 
@@ -135,11 +138,39 @@ const validateTableSuppliers = (
     });
   }
 
-  if (!data.supplier_ids_table_foot || data.supplier_ids_table_foot.length === 0) {
+  if (!isTableTopsType && (!data.supplier_ids_table_foot || data.supplier_ids_table_foot.length === 0)) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['supplier_ids_table_foot'],
       message: 'Select at least one supplier for the table foot',
+    });
+  }
+};
+
+const validateHeightForProductType = (
+  data: { product_type?: string | null; height?: number },
+  ctx: z.RefinementCtx
+) => {
+  if (data.height === undefined) {
+    return;
+  }
+
+  if (isTableTopsProductType(data.product_type)) {
+    if (data.height < 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['height'],
+        message: 'Height must be zero or positive for Table tops',
+      });
+    }
+    return;
+  }
+
+  if (data.height <= 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['height'],
+      message: 'Height must be positive',
     });
   }
 };
@@ -180,6 +211,7 @@ export const createRfqSchema = rfqSchemaBase.superRefine((data, ctx) => {
   validateTableMaterials(data, ctx);
   validateTableSuppliers(data, ctx, { requireForCreate: true });
   validateTableTopsFinishes(data, ctx);
+  validateHeightForProductType(data, ctx);
 });
 
 export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) => {
@@ -187,6 +219,7 @@ export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) =
   validateTableMaterials(data, ctx);
   validateTableSuppliers(data, ctx);
   validateTableTopsFinishes(data, ctx);
+  validateHeightForProductType(data, ctx);
 });
 
 export const updateRfqDetailsSchema = z

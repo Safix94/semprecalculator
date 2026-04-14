@@ -32,16 +32,19 @@ import {
   linkSupplierToMaterial,
   unlinkSupplierFromMaterial,
 } from '@/actions/materials';
-import type { MaterialWithSuppliers, Supplier } from '@/types';
+import type { MaterialWithSuppliers, ProductType, Supplier } from '@/types';
 
 interface MaterialManagementProps {
   materials: MaterialWithSuppliers[];
   suppliers: Supplier[];
+  productTypes: ProductType[];
 }
 
 interface MaterialFormData {
   name: string;
+  product_type_ids: string[];
   finish_options: string;
+  finish_options_top: string;
   finish_options_edge: string;
   finish_options_color: string;
   supplier_ids: string[];
@@ -49,15 +52,27 @@ interface MaterialFormData {
 
 const initialFormData: MaterialFormData = {
   name: '',
+  product_type_ids: [],
   finish_options: '',
+  finish_options_top: '',
   finish_options_edge: '',
   finish_options_color: '',
   supplier_ids: [],
 };
 
 const MATERIALS_PER_PAGE = 5;
+const TABLES_PRODUCT_TYPE_VALUES = new Set(['tables', 'table tops', 'tabletops']);
+const TABLE_TOPS_PRODUCT_TYPE_VALUES = new Set(['table tops', 'tabletops']);
 
-export function MaterialManagement({ materials: initialMaterials, suppliers }: MaterialManagementProps) {
+function normalizeProductTypeName(name: string): string {
+  return name.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export function MaterialManagement({
+  materials: initialMaterials,
+  suppliers,
+  productTypes,
+}: MaterialManagementProps) {
   const router = useRouter();
   const [materials, setMaterials] = useState(initialMaterials);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialWithSuppliers | null>(null);
@@ -69,6 +84,13 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const productTypeNameById = new Map(productTypes.map((productType) => [productType.id, productType.name]));
+  const selectedProductTypeSet = new Set(formData.product_type_ids);
+  const selectedProductTypeNames = productTypes
+    .filter((productType) => selectedProductTypeSet.has(productType.id))
+    .map((productType) => normalizeProductTypeName(productType.name));
+  const hasTablesScope = selectedProductTypeNames.some((name) => TABLES_PRODUCT_TYPE_VALUES.has(name));
+  const hasTableTopsScope = selectedProductTypeNames.some((name) => TABLE_TOPS_PRODUCT_TYPE_VALUES.has(name));
 
   const getErrorMessage = (value: unknown, fallback: string) => {
     if (value instanceof Error && value.message) {
@@ -104,7 +126,9 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     setEditingMaterial(material);
     setFormData({
       name: material.name,
+      product_type_ids: material.product_type_ids ?? [],
       finish_options: material.finish_options.join(', '),
+      finish_options_top: material.finish_options_top?.join(', ') ?? '',
       finish_options_edge: material.finish_options_edge?.join(', ') ?? '',
       finish_options_color: material.finish_options_color?.join(', ') ?? '',
       supplier_ids: material.suppliers?.map(s => s.id) || [],
@@ -119,22 +143,30 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
     const parseFinishOptions = (s: string) =>
       s.split(',').map((x) => x.trim()).filter((x) => x.length > 0);
 
+    if (formData.product_type_ids.length === 0) {
+      setError('Selecteer minstens 1 product type.');
+      return;
+    }
+
+    setLoading(true);
+
     const finishOptions = parseFinishOptions(formData.finish_options);
+    const finishOptionsTop = parseFinishOptions(formData.finish_options_top);
     const finishOptionsEdge = parseFinishOptions(formData.finish_options_edge);
     const finishOptionsColor = parseFinishOptions(formData.finish_options_color);
 
     const input = {
       name: formData.name,
+      product_type_ids: formData.product_type_ids,
       finish_options: finishOptions,
-      finish_options_top: [] as string[],
-      finish_options_edge: finishOptionsEdge,
-      finish_options_color: finishOptionsColor,
+      finish_options_top: hasTablesScope ? finishOptionsTop : ([] as string[]),
+      finish_options_edge: hasTableTopsScope ? finishOptionsEdge : ([] as string[]),
+      finish_options_color: hasTableTopsScope ? finishOptionsColor : ([] as string[]),
       supplier_ids: formData.supplier_ids,
     };
 
@@ -147,6 +179,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
           finish_options_top: input.finish_options_top,
           finish_options_edge: input.finish_options_edge,
           finish_options_color: input.finish_options_color,
+          product_type_ids: input.product_type_ids,
           supplier_ids: input.supplier_ids,
         });
       } else {
@@ -170,6 +203,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
                   finish_options_top: result.data.finish_options_top ?? [],
                   finish_options_edge: result.data.finish_options_edge ?? [],
                   finish_options_color: result.data.finish_options_color ?? [],
+                  product_type_ids: result.data.product_type_ids ?? [],
                   suppliers: selectedSuppliers,
                 }
               : material
@@ -182,6 +216,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
             finish_options_top: result.data.finish_options_top ?? [],
             finish_options_edge: result.data.finish_options_edge ?? [],
             finish_options_color: result.data.finish_options_color ?? [],
+            product_type_ids: result.data.product_type_ids ?? [],
             suppliers: selectedSuppliers,
           },
           ...prev,
@@ -218,6 +253,13 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleProductTypeToggle = (productTypeId: string, checked: boolean) => {
+    const updatedProductTypeIds = checked
+      ? [...new Set([...formData.product_type_ids, productTypeId])]
+      : formData.product_type_ids.filter((id) => id !== productTypeId);
+    updateFormData('product_type_ids', updatedProductTypeIds);
   };
 
   const handleSupplierToggle = (supplierId: string, checked: boolean) => {
@@ -298,7 +340,11 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
     }
 
     const supplierNames = (material.suppliers ?? []).map((supplier) => supplier.name).join(' ');
-    const searchableText = `${material.name} ${material.finish_options.join(' ')} ${supplierNames}`.toLowerCase();
+    const productTypeNames = (material.product_type_ids ?? [])
+      .map((productTypeId) => productTypeNameById.get(productTypeId) ?? '')
+      .join(' ');
+    const searchableText =
+      `${material.name} ${material.finish_options.join(' ')} ${supplierNames} ${productTypeNames}`.toLowerCase();
     return searchableText.includes(normalizedQuery);
   });
 
@@ -334,7 +380,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
         <Input
           value={searchQuery}
           onChange={(e) => handleSearchChange(e.target.value)}
-          placeholder="Search by material, finish, or supplier"
+          placeholder="Search by material, finish, product type, or supplier"
         />
       </div>
 
@@ -344,6 +390,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead>Name</TableHead>
+                <TableHead>Product types</TableHead>
                 <TableHead>Finish options</TableHead>
                 <TableHead>Suppliers</TableHead>
                 <TableHead>Actions</TableHead>
@@ -353,6 +400,19 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               {paginatedMaterials.map((material) => (
                 <TableRow key={material.id}>
                   <TableCell className="font-medium">{material.name}</TableCell>
+                  <TableCell>
+                    {material.product_type_ids.length > 0 ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {material.product_type_ids.map((productTypeId) => (
+                          <span key={productTypeId} className="text-xs rounded-md border px-2 py-1">
+                            {productTypeNameById.get(productTypeId) ?? 'Unknown'}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">No product types</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {material.finish_options.length > 0 ? material.finish_options.join(', ') : 'No finishes'}
                   </TableCell>
@@ -413,7 +473,7 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               ))}
               {filteredMaterials.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     {materials.length === 0 ? 'No materials created yet.' : 'No materials match your search.'}
                   </TableCell>
                 </TableRow>
@@ -475,52 +535,106 @@ export function MaterialManagement({ materials: initialMaterials, suppliers }: M
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="finish-options">
-                  Finish options (comma-separated) (optional)
-                </Label>
-                <p className="text-muted-foreground text-xs">
-                  Used for the Finish (Table top) field and for the Top finish dropdown in the wizard.
-                </p>
-                <Input
-                  id="finish-options"
-                  value={formData.finish_options}
-                  onChange={(e) => updateFormData('finish_options', e.target.value)}
-                  placeholder="e.g. Polished, Matte, Frosted"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="finish-options-edge">
-                  Edge finish options (comma-separated) (optional)
-                </Label>
-                <p className="text-muted-foreground text-xs">
-                  Used for the Edge finish dropdown when this material is selected as table top.
-                </p>
-                <Input
-                  id="finish-options-edge"
-                  value={formData.finish_options_edge}
-                  onChange={(e) => updateFormData('finish_options_edge', e.target.value)}
-                  placeholder="e.g. Straight, Beveled"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="finish-options-color">
-                  Color finish options (comma-separated) (optional)
-                </Label>
-                <p className="text-muted-foreground text-xs">
-                  Used for the Color finish dropdown when this material is selected as table top.
-                </p>
-                <Input
-                  id="finish-options-color"
-                  value={formData.finish_options_color}
-                  onChange={(e) => updateFormData('finish_options_color', e.target.value)}
-                  placeholder="e.g. White, Black"
-                />
+            <div className="space-y-3">
+              <Label>Product types *</Label>
+              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                {productTypes.map((productType) => (
+                  <div key={productType.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`product-type-${productType.id}`}
+                      checked={formData.product_type_ids.includes(productType.id)}
+                      onCheckedChange={(checked) => handleProductTypeToggle(productType.id, checked === true)}
+                    />
+                    <Label htmlFor={`product-type-${productType.id}`} className="text-sm">
+                      {productType.name}
+                    </Label>
+                  </div>
+                ))}
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="finish-options">
+                General finish options (comma-separated) (optional)
+              </Label>
+              <p className="text-muted-foreground text-xs">
+                Used for the standard Finish dropdown for this material.
+              </p>
+              <Input
+                id="finish-options"
+                value={formData.finish_options}
+                onChange={(e) => updateFormData('finish_options', e.target.value)}
+                placeholder="e.g. Polished, Matte, Frosted"
+              />
+            </div>
+
+            {hasTablesScope && (
+              <div className="space-y-4 rounded-md border p-4">
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium">Advanced table/table-top options</h3>
+                  <p className="text-xs text-muted-foreground">
+                    These options are only used for table-related product types.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="finish-options-top">
+                      Top finish options (comma-separated) (optional)
+                    </Label>
+                    <p className="text-muted-foreground text-xs">
+                      Optional override for top finishes. When empty, general finish options are used.
+                    </p>
+                    <Input
+                      id="finish-options-top"
+                      value={formData.finish_options_top}
+                      onChange={(e) => updateFormData('finish_options_top', e.target.value)}
+                      placeholder="e.g. Honed, Brushed"
+                    />
+                  </div>
+
+                  {hasTableTopsScope && (
+                    <>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-options-edge">
+                          Edge finish options (comma-separated) (optional)
+                        </Label>
+                        <p className="text-muted-foreground text-xs">
+                          Used for the Edge finish dropdown for Table tops.
+                        </p>
+                        <Input
+                          id="finish-options-edge"
+                          value={formData.finish_options_edge}
+                          onChange={(e) => updateFormData('finish_options_edge', e.target.value)}
+                          placeholder="e.g. Straight, Beveled"
+                        />
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="finish-options-color">
+                          Color finish options (comma-separated) (optional)
+                        </Label>
+                        <p className="text-muted-foreground text-xs">
+                          Used for the Color finish dropdown for Table tops.
+                        </p>
+                        <Input
+                          id="finish-options-color"
+                          value={formData.finish_options_color}
+                          onChange={(e) => updateFormData('finish_options_color', e.target.value)}
+                          placeholder="e.g. White, Black"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {!hasTablesScope && (
+              <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                Advanced table/table-top finish options are hidden until you select `Tables` or `Table tops`.
+              </div>
+            )}
 
             <div className="space-y-3">
               <Label>Link suppliers (optional)</Label>

@@ -46,6 +46,7 @@ export interface Material {
   finish_options_top?: string[];
   finish_options_edge?: string[];
   finish_options_color?: string[];
+  product_type_ids: string[];
   is_active: boolean;
   created_at: string;
   updated_at: string;

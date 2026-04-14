@@ -37,7 +37,7 @@ export default async function ManagementPage() {
           {currentUser.role === 'admin' && <TabsTrigger value="users">Users</TabsTrigger>}
         </TabsList>
         <TabsContent value="materials">
-          <MaterialManagement materials={materials} suppliers={suppliers} />
+          <MaterialManagement materials={materials} suppliers={suppliers} productTypes={productTypes} />
         </TabsContent>
         <TabsContent value="suppliers">
           <SupplierManagement suppliers={suppliers} materials={materials} />

@@ -6,12 +6,15 @@ import { getCurrentUser, requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
 import type { Material, MaterialWithSuppliers, Supplier } from '@/types';
 
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+
 export interface CreateMaterialInput {
   name: string;
   finish_options: string[];
   finish_options_top?: string[];
   finish_options_edge?: string[];
   finish_options_color?: string[];
+  product_type_ids: string[];
   supplier_ids?: string[];
 }
 
@@ -21,8 +24,89 @@ export interface UpdateMaterialInput {
   finish_options_top?: string[];
   finish_options_edge?: string[];
   finish_options_color?: string[];
+  product_type_ids?: string[];
   is_active?: boolean;
   supplier_ids?: string[];
+}
+
+interface MaterialQueryRow {
+  id: string;
+  name: string;
+  finish_options: string[];
+  finish_options_top?: string[];
+  finish_options_edge?: string[];
+  finish_options_color?: string[];
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  material_suppliers?: Array<{ supplier: unknown }> | null;
+  material_product_types?: Array<{ product_type_id: string }> | null;
+}
+
+function normalizeIds(ids: string[] | undefined): string[] {
+  return [...new Set((ids ?? []).map((value) => value.trim()).filter((value) => value.length > 0))];
+}
+
+function mapMaterialRow(material: MaterialQueryRow): Material {
+  return {
+    id: material.id,
+    name: material.name,
+    finish_options: material.finish_options,
+    finish_options_top: material.finish_options_top ?? [],
+    finish_options_edge: material.finish_options_edge ?? [],
+    finish_options_color: material.finish_options_color ?? [],
+    product_type_ids: (material.material_product_types ?? []).map((item) => item.product_type_id),
+    is_active: material.is_active,
+    created_at: material.created_at,
+    updated_at: material.updated_at,
+  };
+}
+
+async function syncMaterialProductTypes(
+  supabase: SupabaseServerClient,
+  materialId: string,
+  productTypeIds: string[]
+) {
+  const { data: existingLinks, error: fetchLinksError } = await supabase
+    .from('material_product_types')
+    .select('product_type_id')
+    .eq('material_id', materialId);
+
+  if (fetchLinksError) {
+    return { error: fetchLinksError.message };
+  }
+
+  const requestedIds = normalizeIds(productTypeIds);
+  const existingIdSet = new Set((existingLinks ?? []).map((link) => link.product_type_id));
+  const requestedIdSet = new Set(requestedIds);
+
+  const toAdd = requestedIds.filter((productTypeId) => !existingIdSet.has(productTypeId));
+  const toRemove = [...existingIdSet].filter((productTypeId) => !requestedIdSet.has(productTypeId));
+
+  if (toAdd.length > 0) {
+    const rowsToInsert = toAdd.map((productTypeId) => ({
+      material_id: materialId,
+      product_type_id: productTypeId,
+    }));
+    const { error: addError } = await supabase.from('material_product_types').insert(rowsToInsert);
+    if (addError) {
+      return { error: addError.message };
+    }
+  }
+
+  if (toRemove.length > 0) {
+    const { error: removeError } = await supabase
+      .from('material_product_types')
+      .delete()
+      .eq('material_id', materialId)
+      .in('product_type_id', toRemove);
+
+    if (removeError) {
+      return { error: removeError.message };
+    }
+  }
+
+  return { error: null as string | null };
 }
 
 /**
@@ -44,6 +128,9 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
             email,
             is_active
           )
+        ),
+        material_product_types (
+          product_type_id
         )
       `)
       .eq('is_active', true)
@@ -54,31 +141,10 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
       return [];
     }
 
-    type MaterialQueryRow = {
-      id: string;
-      name: string;
-      finish_options: string[];
-      finish_options_top?: string[];
-      finish_options_edge?: string[];
-      finish_options_color?: string[];
-      is_active: boolean;
-      created_at: string;
-      updated_at: string;
-      material_suppliers?: Array<{ supplier: unknown }> | null;
-    };
-
     // Transform the data to group suppliers under each material
     const materialsWithSuppliers: MaterialWithSuppliers[] = ((materials ?? []) as MaterialQueryRow[]).map(
       (material) => ({
-        id: material.id,
-        name: material.name,
-        finish_options: material.finish_options,
-        finish_options_top: material.finish_options_top ?? [],
-        finish_options_edge: material.finish_options_edge ?? [],
-        finish_options_color: material.finish_options_color ?? [],
-        is_active: material.is_active,
-        created_at: material.created_at,
-        updated_at: material.updated_at,
+        ...mapMaterialRow(material),
         suppliers: (material.material_suppliers ?? [])
           .map((ms) => ms.supplier)
           .filter((supplier): supplier is Supplier => Boolean(supplier)),
@@ -108,7 +174,12 @@ export async function getActiveMaterials(): Promise<{ data: Material[] } | { err
     const supabase = await createClient();
     const { data, error } = await supabase
       .from('materials')
-      .select('*')
+      .select(`
+        *,
+        material_product_types (
+          product_type_id
+        )
+      `)
       .eq('is_active', true)
       .order('name');
 
@@ -117,7 +188,10 @@ export async function getActiveMaterials(): Promise<{ data: Material[] } | { err
       return { error: 'Materialen konden niet geladen worden.' };
     }
 
-    return { data: (data ?? []) as Material[] };
+    const normalizedMaterials = ((data ?? []) as MaterialQueryRow[]).map((material) =>
+      mapMaterialRow(material)
+    );
+    return { data: normalizedMaterials };
   } catch (error) {
     console.error('Failed to fetch active materials:', error);
     return { error: 'Materialen konden niet geladen worden.' };
@@ -161,6 +235,11 @@ export async function getSuppliersForMaterial(
 export async function createMaterial(input: CreateMaterialInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
+  const normalizedProductTypeIds = normalizeIds(input.product_type_ids);
+
+  if (normalizedProductTypeIds.length === 0) {
+    return { error: { _form: ['Select at least one product type.'] } };
+  }
 
   const { data: insertedMaterial, error } = await supabase
     .from('materials')
@@ -210,6 +289,19 @@ export async function createMaterial(input: CreateMaterialInput) {
     material = fetchedMaterial as Material;
   }
 
+  const productTypeLinkResult = await syncMaterialProductTypes(
+    supabase,
+    material.id,
+    normalizedProductTypeIds
+  );
+  if (productTypeLinkResult.error) {
+    return {
+      error: {
+        _form: [`Material created but failed to link product types: ${productTypeLinkResult.error}`],
+      },
+    };
+  }
+
   // Link suppliers if provided
   if (input.supplier_ids && input.supplier_ids.length > 0) {
     const materialSupplierInserts = input.supplier_ids.map(supplierId => ({
@@ -226,17 +318,45 @@ export async function createMaterial(input: CreateMaterialInput) {
     }
   }
 
+  const { data: materialWithRelations, error: materialFetchError } = await supabase
+    .from('materials')
+    .select(`
+      *,
+      material_product_types (
+        product_type_id
+      )
+    `)
+    .eq('id', material.id)
+    .maybeSingle();
+
+  if (materialFetchError || !materialWithRelations) {
+    return {
+      error: {
+        _form: [
+          materialFetchError?.message ??
+            'Material was created but could not be read back with product types. Please refresh.',
+        ],
+      },
+    };
+  }
+
+  const normalizedMaterial = mapMaterialRow(materialWithRelations as MaterialQueryRow);
+
   await logAuditEvent({
     actorType: user.role,
     actorId: user.id,
     action: 'MATERIAL_CREATED',
     entityType: 'material',
     entityId: material.id,
-    metadata: { materialName: material.name, supplierIds: input.supplier_ids }
+    metadata: {
+      materialName: material.name,
+      supplierIds: input.supplier_ids,
+      productTypeIds: normalizedProductTypeIds,
+    },
   });
 
   revalidatePath('/admin/management');
-  return { data: material };
+  return { data: normalizedMaterial };
 }
 
 /**
@@ -245,7 +365,7 @@ export async function createMaterial(input: CreateMaterialInput) {
 export async function updateMaterial(materialId: string, input: UpdateMaterialInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
-  const { supplier_ids, ...materialFields } = input;
+  const { supplier_ids, product_type_ids, ...materialFields } = input;
   const hasMaterialFieldUpdates = Object.keys(materialFields).length > 0;
   let material: Material | null = null;
 
@@ -317,10 +437,31 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
     }
   }
 
+  if (product_type_ids !== undefined) {
+    const normalizedProductTypeIds = normalizeIds(product_type_ids);
+    if (normalizedProductTypeIds.length === 0) {
+      return { error: { _form: ['Select at least one product type.'] } };
+    }
+
+    const productTypeLinkResult = await syncMaterialProductTypes(
+      supabase,
+      materialId,
+      normalizedProductTypeIds
+    );
+    if (productTypeLinkResult.error) {
+      return { error: { _form: [productTypeLinkResult.error] } };
+    }
+  }
+
   if (!material) {
     const { data: currentMaterial, error: fetchMaterialError } = await supabase
       .from('materials')
-      .select('*')
+      .select(`
+        *,
+        material_product_types (
+          product_type_id
+        )
+      `)
       .eq('id', materialId)
       .maybeSingle();
 
@@ -334,7 +475,30 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
       };
     }
 
-    material = currentMaterial as Material;
+    material = mapMaterialRow(currentMaterial as MaterialQueryRow);
+  } else {
+    const { data: currentMaterial, error: fetchMaterialError } = await supabase
+      .from('materials')
+      .select(`
+        *,
+        material_product_types (
+          product_type_id
+        )
+      `)
+      .eq('id', materialId)
+      .maybeSingle();
+
+    if (fetchMaterialError || !currentMaterial) {
+      return {
+        error: {
+          _form: [
+            fetchMaterialError?.message ?? 'Material could not be found after update.',
+          ],
+        },
+      };
+    }
+
+    material = mapMaterialRow(currentMaterial as MaterialQueryRow);
   }
 
   await logAuditEvent({
@@ -343,9 +507,11 @@ export async function updateMaterial(materialId: string, input: UpdateMaterialIn
     action: 'MATERIAL_UPDATED',
     entityType: 'material',
     entityId: materialId,
-    metadata: supplier_ids === undefined
-      ? { changes: materialFields }
-      : { changes: materialFields, supplierIds: supplier_ids }
+    metadata: {
+      changes: materialFields,
+      supplierIds: supplier_ids,
+      productTypeIds: product_type_ids,
+    },
   });
 
   revalidatePath('/admin/management');

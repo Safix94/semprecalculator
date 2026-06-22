@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getFinishOptions } from '@/actions/finish-options';
 import { getActiveMaterials, getSuppliersForMaterial } from '@/actions/materials';
 import { getProductTypes } from '@/actions/product-types';
 import { createRfq, uploadAttachment } from '@/actions/rfq';
@@ -28,7 +29,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import type { Material, ProductType, Supplier, UsageEnvironment } from '@/types';
+import type { FinishOption, Material, ProductType, Supplier, UsageEnvironment } from '@/types';
 
 interface RfqCreateWizardProps {
   children?: React.ReactNode;
@@ -147,6 +148,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [productTypesLoading, setProductTypesLoading] = useState(false);
   const [productTypesError, setProductTypesError] = useState<string | null>(null);
 
+  const [finishOptions, setFinishOptions] = useState<FinishOption[]>([]);
+  const [finishOptionsLoading, setFinishOptionsLoading] = useState(false);
+  const [finishOptionsError, setFinishOptionsError] = useState<string | null>(null);
+
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
   const [suppliersError, setSuppliersError] = useState<string | null>(null);
@@ -210,7 +215,35 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     [availableMaterialsForType, data.material_id_table_foot]
   );
 
-  const availableFinishOptions = normalizeFinishOptions(selectedMaterial?.finish_options);
+  const finishOptionNames = useMemo(
+    () => normalizeFinishOptions(finishOptions.map((finishOption) => finishOption.name)),
+    [finishOptions]
+  );
+  const buildRequestFinishOptions = useCallback(
+    (material: Material | null): string[] => {
+      const seen = new Set<string>();
+      const options: string[] = [];
+
+      for (const finish of [
+        ...normalizeFinishOptions(material?.finish_options),
+        ...finishOptionNames,
+      ]) {
+        const key = finish.toLowerCase();
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        options.push(finish);
+      }
+
+      return options;
+    },
+    [finishOptionNames]
+  );
+  const availableFinishOptions = useMemo(
+    () => buildRequestFinishOptions(selectedMaterial),
+    [buildRequestFinishOptions, selectedMaterial]
+  );
   const tableTopFinishOptions = normalizeFinishOptions(selectedTableTopMaterial?.finish_options);
   const tableTopMaterialTopOptions = getMaterialFinishOptionsWithFallback(
     selectedTableTopMaterial,
@@ -270,6 +303,22 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     }
   }, []);
 
+  const loadFinishOptions = useCallback(async () => {
+    setFinishOptionsLoading(true);
+    setFinishOptionsError(null);
+
+    try {
+      const result = await getFinishOptions();
+      setFinishOptions(result);
+    } catch (error) {
+      console.error('Failed to load finish options:', error);
+      setFinishOptions([]);
+      setFinishOptionsError('Finishes could not be loaded.');
+    } finally {
+      setFinishOptionsLoading(false);
+    }
+  }, []);
+
   const loadSuppliersForMaterial = useCallback(async (materialId: string) => {
     try {
       const result = await getSuppliersForMaterial(materialId);
@@ -300,8 +349,32 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       return;
     }
 
-    void Promise.all([loadMaterials(), loadProductTypeOptions()]);
-  }, [open, loadMaterials, loadProductTypeOptions]);
+    void Promise.all([loadMaterials(), loadProductTypeOptions(), loadFinishOptions()]);
+  }, [open, loadFinishOptions, loadMaterials, loadProductTypeOptions]);
+
+  useEffect(() => {
+    if (isTablesType || isTableTopsType || !selectedMaterial) {
+      return;
+    }
+
+    if (availableFinishOptions.length === 0) {
+      if (data.finish !== 'N.v.t.') {
+        setData((prev) => ({ ...prev, finish: 'N.v.t.' }));
+      }
+      return;
+    }
+
+    if (!data.finish) {
+      return;
+    }
+
+    const selectedFinishStillAvailable = availableFinishOptions.some(
+      (finish) => finish.toLowerCase() === data.finish.toLowerCase()
+    );
+    if (!selectedFinishStillAvailable) {
+      setData((prev) => ({ ...prev, finish: '' }));
+    }
+  }, [availableFinishOptions, data.finish, isTableTopsType, isTablesType, selectedMaterial]);
 
   useEffect(() => {
     if (isTablesType) {
@@ -524,7 +597,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     const material = availableMaterialsForType.find((item) => item.id === materialId);
     if (!material) return;
 
-    const materialFinishOptions = normalizeFinishOptions(material.finish_options);
+    const materialFinishOptions = buildRequestFinishOptions(material);
 
     updateData('material_id', materialId);
     updateData('material_name', material.name);
@@ -901,6 +974,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setTableFootSuppliersError(null);
     setMaterialsError(null);
     setProductTypesError(null);
+    setFinishOptionsError(null);
     setAttachments([]);
   };
   const stepTitles = showTableFoot
@@ -1028,13 +1102,16 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                           ))}
                         </SelectContent>
                       </Select>
+                      {finishOptionsError && <p className="text-destructive text-xs">{finishOptionsError}</p>}
                       {errors.finish && <p className="text-destructive text-xs">{errors.finish[0]}</p>}
                     </div>
                   )}
 
                   {selectedMaterial && !isTableTopsType && availableFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
-                      No finishes are configured for this material.
+                      {finishOptionsLoading
+                        ? 'Loading finishes...'
+                        : 'No active finishes are available. Add finishes under Management > Finishes.'}
                     </p>
                   )}
                 </>

@@ -5,6 +5,7 @@ import { submitQuoteSchema } from '@/lib/validation';
 import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
 import { calculateAllPricing } from '@/lib/pricing';
 import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
+import { getEffectivePricingSettings } from './pricing-settings';
 import {
   checkSupplierLinkRateLimits,
   getSupplierLinkRequestContext,
@@ -326,8 +327,10 @@ export async function submitQuote(
   }
 
   // Server-side pricing calculation
+  const pricingSettings = await getEffectivePricingSettings();
   const { shippingCostCalculated, finalPriceCalculated } =
-    calculateAllPricing(basePrice, volumeM3);
+    calculateAllPricing(basePrice, volumeM3, pricingSettings);
+
   const { data: existingQuote, error: existingQuoteError } = await supabase
     .from('rfq_quotes')
     .select('*')

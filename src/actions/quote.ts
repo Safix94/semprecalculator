@@ -5,6 +5,14 @@ import { submitQuoteSchema } from '@/lib/validation';
 import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
 import { calculateAllPricing } from '@/lib/pricing';
 import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
+import {
+  checkSupplierLinkRateLimits,
+  getSupplierLinkRequestContext,
+} from '@/lib/rate-limit';
+import type {
+  SupplierLinkRateLimitAction,
+  SupplierLinkRequestContext,
+} from '@/lib/rate-limit';
 import { logAuditEvent } from './audit';
 import type { SubmitQuoteInput } from '@/lib/validation';
 import type { RfqQuote } from '@/types';
@@ -20,6 +28,38 @@ function maskSupplierToken(token: string): string {
 
 function isValidSupplierToken(token: string): boolean {
   return SUPPLIER_TOKEN_REGEX.test(token);
+}
+
+async function enforceSupplierLinkRateLimit(
+  action: SupplierLinkRateLimitAction,
+  rfqId: string,
+  tokenHash: string,
+  requestContext: SupplierLinkRequestContext
+): Promise<string | null> {
+  const result = await checkSupplierLinkRateLimits({
+    action,
+    requestContext,
+    scopes: [
+      { name: 'ip', parts: [rfqId, requestContext.ipHash] },
+      { name: 'token', parts: [rfqId, tokenHash] },
+    ],
+  });
+
+  return result.allowed ? null : result.error;
+}
+
+async function enforceMalformedSupplierLinkRateLimit(
+  action: SupplierLinkRateLimitAction,
+  rfqId: string,
+  requestContext: SupplierLinkRequestContext
+): Promise<string | null> {
+  const result = await checkSupplierLinkRateLimits({
+    action,
+    requestContext,
+    scopes: [{ name: 'ip-malformed', parts: [rfqId, requestContext.ipHash] }],
+  });
+
+  return result.allowed ? null : result.error;
 }
 
 async function getInviteLookupDiagnostics(
@@ -60,6 +100,7 @@ async function getInviteLookupDiagnostics(
 export async function validateSupplierToken(rfqId: string, token: string) {
   const supabase = createServiceRoleClient();
   const normalizedToken = token.trim();
+  const requestContext = await getSupplierLinkRequestContext();
 
   try {
     assertTokenHashingConfigured();
@@ -69,6 +110,15 @@ export async function validateSupplierToken(rfqId: string, token: string) {
   }
 
   if (!isValidSupplierToken(normalizedToken)) {
+    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
+      'supplier_token_validate',
+      rfqId,
+      requestContext
+    );
+    if (rateLimitError) {
+      return { error: rateLimitError };
+    }
+
     console.warn('Supplier token validation failed: malformed token.', {
       rfqId,
       token: maskSupplierToken(normalizedToken),
@@ -77,6 +127,15 @@ export async function validateSupplierToken(rfqId: string, token: string) {
   }
 
   const tokenHash = hashToken(normalizedToken);
+  const rateLimitError = await enforceSupplierLinkRateLimit(
+    'supplier_token_validate',
+    rfqId,
+    tokenHash,
+    requestContext
+  );
+  if (rateLimitError) {
+    return { error: rateLimitError };
+  }
 
   // Find invite by token hash and rfq
   const { data: invite, error } = await supabase
@@ -155,6 +214,8 @@ export async function validateSupplierToken(rfqId: string, token: string) {
     entityType: 'rfq_invite',
     entityId: invite.id,
     metadata: { rfqId },
+    ip: requestContext.ip,
+    userAgent: requestContext.userAgent,
   });
 
   return {
@@ -177,6 +238,7 @@ export async function submitQuote(
 ) {
   const supabase = createServiceRoleClient();
   const normalizedToken = token.trim();
+  const requestContext = await getSupplierLinkRequestContext();
 
   try {
     assertTokenHashingConfigured();
@@ -186,6 +248,15 @@ export async function submitQuote(
   }
 
   if (!isValidSupplierToken(normalizedToken)) {
+    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
+      'supplier_quote_submit',
+      rfqId,
+      requestContext
+    );
+    if (rateLimitError) {
+      return { error: rateLimitError };
+    }
+
     console.warn('Quote submission blocked: malformed token.', {
       rfqId,
       token: maskSupplierToken(normalizedToken),
@@ -195,6 +266,15 @@ export async function submitQuote(
 
   // Validate token first
   const tokenHash = hashToken(normalizedToken);
+  const rateLimitError = await enforceSupplierLinkRateLimit(
+    'supplier_quote_submit',
+    rfqId,
+    tokenHash,
+    requestContext
+  );
+  if (rateLimitError) {
+    return { error: rateLimitError };
+  }
 
   const { data: invite, error: inviteError } = await supabase
     .from('rfq_invites')
@@ -377,6 +457,8 @@ export async function submitQuote(
       shippingCostCalculated,
       finalPriceCalculated,
     },
+    ip: requestContext.ip,
+    userAgent: requestContext.userAgent,
   });
 
   // Notify sales user who created the RFQ
@@ -420,6 +502,7 @@ export async function submitQuote(
 export async function getAttachmentUrl(rfqId: string, token: string, storagePath: string) {
   const supabase = createServiceRoleClient();
   const normalizedToken = token.trim();
+  const requestContext = await getSupplierLinkRequestContext();
 
   try {
     assertTokenHashingConfigured();
@@ -429,6 +512,15 @@ export async function getAttachmentUrl(rfqId: string, token: string, storagePath
   }
 
   if (!isValidSupplierToken(normalizedToken)) {
+    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
+      'supplier_attachment_url',
+      rfqId,
+      requestContext
+    );
+    if (rateLimitError) {
+      return { error: rateLimitError };
+    }
+
     console.warn('Attachment access blocked: malformed token.', {
       rfqId,
       token: maskSupplierToken(normalizedToken),
@@ -438,11 +530,20 @@ export async function getAttachmentUrl(rfqId: string, token: string, storagePath
   }
 
   const tokenHash = hashToken(normalizedToken);
+  const rateLimitError = await enforceSupplierLinkRateLimit(
+    'supplier_attachment_url',
+    rfqId,
+    tokenHash,
+    requestContext
+  );
+  if (rateLimitError) {
+    return { error: rateLimitError };
+  }
 
   // Validate token
   const { data: invite } = await supabase
     .from('rfq_invites')
-    .select('id')
+    .select('id, supplier_id, expires_at')
     .eq('rfq_id', rfqId)
     .eq('token_hash', tokenHash)
     .is('revoked_at', null)
@@ -450,6 +551,10 @@ export async function getAttachmentUrl(rfqId: string, token: string, storagePath
 
   if (!invite) {
     return { error: 'Access denied' };
+  }
+
+  if (new Date(invite.expires_at) < new Date()) {
+    return { error: 'This link has expired' };
   }
 
   // Verify attachment belongs to this RFQ

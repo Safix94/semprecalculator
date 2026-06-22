@@ -6,6 +6,11 @@ import { assertTokenHashingConfigured, hashToken, isTokenHashingConfigError } fr
 import { getPricingTeamEmailsFromEnv, sendInternalSupplierCommentEmail } from '@/lib/mailer';
 import { rfqCommentBodySchema } from '@/lib/validation';
 import { logAuditEvent } from '@/actions/audit';
+import {
+  checkSupplierLinkRateLimits,
+  getSupplierLinkRequestContext,
+} from '@/lib/rate-limit';
+import type { SupplierLinkRequestContext } from '@/lib/rate-limit';
 import type { RfqComment } from '@/types';
 
 const SUPPLIER_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
@@ -23,7 +28,11 @@ function isValidSupplierToken(token: string): boolean {
 
 async function resolveSupplierInvite(
   rfqId: string,
-  token: string
+  token: string,
+  options?: {
+    rateLimitCommentSubmit?: boolean;
+    requestContext?: SupplierLinkRequestContext;
+  }
 ): Promise<{ data: SupplierInviteAccess } | ActionError> {
   const supabase = createServiceRoleClient();
   const normalizedToken = token.trim();
@@ -38,10 +47,40 @@ async function resolveSupplierInvite(
   }
 
   if (!isValidSupplierToken(normalizedToken)) {
+    if (options?.rateLimitCommentSubmit) {
+      const requestContext = options.requestContext ?? await getSupplierLinkRequestContext();
+      const rateLimitResult = await checkSupplierLinkRateLimits({
+        action: 'supplier_comment_add',
+        requestContext,
+        scopes: [{ name: 'ip-malformed', parts: [rfqId, requestContext.ipHash] }],
+      });
+
+      if (!rateLimitResult.allowed) {
+        return { error: rateLimitResult.error };
+      }
+    }
+
     return { error: 'Invalid link' };
   }
 
   const tokenHash = hashToken(normalizedToken);
+
+  if (options?.rateLimitCommentSubmit) {
+    const requestContext = options.requestContext ?? await getSupplierLinkRequestContext();
+    const rateLimitResult = await checkSupplierLinkRateLimits({
+      action: 'supplier_comment_add',
+      requestContext,
+      scopes: [
+        { name: 'ip', parts: [rfqId, requestContext.ipHash] },
+        { name: 'token', parts: [rfqId, tokenHash] },
+      ],
+    });
+
+    if (!rateLimitResult.allowed) {
+      return { error: rateLimitResult.error };
+    }
+  }
+
   const { data: invite, error: inviteError } = await supabase
     .from('rfq_invites')
     .select('id, supplier_id, expires_at')
@@ -95,7 +134,11 @@ export async function addSupplierComment(
     return { error: parsedBody.error.flatten().formErrors[0] ?? 'Message is invalid' };
   }
 
-  const inviteResult = await resolveSupplierInvite(rfqId, token);
+  const requestContext = await getSupplierLinkRequestContext();
+  const inviteResult = await resolveSupplierInvite(rfqId, token, {
+    rateLimitCommentSubmit: true,
+    requestContext,
+  });
   if ('error' in inviteResult) {
     return { error: inviteResult.error };
   }
@@ -180,6 +223,8 @@ export async function addSupplierComment(
       rfqId,
       supplierId: invite.supplier_id,
     },
+    ip: requestContext.ip,
+    userAgent: requestContext.userAgent,
   });
 
   return { data: comment as RfqComment };

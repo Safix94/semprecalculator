@@ -22,6 +22,21 @@ What they change:
 - Replace RFQ attachment storage policies with sales/admin role checks.
 - Add missing supplier foreign-key indexes for RFQ comments and quotes.
 
+## Sprint 2 supplier-link hardening
+
+Migration:
+
+```txt
+supabase/migrations/024_supplier_link_rate_limits.sql
+```
+
+What it changes:
+
+- Adds `supplier_link_rate_limits`, a service-role-only table for public supplier-link rate-limit events.
+- Enables RLS with no browser policies by design.
+- Adds indexes for action/scope/time-window checks.
+- Stores hashed scope keys/IP hashes instead of raw tokens.
+
 ## Apply to the linked Supabase project
 
 Use one of these paths.
@@ -58,6 +73,7 @@ Run the read-only verification scripts:
 ```txt
 supabase/verification/022_security_hardening_sprint1.sql
 supabase/verification/023_private_role_helper.sql
+supabase/verification/024_supplier_link_rate_limits.sql
 ```
 
 Expected result after the migrations:

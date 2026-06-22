@@ -61,13 +61,13 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
     const supplierPrice = 100;
     const supplierVolumeM3 = 10;
     const shippingCost = (containerPrice / containerVolume) * supplierVolumeM3;
-    const finalPrice = supplierPrice * productMargin + shippingCost * shippingMargin;
+    const productPriceWithMargin = supplierPrice * productMargin;
+    const finalPrice = (productPriceWithMargin + shippingCost) * shippingMargin;
 
     return {
       shippingCost,
       finalPrice,
-      shippingCostWithMargin: shippingCost * shippingMargin,
-      productPriceWithMargin: supplierPrice * productMargin,
+      productPriceWithMargin,
     };
   }, [formData]);
 
@@ -161,7 +161,7 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="shipping-margin">Shipping margin factor</Label>
+                <Label htmlFor="shipping-margin">Final margin factor</Label>
                 <Input
                   id="shipping-margin"
                   inputMode="decimal"
@@ -177,11 +177,11 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
               <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
                 <p className="font-medium text-foreground">Formula</p>
                 <p>
-                  Final price = supplier price × product margin + ((container price / container m³) × supplier m³ × shipping margin)
+                  Final price = (supplier price × product margin + (container price / container m³) × supplier m³) × final margin
                 </p>
                 {preview && (
                   <p>
-                    Example with supplier price €100 and 10 m³: product €{preview.productPriceWithMargin.toFixed(2)} + shipping €{preview.shippingCostWithMargin.toFixed(2)} = €{preview.finalPrice.toFixed(2)}
+                    Example with supplier price €100 and 10 m³: (€{preview.productPriceWithMargin.toFixed(2)} + €{preview.shippingCost.toFixed(2)}) × final margin = €{preview.finalPrice.toFixed(2)}
                   </p>
                 )}
               </CardContent>

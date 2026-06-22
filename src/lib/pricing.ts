@@ -36,7 +36,7 @@ export function calculateShippingCost(
 
 /**
  * Calculate final price including margins.
- * Formula: (basePrice * productMarginFactor) + (shippingCost * shippingMarginFactor)
+ * Formula: ((basePrice * productMarginFactor) + shippingCost) * shippingMarginFactor
  * Rounded to 2 decimal places.
  */
 export function calculateFinalPrice(
@@ -45,8 +45,8 @@ export function calculateFinalPrice(
   settings: PricingSettings = DEFAULT_PRICING_SETTINGS
 ): number {
   return roundTo(
-    basePrice * settings.productMarginFactor +
-      shippingCostCalculated * settings.shippingMarginFactor,
+    (basePrice * settings.productMarginFactor + shippingCostCalculated) *
+      settings.shippingMarginFactor,
     2
   );
 }

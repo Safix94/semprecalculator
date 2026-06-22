@@ -32,6 +32,7 @@ import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } fr
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
 const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
+const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type InvitePart = 'default' | 'table_top' | 'table_foot' | 'table_both';
 
@@ -708,6 +709,10 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
     return { error: 'No file selected' };
   }
 
+  if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+    return { error: 'File is too large. Maximum size is 25 MB.' };
+  }
+
   const allowedTypes = new Set([
     'application/pdf',
     'image/jpeg',
@@ -717,11 +722,14 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
     'application/x-acad',
     'application/x-autocad',
     'image/vnd.dwg',
-    'application/octet-stream',
   ]);
   const allowedExtensions = new Set(['skp', 'pdf', 'jpg', 'jpeg', 'png', 'dwg']);
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if ((!file.type || !allowedTypes.has(file.type)) && (!ext || !allowedExtensions.has(ext))) {
+  if (!ext || !allowedExtensions.has(ext)) {
+    return { error: 'Invalid file type. Allowed: SKP, PDF, JPG, PNG, DWG' };
+  }
+
+  if (file.type && file.type !== 'application/octet-stream' && !allowedTypes.has(file.type)) {
     return { error: 'Invalid file type. Allowed: SKP, PDF, JPG, PNG, DWG' };
   }
 

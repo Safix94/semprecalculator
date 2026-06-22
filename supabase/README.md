@@ -4,20 +4,23 @@ This project keeps Supabase database changes in `supabase/migrations`.
 
 ## Sprint 1 security hardening
 
-Migration:
+Migrations:
 
 ```txt
 supabase/migrations/022_security_hardening_sprint1.sql
+supabase/migrations/023_private_role_helper.sql
 ```
 
-What it changes:
+What they change:
 
-- Pins `search_path` for functions reported by Supabase Security Advisor.
-- Removes anonymous execute access from sensitive RPC/helper functions.
-- Converts `get_suppliers_for_material(uuid)` to `SECURITY INVOKER`.
-- Sets defensive limits on the private `rfq-attachments` storage bucket.
-- Replaces RFQ attachment storage policies with sales/admin role checks.
-- Adds missing supplier foreign-key indexes for RFQ comments and quotes.
+- Pin `search_path` for functions reported by Supabase Security Advisor.
+- Remove anonymous execute access from sensitive RPC/helper functions.
+- Convert `get_suppliers_for_material(uuid)` to `SECURITY INVOKER`.
+- Move the elevated RLS role helper to private schema and update policies to call `private.get_user_role()`.
+- Keep `public.get_user_role()` only as a non-elevated compatibility wrapper.
+- Set defensive limits on the private `rfq-attachments` storage bucket.
+- Replace RFQ attachment storage policies with sales/admin role checks.
+- Add missing supplier foreign-key indexes for RFQ comments and quotes.
 
 ## Apply to the linked Supabase project
 
@@ -50,19 +53,21 @@ supabase db push --password "$SUPABASE_DB_PASSWORD"
 
 ## Verify after applying
 
-Run the read-only verification script:
+Run the read-only verification scripts:
 
 ```txt
 supabase/verification/022_security_hardening_sprint1.sql
+supabase/verification/023_private_role_helper.sql
 ```
 
-Expected result after the migration:
+Expected result after the migrations:
 
-- `get_user_role` has a fixed `search_path` and no direct `anon` execute grant.
+- `get_user_role` has a fixed `search_path` and the public wrapper is not `SECURITY DEFINER`.
+- RLS/storage policies use `private.get_user_role()`, not the exposed public helper.
 - `get_suppliers_for_material` is `SECURITY INVOKER`, has fixed `search_path`, and no `anon` execute grant.
 - `update_updated_at_column` has fixed `search_path`.
 - `rfq-attachments` has `public = false`, `file_size_limit = 26214400`, and a MIME allowlist.
-- RFQ attachment policies include `public.get_user_role() in ('sales', 'admin')`.
+- RFQ attachment policies include `private.get_user_role() in ('sales', 'admin')`.
 - `idx_rfq_comments_supplier` and `idx_rfq_quotes_supplier` exist.
 
 Also re-run Supabase Security Advisor and enable leaked password protection in Supabase Dashboard:

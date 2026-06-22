@@ -6,11 +6,7 @@ interface SupplierQuoteReadOnlyProps {
 }
 
 export function SupplierQuoteReadOnly({ quote }: SupplierQuoteReadOnlyProps) {
-  const hasAreaM2 = quote.area_m2 !== null && quote.area_m2 !== undefined;
-  const volumeLabel = hasAreaM2 ? 'Volume (m\u00b2)' : 'Volume (m\u00b3)';
-  const volumeValue = hasAreaM2
-    ? Number(quote.area_m2).toFixed(3)
-    : Number(quote.volume_m3).toFixed(3);
+  const volumeValue = Number(quote.volume_m3).toFixed(3);
 
   return (
     <Card>
@@ -34,7 +30,7 @@ export function SupplierQuoteReadOnly({ quote }: SupplierQuoteReadOnlyProps) {
             <dd className="mt-1 text-sm font-medium">{`\u20ac${Number(quote.base_price).toFixed(2)}`}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase text-muted-foreground">{volumeLabel}</dt>
+            <dt className="text-xs uppercase text-muted-foreground">{'Volume (m\u00b3)'}</dt>
             <dd className="mt-1 text-sm font-medium">{volumeValue}</dd>
           </div>
           {quote.lead_time_days && (

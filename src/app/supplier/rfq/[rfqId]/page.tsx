@@ -89,7 +89,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const quoteInitialValues = existingQuote
     ? {
         basePrice: Number(existingQuote.base_price),
-        areaM2: Number(existingQuote.area_m2 ?? existingQuote.volume_m3),
+        volumeM3: Number(existingQuote.volume_m3),
         leadTimeDays: existingQuote.lead_time_days,
         comment: existingQuote.comment,
       }

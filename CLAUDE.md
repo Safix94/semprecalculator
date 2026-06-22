@@ -29,9 +29,10 @@ This is an RFQ (Request for Quotation) platform built with Next.js 16, Supabase,
 
 **Pricing System**:
 - Server-side pricing calculations only (not exposed to client)
-- Base price + calculated shipping cost with configurable margins
+- Base price + supplier-entered volume in m³ + calculated shipping cost with configurable margins
 - Shipping calculated per container volume (€7500/67m³)
 - Product margin: 2.1x, shipping margin: 2.4x
+- Do not derive pricing volume from RFQ thickness; suppliers enter m³ directly
 
 ### Key Components Structure
 

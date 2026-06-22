@@ -312,21 +312,18 @@ export async function submitQuote(
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { basePrice, areaM2, leadTimeDays, comment } = parsed.data;
+  const { basePrice, volumeM3, leadTimeDays, comment } = parsed.data;
 
-  // Fetch RFQ thickness (stored in cm) to derive volume in m3 from supplier area input (m2).
+  // Supplier provides volume directly in m3. Do not derive pricing volume from RFQ thickness.
   const { data: rfqForPricing, error: rfqForPricingError } = await supabase
     .from('rfqs')
-    .select('thickness, created_by, status')
+    .select('created_by, status')
     .eq('id', rfqId)
     .single();
 
   if (rfqForPricingError || !rfqForPricing) {
     return { error: 'Request not found' };
   }
-
-  const thicknessCm = Math.max(Number(rfqForPricing.thickness ?? 0), 0);
-  const volumeM3 = Math.round(areaM2 * (thicknessCm / 100) * 1000) / 1000;
 
   // Server-side pricing calculation
   const { shippingCostCalculated, finalPriceCalculated } =
@@ -361,7 +358,7 @@ export async function submitQuote(
       .from('rfq_quotes')
       .update({
         base_price: basePrice,
-        area_m2: areaM2,
+        area_m2: null,
         volume_m3: volumeM3,
         shipping_cost_calculated: shippingCostCalculated,
         final_price_calculated: finalPriceCalculated,
@@ -386,7 +383,7 @@ export async function submitQuote(
         rfq_id: rfqId,
         supplier_id: invite.supplier_id,
         base_price: basePrice,
-        area_m2: areaM2,
+        area_m2: null,
         volume_m3: volumeM3,
         shipping_cost_calculated: shippingCostCalculated,
         final_price_calculated: finalPriceCalculated,
@@ -452,7 +449,6 @@ export async function submitQuote(
     metadata: {
       rfqId,
       basePrice,
-      areaM2,
       volumeM3,
       shippingCostCalculated,
       finalPriceCalculated,

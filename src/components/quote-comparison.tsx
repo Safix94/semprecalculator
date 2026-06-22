@@ -33,12 +33,7 @@ function formatQuoteVolume(quote: RfqQuote | undefined) {
     return '-';
   }
 
-  const hasAreaM2 = quote.area_m2 !== null && quote.area_m2 !== undefined;
-  const value = hasAreaM2
-    ? Number(quote.area_m2).toFixed(3)
-    : Number(quote.volume_m3).toFixed(3);
-  const unit = hasAreaM2 ? 'm\u00b2' : 'm\u00b3';
-  return `${value} ${unit}`;
+  return `${Number(quote.volume_m3).toFixed(3)} m\u00b3`;
 }
 
 export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {

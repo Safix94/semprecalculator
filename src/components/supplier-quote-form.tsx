@@ -14,7 +14,7 @@ interface SupplierQuoteFormProps {
   token: string;
   initialValues?: {
     basePrice: number;
-    areaM2: number;
+    volumeM3: number;
     leadTimeDays: number | null;
     comment: string | null;
   } | null;
@@ -39,7 +39,7 @@ export function SupplierQuoteForm({
     const form = new FormData(e.currentTarget);
     const input = {
       basePrice: Number(form.get('basePrice')),
-      areaM2: Number(form.get('areaM2')),
+      volumeM3: Number(form.get('volumeM3')),
       leadTimeDays: form.get('leadTimeDays') ? Number(form.get('leadTimeDays')) : null,
       comment: (form.get('comment') as string) || null,
     };
@@ -107,20 +107,20 @@ export function SupplierQuoteForm({
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="areaM2">{'Volume (m\u00b2) *'}</Label>
+              <Label htmlFor="volumeM3">{'Volume (m\u00b3) *'}</Label>
               <Input
-                id="areaM2"
-                name="areaM2"
+                id="volumeM3"
+                name="volumeM3"
                 type="number"
                 step="0.001"
                 min="0.001"
                 required
                 placeholder="0.000"
-                defaultValue={initialValues?.areaM2 ?? ''}
-                aria-invalid={Boolean(typeof errors === 'object' && errors?.areaM2)}
+                defaultValue={initialValues?.volumeM3 ?? ''}
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.volumeM3)}
               />
-              {typeof errors === 'object' && errors?.areaM2 && (
-                <p className="text-destructive text-xs">{errors.areaM2[0]}</p>
+              {typeof errors === 'object' && errors?.volumeM3 && (
+                <p className="text-destructive text-xs">{errors.volumeM3[0]}</p>
               )}
             </div>
           </div>

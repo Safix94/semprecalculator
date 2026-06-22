@@ -32,12 +32,13 @@ import {
   linkSupplierToMaterial,
   unlinkSupplierFromMaterial,
 } from '@/actions/materials';
-import type { MaterialWithSuppliers, ProductType, Supplier } from '@/types';
+import type { FinishOption, MaterialWithSuppliers, ProductType, Supplier } from '@/types';
 
 interface MaterialManagementProps {
   materials: MaterialWithSuppliers[];
   suppliers: Supplier[];
   productTypes: ProductType[];
+  finishOptions: FinishOption[];
 }
 
 interface MaterialFormData {
@@ -72,6 +73,7 @@ export function MaterialManagement({
   materials: initialMaterials,
   suppliers,
   productTypes,
+  finishOptions,
 }: MaterialManagementProps) {
   const router = useRouter();
   const [materials, setMaterials] = useState(initialMaterials);
@@ -91,6 +93,25 @@ export function MaterialManagement({
     .map((productType) => normalizeProductTypeName(productType.name));
   const hasTablesScope = selectedProductTypeNames.some((name) => TABLES_PRODUCT_TYPE_VALUES.has(name));
   const hasTableTopsScope = selectedProductTypeNames.some((name) => TABLE_TOPS_PRODUCT_TYPE_VALUES.has(name));
+  const finishOptionNames = finishOptions.map((finishOption) => finishOption.name);
+
+  const parseFinishOptions = (value: string) =>
+    value.split(',').map((finish) => finish.trim()).filter((finish) => finish.length > 0);
+
+  const appendFinishOption = (field: keyof Pick<MaterialFormData,
+    'finish_options' | 'finish_options_top' | 'finish_options_edge' | 'finish_options_color'
+  >, finish: string) => {
+    const existingOptions = parseFinishOptions(formData[field]);
+    const hasFinish = existingOptions.some(
+      (existingFinish) => existingFinish.toLowerCase() === finish.toLowerCase()
+    );
+
+    if (hasFinish) {
+      return;
+    }
+
+    updateFormData(field, [...existingOptions, finish].join(', '));
+  };
 
   const getErrorMessage = (value: unknown, fallback: string) => {
     if (value instanceof Error && value.message) {
@@ -267,6 +288,43 @@ export function MaterialManagement({
       ? [...formData.supplier_ids, supplierId]
       : formData.supplier_ids.filter(id => id !== supplierId);
     updateFormData('supplier_ids', updatedSupplierIds);
+  };
+
+  const renderFinishSuggestions = (field: keyof Pick<MaterialFormData,
+    'finish_options' | 'finish_options_top' | 'finish_options_edge' | 'finish_options_color'
+  >) => {
+    if (finishOptionNames.length === 0) {
+      return null;
+    }
+
+    const selectedFinishes = new Set(parseFinishOptions(formData[field]).map((finish) => finish.toLowerCase()));
+    const availableFinishes = finishOptionNames.filter(
+      (finish) => !selectedFinishes.has(finish.toLowerCase())
+    );
+
+    if (availableFinishes.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="space-y-1.5">
+        <p className="text-xs text-muted-foreground">Add from master finish list:</p>
+        <div className="flex max-h-24 flex-wrap gap-2 overflow-y-auto rounded-md border border-dashed p-2">
+          {availableFinishes.map((finish) => (
+            <Button
+              key={`${field}-${finish}`}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => appendFinishOption(field, finish)}
+            >
+              + {finish}
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const handleLinkSupplier = async (supplierId: string) => {
@@ -566,6 +624,7 @@ export function MaterialManagement({
                 onChange={(e) => updateFormData('finish_options', e.target.value)}
                 placeholder="e.g. Polished, Matte, Frosted"
               />
+              {renderFinishSuggestions('finish_options')}
             </div>
 
             {hasTablesScope && (
@@ -591,6 +650,7 @@ export function MaterialManagement({
                       onChange={(e) => updateFormData('finish_options_top', e.target.value)}
                       placeholder="e.g. Honed, Brushed"
                     />
+                    {renderFinishSuggestions('finish_options_top')}
                   </div>
 
                   {hasTableTopsScope && (
@@ -608,6 +668,7 @@ export function MaterialManagement({
                           onChange={(e) => updateFormData('finish_options_edge', e.target.value)}
                           placeholder="e.g. Straight, Beveled"
                         />
+                        {renderFinishSuggestions('finish_options_edge')}
                       </div>
 
                       <div className="space-y-1.5">
@@ -623,6 +684,7 @@ export function MaterialManagement({
                           onChange={(e) => updateFormData('finish_options_color', e.target.value)}
                           placeholder="e.g. White, Black"
                         />
+                        {renderFinishSuggestions('finish_options_color')}
                       </div>
                     </>
                   )}

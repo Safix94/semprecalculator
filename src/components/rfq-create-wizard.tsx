@@ -7,6 +7,12 @@ import { getActiveMaterials, getSuppliersForMaterial } from '@/actions/materials
 import { getProductTypes } from '@/actions/product-types';
 import { createRfq, uploadAttachment } from '@/actions/rfq';
 import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
+import {
+  isDetailFieldEnabled,
+  isDetailFieldRequired,
+  normalizeDetailFieldSettings,
+  type ProductTypeDetailFieldKey,
+} from '@/lib/product-type-detail-fields';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -169,17 +175,29 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const isTablesType = isTablesProductType(data.product_type);
   const isTableTopsType = isTableTopsProductType(data.product_type);
   const showTableFoot = isTablesType && !isTableTopsType;
-  const selectedProductTypeId = useMemo(() => {
+  const selectedProductType = useMemo(() => {
     const normalized = normalizeProductTypeName(data.product_type);
     if (!normalized) {
       return null;
     }
 
-    const matchedProductType = productTypes.find(
+    return productTypes.find(
       (productType) => normalizeProductTypeName(productType.name) === normalized
-    );
-    return matchedProductType?.id ?? null;
+    ) ?? null;
   }, [data.product_type, productTypes]);
+  const selectedProductTypeId = selectedProductType?.id ?? null;
+  const detailFieldSettings = useMemo(
+    () => normalizeDetailFieldSettings(selectedProductType?.detail_fields, selectedProductType?.name ?? data.product_type),
+    [data.product_type, selectedProductType]
+  );
+  const detailFieldEnabled = useCallback(
+    (key: ProductTypeDetailFieldKey) => isDetailFieldEnabled(detailFieldSettings, key),
+    [detailFieldSettings]
+  );
+  const detailFieldRequired = useCallback(
+    (key: ProductTypeDetailFieldKey) => isDetailFieldRequired(detailFieldSettings, key),
+    [detailFieldSettings]
+  );
   const availableMaterialsForType = useMemo(() => {
     if (!selectedProductTypeId) {
       return materials;
@@ -201,6 +219,29 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     return isGlassMaterialName(data.material_name);
   }, [data.material_name, data.material_table_top, isTablesType]);
   const shouldShowUsageEnvironment = !isGlassMaterialSelected;
+  const isRoundShape = data.shape === 'Round';
+  const showModelField = detailFieldEnabled('model');
+  const showShapeField = detailFieldEnabled('shape');
+  const showUsageEnvironmentField = detailFieldEnabled('usage_environment') && shouldShowUsageEnvironment;
+  const showLengthField = !isRoundShape && detailFieldEnabled('length');
+  const showWidthField = !isRoundShape && detailFieldEnabled('width');
+  const showDiameterField = isRoundShape && detailFieldEnabled('diameter');
+  const showHeightField = detailFieldEnabled('height');
+  const showThicknessField = detailFieldEnabled('thickness');
+  const showQuantityField = detailFieldEnabled('quantity');
+  const showNotesField = detailFieldEnabled('notes');
+  const showAttachmentsField = detailFieldEnabled('attachments');
+  const isShapeRequired = detailFieldRequired('shape');
+  const isUsageEnvironmentRequired = detailFieldRequired('usage_environment');
+  const isLengthRequired = detailFieldRequired('length');
+  const isWidthRequired = detailFieldRequired('width');
+  const isDiameterRequired = detailFieldRequired('diameter');
+  const isHeightRequired = detailFieldRequired('height');
+  const isThicknessRequired = detailFieldRequired('thickness') && (isTableTopsType || !isRoundShape);
+  const isQuantityRequired = detailFieldRequired('quantity');
+  const isModelRequired = detailFieldRequired('model');
+  const isNotesRequired = detailFieldRequired('notes');
+  const isAttachmentsRequired = detailFieldRequired('attachments');
 
   const selectedMaterial = useMemo(
     () => availableMaterialsForType.find((item) => item.id === data.material_id) ?? null,
@@ -783,59 +824,65 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         stepErrors.supplier_ids_table_foot = ['Select at least one table foot supplier'];
       }
     } else if (currentStep === detailsStepIndex) {
-      const isRound = data.shape === 'Round';
+      const validatePositiveNumber = (field: keyof WizardData, label: string) => {
+        const value = data[field];
+        if (typeof value !== 'string' || value.trim() === '' || Number(value) <= 0) {
+          stepErrors[field] = [`${label} must be positive`];
+        }
+      };
 
-      if (!data.shape) {
+      const validateOptionalNonNegativeNumber = (field: keyof WizardData, label: string) => {
+        const value = data[field];
+        if (typeof value === 'string' && value.trim() !== '' && Number(value) < 0) {
+          stepErrors[field] = [`${label} must be zero or positive`];
+        }
+      };
+
+      if (showModelField && isModelRequired && !data.model.trim()) {
+        stepErrors.model = ['Model is required'];
+      }
+
+      if (showShapeField && isShapeRequired && !data.shape) {
         stepErrors.shape = ['Shape is required'];
       }
 
-      if (isTableTopsType) {
-        if (isRound) {
-          if (!data.diameter || Number(data.diameter) <= 0) {
-            stepErrors.diameter = ['Diameter must be positive'];
-          }
-          if (!data.thickness || Number(data.thickness) <= 0) {
-            stepErrors.thickness = ['Thickness must be positive'];
-          }
-        } else {
-          if (!data.length || Number(data.length) <= 0) {
-            stepErrors.length = ['Length must be positive'];
-          }
-          if (!data.width || Number(data.width) <= 0) {
-            stepErrors.width = ['Width must be positive'];
-          }
-          if (!data.thickness || Number(data.thickness) <= 0) {
-            stepErrors.thickness = ['Thickness must be positive'];
-          }
-        }
-      } else if (isRound) {
-        if (!data.diameter || Number(data.diameter) <= 0) {
-          stepErrors.diameter = ['Diameter must be positive'];
-        }
-        if (!data.height || Number(data.height) <= 0) {
-          stepErrors.height = ['Height must be positive'];
-        }
-        if (data.thickness && Number(data.thickness) < 0) {
-          stepErrors.thickness = ['Thickness must be zero or positive'];
-        }
-      } else {
-        if (!data.length || Number(data.length) <= 0) {
-          stepErrors.length = ['Length must be positive'];
-        }
-        if (!data.width || Number(data.width) <= 0) {
-          stepErrors.width = ['Width must be positive'];
-        }
-        if (!data.height || Number(data.height) <= 0) {
-          stepErrors.height = ['Height must be positive'];
-        }
-        if (!data.thickness || Number(data.thickness) <= 0) {
-          stepErrors.thickness = ['Thickness must be positive'];
+      if (showUsageEnvironmentField && isUsageEnvironmentRequired && !data.usage_environment) {
+        stepErrors.usage_environment = ['Use is required'];
+      }
+
+      if (showDiameterField && isDiameterRequired) {
+        validatePositiveNumber('diameter', 'Diameter');
+      }
+      if (showLengthField && isLengthRequired) {
+        validatePositiveNumber('length', 'Length');
+      }
+      if (showWidthField && isWidthRequired) {
+        validatePositiveNumber('width', 'Width');
+      }
+      if (showHeightField && isHeightRequired) {
+        validatePositiveNumber('height', 'Height');
+      }
+      if (showThicknessField && isThicknessRequired) {
+        validatePositiveNumber('thickness', 'Thickness');
+      } else if (showThicknessField) {
+        validateOptionalNonNegativeNumber('thickness', 'Thickness');
+      }
+
+      if (showQuantityField) {
+        const quantityValue = Number(data.quantity);
+        if (isQuantityRequired && (!data.quantity || !Number.isInteger(quantityValue) || quantityValue < 1)) {
+          stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
+        } else if (data.quantity && (!Number.isInteger(quantityValue) || quantityValue < 1)) {
+          stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
         }
       }
 
-      const quantityValue = Number(data.quantity);
-      if (!data.quantity || !Number.isInteger(quantityValue) || quantityValue < 1) {
-        stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
+      if (showNotesField && isNotesRequired && !data.notes.trim()) {
+        stepErrors.notes = ['Notes are required'];
+      }
+
+      if (showAttachmentsField && isAttachmentsRequired && attachments.length === 0) {
+        stepErrors.attachments = ['At least one attachment is required'];
       }
 
     }
@@ -862,8 +909,12 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setErrors({});
 
     const isRound = data.shape === 'Round';
-    const diameter = Number(data.diameter);
-    const thicknessValue = data.thickness === '' ? 0 : Number(data.thickness);
+    const toNumber = (value: string, fallback = 0) => {
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : fallback;
+    };
+    const diameter = toNumber(data.diameter);
+    const thicknessValue = data.thickness === '' ? 0 : toNumber(data.thickness);
     const tableTopsFinishValues = [data.finish_top, data.finish_edge, data.finish_color]
       .map((finish) => finish.trim())
       .filter((finish) => finish.length > 0);
@@ -901,15 +952,15 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         ? (isTableTopsType ? (finishSummary || null) : data.finish_table_top || null)
         : null,
       finish_table_foot: showTableFoot ? data.finish_table_foot || null : null,
-      length: isRound ? diameter : Number(data.length),
-      width: isRound ? diameter : Number(data.width),
-      height: isTableTopsType ? (Number(data.height) || 0) : Number(data.height),
-      thickness: isRound ? thicknessValue : Number(data.thickness),
-      quantity: Number(data.quantity),
-      shape: data.shape,
-      model: isTablesType ? data.model.trim() || null : null,
-      usage_environment: shouldShowUsageEnvironment ? data.usage_environment || null : null,
-      notes: data.notes || null,
+      length: isRound ? (showDiameterField ? diameter : 1) : (showLengthField ? toNumber(data.length) : 1),
+      width: isRound ? (showDiameterField ? diameter : 1) : (showWidthField ? toNumber(data.width) : 1),
+      height: showHeightField ? toNumber(data.height) : (isTableTopsType ? 0 : 1),
+      thickness: showThicknessField ? (isRound ? thicknessValue : toNumber(data.thickness)) : (isRound ? 0 : 1),
+      quantity: showQuantityField ? Math.max(1, Math.trunc(toNumber(data.quantity, 1))) : 1,
+      shape: showShapeField ? data.shape : 'N.v.t.',
+      model: showModelField ? data.model.trim() || null : null,
+      usage_environment: showUsageEnvironmentField ? data.usage_environment || null : null,
+      notes: showNotesField ? data.notes || null : null,
       supplier_ids: isTablesType ? undefined : data.supplier_ids,
       supplier_ids_table_top: isTablesType ? data.supplier_ids_table_top : undefined,
       supplier_ids_table_foot: showTableFoot ? data.supplier_ids_table_foot : undefined,
@@ -930,7 +981,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       if (result.data) {
         const failedUploads: string[] = [];
 
-        for (const attachment of attachments) {
+        for (const attachment of (showAttachmentsField ? attachments : [])) {
           const formData = new FormData();
           formData.append('file', attachment);
 
@@ -1455,36 +1506,40 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
           {currentStep === detailsStepIndex && (
             <>
-              {isTablesType && (
+              {showModelField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="model">Model (optional)</Label>
+                  <Label htmlFor="model">Model {isModelRequired ? '*' : '(optional)'}</Label>
                   <Input
                     id="model"
                     value={data.model}
                     onChange={(e) => updateData('model', e.target.value)}
+                    aria-invalid={Boolean(errors.model)}
                   />
+                  {errors.model && <p className="text-destructive text-xs">{errors.model[0]}</p>}
                 </div>
               )}
 
-              <div className="space-y-1.5">
-                <Label htmlFor="shape">Shape *</Label>
-                <Select value={data.shape} onValueChange={handleShapeChange}>
-                  <SelectTrigger id="shape" className="w-full" aria-invalid={Boolean(errors.shape)}>
-                    <SelectValue placeholder="Select a shape" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[70]">
-                    <SelectItem value="Rectangular">Rectangular</SelectItem>
-                    <SelectItem value="Round">Round</SelectItem>
-                    <SelectItem value="Oval">Oval</SelectItem>
-                    <SelectItem value="Square">Square</SelectItem>
-                  </SelectContent>
-                </Select>
-                {errors.shape && <p className="text-destructive text-xs">{errors.shape[0]}</p>}
-              </div>
-
-              {shouldShowUsageEnvironment && (
+              {showShapeField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="usage-environment">Use</Label>
+                  <Label htmlFor="shape">Shape {isShapeRequired ? '*' : '(optional)'}</Label>
+                  <Select value={data.shape} onValueChange={handleShapeChange}>
+                    <SelectTrigger id="shape" className="w-full" aria-invalid={Boolean(errors.shape)}>
+                      <SelectValue placeholder="Select a shape" />
+                    </SelectTrigger>
+                    <SelectContent className="z-[70]">
+                      <SelectItem value="Rectangular">Rectangular</SelectItem>
+                      <SelectItem value="Round">Round</SelectItem>
+                      <SelectItem value="Oval">Oval</SelectItem>
+                      <SelectItem value="Square">Square</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {errors.shape && <p className="text-destructive text-xs">{errors.shape[0]}</p>}
+                </div>
+              )}
+
+              {showUsageEnvironmentField && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="usage-environment">Use {isUsageEnvironmentRequired ? '*' : '(optional)'}</Label>
                   <Select
                     value={data.usage_environment}
                     onValueChange={handleUsageEnvironmentChange}
@@ -1503,134 +1558,90 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 </div>
               )}
 
-              {data.shape === 'Round' ? (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="diameter">Diameter (cm) *</Label>
-                      <Input
-                        id="diameter"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.diameter}
-                        onChange={(e) => updateData('diameter', e.target.value)}
-                        aria-invalid={Boolean(errors.diameter)}
-                      />
-                      {errors.diameter && <p className="text-destructive text-xs">{errors.diameter[0]}</p>}
-                    </div>
-                    {!isTableTopsType && (
-                      <div className="space-y-1.5">
-                        <Label htmlFor="height">Height (cm) *</Label>
-                        <Input
-                          id="height"
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={data.height}
-                          onChange={(e) => updateData('height', e.target.value)}
-                          aria-invalid={Boolean(errors.height)}
-                        />
-                        {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="thickness">
-                        Thickness (cm) {isTableTopsType ? '*' : '(optional)'}
-                      </Label>
-                      <Input
-                        id="thickness"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.thickness}
-                        onChange={(e) => updateData('thickness', e.target.value)}
-                        aria-invalid={Boolean(errors.thickness)}
-                      />
-                      {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="quantity">Number of pieces *</Label>
-                      <Input
-                        id="quantity"
-                        type="number"
-                        step="1"
-                        min="1"
-                        value={data.quantity}
-                        onChange={(e) => updateData('quantity', e.target.value)}
-                        aria-invalid={Boolean(errors.quantity)}
-                      />
-                      {errors.quantity && <p className="text-destructive text-xs">{errors.quantity[0]}</p>}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="length">Length (cm) *</Label>
-                      <Input
-                        id="length"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.length}
-                        onChange={(e) => updateData('length', e.target.value)}
-                        aria-invalid={Boolean(errors.length)}
-                      />
-                      {errors.length && <p className="text-destructive text-xs">{errors.length[0]}</p>}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="width">Width (cm) *</Label>
-                      <Input
-                        id="width"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.width}
-                        onChange={(e) => updateData('width', e.target.value)}
-                        aria-invalid={Boolean(errors.width)}
-                      />
-                      {errors.width && <p className="text-destructive text-xs">{errors.width[0]}</p>}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {!isTableTopsType && (
-                      <div className="space-y-1.5">
-                        <Label htmlFor="height">Height (cm) *</Label>
-                        <Input
-                          id="height"
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={data.height}
-                          onChange={(e) => updateData('height', e.target.value)}
-                          aria-invalid={Boolean(errors.height)}
-                        />
-                        {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
-                      </div>
-                    )}
-                    <div className="space-y-1.5">
-                      <Label htmlFor="thickness">Thickness (cm) *</Label>
-                      <Input
-                        id="thickness"
-                        type="number"
-                        step="any"
-                        min="0"
-                        value={data.thickness}
-                        onChange={(e) => updateData('thickness', e.target.value)}
-                        aria-invalid={Boolean(errors.thickness)}
-                      />
-                      {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
-                    </div>
-                  </div>
-
+              <div className="grid grid-cols-2 gap-4">
+                {showDiameterField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="quantity">Number of pieces *</Label>
+                    <Label htmlFor="diameter">Diameter (cm) {isDiameterRequired ? '*' : '(optional)'}</Label>
+                    <Input
+                      id="diameter"
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={data.diameter}
+                      onChange={(e) => updateData('diameter', e.target.value)}
+                      aria-invalid={Boolean(errors.diameter)}
+                    />
+                    {errors.diameter && <p className="text-destructive text-xs">{errors.diameter[0]}</p>}
+                  </div>
+                )}
+
+                {showLengthField && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="length">Length (cm) {isLengthRequired ? '*' : '(optional)'}</Label>
+                    <Input
+                      id="length"
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={data.length}
+                      onChange={(e) => updateData('length', e.target.value)}
+                      aria-invalid={Boolean(errors.length)}
+                    />
+                    {errors.length && <p className="text-destructive text-xs">{errors.length[0]}</p>}
+                  </div>
+                )}
+
+                {showWidthField && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="width">Width (cm) {isWidthRequired ? '*' : '(optional)'}</Label>
+                    <Input
+                      id="width"
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={data.width}
+                      onChange={(e) => updateData('width', e.target.value)}
+                      aria-invalid={Boolean(errors.width)}
+                    />
+                    {errors.width && <p className="text-destructive text-xs">{errors.width[0]}</p>}
+                  </div>
+                )}
+
+                {showHeightField && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="height">Height (cm) {isHeightRequired ? '*' : '(optional)'}</Label>
+                    <Input
+                      id="height"
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={data.height}
+                      onChange={(e) => updateData('height', e.target.value)}
+                      aria-invalid={Boolean(errors.height)}
+                    />
+                    {errors.height && <p className="text-destructive text-xs">{errors.height[0]}</p>}
+                  </div>
+                )}
+
+                {showThicknessField && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="thickness">Thickness (cm) {isThicknessRequired ? '*' : '(optional)'}</Label>
+                    <Input
+                      id="thickness"
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={data.thickness}
+                      onChange={(e) => updateData('thickness', e.target.value)}
+                      aria-invalid={Boolean(errors.thickness)}
+                    />
+                    {errors.thickness && <p className="text-destructive text-xs">{errors.thickness[0]}</p>}
+                  </div>
+                )}
+
+                {showQuantityField && (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="quantity">Number of pieces {isQuantityRequired ? '*' : '(optional)'}</Label>
                     <Input
                       id="quantity"
                       type="number"
@@ -1642,54 +1653,61 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     />
                     {errors.quantity && <p className="text-destructive text-xs">{errors.quantity[0]}</p>}
                   </div>
-                </>
-              )}
-
-              <div className="space-y-1.5">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea
-                  id="notes"
-                  rows={3}
-                  value={data.notes}
-                  onChange={(e) => updateData('notes', e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Attachments (optional)</Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".skp,.pdf,.jpg,.jpeg,.png,.dwg"
-                  multiple
-                  onChange={handleAttachmentChange}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  Add files
-                </Button>
-                {attachments.length > 0 && (
-                  <div className="space-y-1">
-                    {attachments.map((attachment, index) => (
-                      <div key={`${attachment.name}-${attachment.size}-${index}`} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="truncate">{attachment.name}</span>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeAttachment(index)}
-                        >
-                          Remove
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
                 )}
               </div>
+
+              {showNotesField && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="notes">Notes {isNotesRequired ? '*' : '(optional)'}</Label>
+                  <Textarea
+                    id="notes"
+                    rows={3}
+                    value={data.notes}
+                    onChange={(e) => updateData('notes', e.target.value)}
+                    aria-invalid={Boolean(errors.notes)}
+                  />
+                  {errors.notes && <p className="text-destructive text-xs">{errors.notes[0]}</p>}
+                </div>
+              )}
+
+              {showAttachmentsField && (
+                <div className="space-y-2">
+                  <Label>Attachments {isAttachmentsRequired ? '*' : '(optional)'}</Label>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".skp,.pdf,.jpg,.jpeg,.png,.dwg"
+                    multiple
+                    onChange={handleAttachmentChange}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Add files
+                  </Button>
+                  {errors.attachments && <p className="text-destructive text-xs">{errors.attachments[0]}</p>}
+                  {attachments.length > 0 && (
+                    <div className="space-y-1">
+                      {attachments.map((attachment, index) => (
+                        <div key={`${attachment.name}-${attachment.size}-${index}`} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="truncate">{attachment.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeAttachment(index)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
 

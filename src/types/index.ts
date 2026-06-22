@@ -59,10 +59,13 @@ export interface MaterialSupplier {
   created_at: string;
 }
 
+import type { ProductTypeDetailFieldSetting } from '@/lib/product-type-detail-fields';
+
 export interface ProductType {
   id: string;
   name: string;
   sort_order: number;
+  detail_fields?: ProductTypeDetailFieldSetting[];
   created_at: string;
 }
 

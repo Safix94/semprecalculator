@@ -60,7 +60,7 @@ function validatePricingSettings(input: UpdatePricingSettingsInput): string | nu
     ['containerPriceEur', 'Container price'],
     ['containerVolumeM3', 'Container volume'],
     ['productMarginFactor', 'Product margin'],
-    ['shippingMarginFactor', 'Final margin'],
+    ['shippingMarginFactor', 'Multiplier'],
   ];
 
   for (const [key, label] of entries) {

@@ -43,17 +43,17 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
     const containerPrice = parsePositiveNumber(formData.containerPriceEur);
     const containerVolume = parsePositiveNumber(formData.containerVolumeM3);
     const productMargin = parsePositiveNumber(formData.productMarginFactor);
-    const shippingMargin = parsePositiveNumber(formData.shippingMarginFactor);
+    const multi = parsePositiveNumber(formData.shippingMarginFactor);
 
     if (
       !Number.isFinite(containerPrice) ||
       !Number.isFinite(containerVolume) ||
       !Number.isFinite(productMargin) ||
-      !Number.isFinite(shippingMargin) ||
+      !Number.isFinite(multi) ||
       containerPrice <= 0 ||
       containerVolume <= 0 ||
       productMargin <= 0 ||
-      shippingMargin <= 0
+      multi <= 0
     ) {
       return null;
     }
@@ -61,13 +61,13 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
     const supplierPrice = 100;
     const supplierVolumeM3 = 10;
     const shippingCost = (containerPrice / containerVolume) * supplierVolumeM3;
-    const productPriceWithMargin = supplierPrice * productMargin;
-    const finalPrice = (productPriceWithMargin + shippingCost) * shippingMargin;
+    const basisPrice = supplierPrice * productMargin * multi;
+    const finalPrice = basisPrice + shippingCost;
 
     return {
       shippingCost,
+      basisPrice,
       finalPrice,
-      productPriceWithMargin,
     };
   }, [formData]);
 
@@ -107,7 +107,7 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
         <CardHeader>
           <CardTitle>Pricing settings</CardTitle>
           <CardDescription>
-            Configure the container cost, container capacity, and pricing margins used for supplier quotes.
+            Configure the container cost, container capacity, product margin, and multiplier used for supplier quotes.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -161,7 +161,7 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="shipping-margin">Final margin factor</Label>
+                <Label htmlFor="shipping-margin">Multiplier factor</Label>
                 <Input
                   id="shipping-margin"
                   inputMode="decimal"
@@ -177,11 +177,11 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
               <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
                 <p className="font-medium text-foreground">Formula</p>
                 <p>
-                  Final price = (supplier price × product margin + (container price / container m³) × supplier m³) × final margin
+                  Final price = supplier price × product margin × multiplier + (container price / container m³) × supplier m³
                 </p>
                 {preview && (
                   <p>
-                    Example with supplier price €100 and 10 m³: (€{preview.productPriceWithMargin.toFixed(2)} + €{preview.shippingCost.toFixed(2)}) × final margin = €{preview.finalPrice.toFixed(2)}
+                    Example with supplier price €100 and 10 m³: basis €{preview.basisPrice.toFixed(2)} + shipping €{preview.shippingCost.toFixed(2)} = €{preview.finalPrice.toFixed(2)}
                   </p>
                 )}
               </CardContent>

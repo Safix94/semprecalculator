@@ -1,0 +1,528 @@
+'use server';
+
+import { randomUUID } from 'crypto';
+import { revalidatePath } from 'next/cache';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { requireRole } from '@/lib/auth';
+import { logAuditEvent } from './audit';
+import type { FinishOption } from '@/types';
+
+type FinishOptionResult = { data: FinishOption } | { error: { _form: string[] } };
+type DeleteFinishOptionResult = { data: { id: string } } | { error: { _form: string[] } };
+
+interface CreateFinishOptionInput {
+  name: string;
+  sort_order?: number;
+}
+
+interface UpdateFinishOptionInput {
+  name?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}
+
+interface StoredFinishOptionsFile {
+  options: FinishOption[];
+}
+
+const STORAGE_BUCKET = 'app-config';
+const FINISH_OPTIONS_PATH = 'finish-options.json';
+
+function normalizeName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
+function normalizeSortOrder(value: number | undefined): number {
+  return Number.isFinite(value) ? Math.trunc(value as number) : 0;
+}
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+function sortFinishOptions(options: FinishOption[]): FinishOption[] {
+  return [...options].sort((a, b) => {
+    if (a.sort_order !== b.sort_order) {
+      return a.sort_order - b.sort_order;
+    }
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+}
+
+function isFinishOptionsTableMissing(error: { code?: string; message?: string } | null | undefined): boolean {
+  if (!error) {
+    return false;
+  }
+
+  return (
+    error.code === '42P01' ||
+    error.code === 'PGRST205' ||
+    error.message?.toLowerCase().includes('finish_options') === true &&
+      error.message.toLowerCase().includes('schema cache')
+  );
+}
+
+async function ensureStorageBucket() {
+  const supabase = createServiceRoleClient();
+  const { error: getBucketError } = await supabase.storage.getBucket(STORAGE_BUCKET);
+
+  if (!getBucketError) {
+    return { supabase, error: null as string | null };
+  }
+
+  const { error: createBucketError } = await supabase.storage.createBucket(STORAGE_BUCKET, {
+    public: false,
+  });
+
+  if (createBucketError && !createBucketError.message.toLowerCase().includes('already exists')) {
+    return { supabase, error: createBucketError.message };
+  }
+
+  return { supabase, error: null as string | null };
+}
+
+async function seedFinishOptionsFromMaterials(): Promise<FinishOption[]> {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from('materials')
+    .select('finish_options, finish_options_top, finish_options_edge, finish_options_color');
+
+  if (error) {
+    console.error('Failed to seed finish options from materials:', error.message);
+    return [];
+  }
+
+  const seen = new Map<string, string>();
+  for (const material of data ?? []) {
+    const allFinishes = [
+      ...((material.finish_options ?? []) as string[]),
+      ...((material.finish_options_top ?? []) as string[]),
+      ...((material.finish_options_edge ?? []) as string[]),
+      ...((material.finish_options_color ?? []) as string[]),
+    ];
+
+    for (const finish of allFinishes) {
+      const normalized = normalizeName(finish);
+      if (!normalized) {
+        continue;
+      }
+      const key = normalized.toLowerCase();
+      if (!seen.has(key)) {
+        seen.set(key, normalized);
+      }
+    }
+  }
+
+  const timestamp = nowIso();
+  return sortFinishOptions(
+    Array.from(seen.values()).map((name) => ({
+      id: randomUUID(),
+      name,
+      sort_order: 0,
+      is_active: true,
+      created_at: timestamp,
+      updated_at: timestamp,
+    }))
+  );
+}
+
+async function readStoredFinishOptions(seedIfMissing = true): Promise<{
+  options: FinishOption[];
+  error: string | null;
+}> {
+  const { supabase, error: bucketError } = await ensureStorageBucket();
+  if (bucketError) {
+    return { options: [], error: bucketError };
+  }
+
+  const { data, error } = await supabase.storage.from(STORAGE_BUCKET).download(FINISH_OPTIONS_PATH);
+
+  if (error) {
+    const isMissing = error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist');
+    if (!isMissing || !seedIfMissing) {
+      return { options: [], error: isMissing ? null : error.message };
+    }
+
+    const seededOptions = await seedFinishOptionsFromMaterials();
+    const writeError = await writeStoredFinishOptions(seededOptions);
+    return { options: seededOptions, error: writeError };
+  }
+
+  try {
+    const text = await data.text();
+    const parsed = JSON.parse(text) as StoredFinishOptionsFile;
+    return { options: Array.isArray(parsed.options) ? parsed.options : [], error: null };
+  } catch (parseError) {
+    console.error('Failed to parse stored finish options:', parseError);
+    return { options: [], error: 'Stored finish list could not be parsed.' };
+  }
+}
+
+async function writeStoredFinishOptions(options: FinishOption[]): Promise<string | null> {
+  const { supabase, error: bucketError } = await ensureStorageBucket();
+  if (bucketError) {
+    return bucketError;
+  }
+
+  const file: StoredFinishOptionsFile = { options: sortFinishOptions(options) };
+  const { error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(FINISH_OPTIONS_PATH, JSON.stringify(file, null, 2), {
+      contentType: 'application/json',
+      upsert: true,
+    });
+
+  return error?.message ?? null;
+}
+
+async function getStoredActiveFinishOptions(): Promise<FinishOption[]> {
+  const { options, error } = await readStoredFinishOptions(true);
+  if (error) {
+    console.error('Failed to load stored finish options:', error);
+    return [];
+  }
+
+  return sortFinishOptions(options.filter((option) => option.is_active));
+}
+
+async function createStoredFinishOption(input: CreateFinishOptionInput): Promise<FinishOptionResult> {
+  const name = normalizeName(input.name);
+  if (!name) {
+    return { error: { _form: ['Name is required.'] } };
+  }
+
+  const { options, error } = await readStoredFinishOptions(true);
+  if (error) {
+    return { error: { _form: [error] } };
+  }
+
+  const timestamp = nowIso();
+  const existingIndex = options.findIndex((option) => option.name.toLowerCase() === name.toLowerCase());
+  const sortOrder = normalizeSortOrder(input.sort_order);
+
+  let finishOption: FinishOption;
+  if (existingIndex >= 0) {
+    finishOption = {
+      ...options[existingIndex],
+      name,
+      sort_order: sortOrder,
+      is_active: true,
+      updated_at: timestamp,
+    };
+    options[existingIndex] = finishOption;
+  } else {
+    finishOption = {
+      id: randomUUID(),
+      name,
+      sort_order: sortOrder,
+      is_active: true,
+      created_at: timestamp,
+      updated_at: timestamp,
+    };
+    options.push(finishOption);
+  }
+
+  const writeError = await writeStoredFinishOptions(options);
+  if (writeError) {
+    return { error: { _form: [writeError] } };
+  }
+
+  return { data: finishOption };
+}
+
+async function updateStoredFinishOption(
+  finishOptionId: string,
+  input: UpdateFinishOptionInput
+): Promise<FinishOptionResult> {
+  const { options, error } = await readStoredFinishOptions(true);
+  if (error) {
+    return { error: { _form: [error] } };
+  }
+
+  const index = options.findIndex((option) => option.id === finishOptionId);
+  if (index < 0) {
+    return { error: { _form: ['Finish not found.'] } };
+  }
+
+  const updates: Partial<FinishOption> = { updated_at: nowIso() };
+  if (input.name !== undefined) {
+    const name = normalizeName(input.name);
+    if (!name) {
+      return { error: { _form: ['Name is required.'] } };
+    }
+    updates.name = name;
+  }
+  if (input.sort_order !== undefined) {
+    updates.sort_order = normalizeSortOrder(input.sort_order);
+  }
+  if (input.is_active !== undefined) {
+    updates.is_active = input.is_active;
+  }
+
+  const nextOption = { ...options[index], ...updates };
+  options[index] = nextOption;
+
+  const writeError = await writeStoredFinishOptions(options);
+  if (writeError) {
+    return { error: { _form: [writeError] } };
+  }
+
+  return { data: nextOption };
+}
+
+async function deleteStoredFinishOption(finishOptionId: string): Promise<DeleteFinishOptionResult> {
+  const result = await updateStoredFinishOption(finishOptionId, { is_active: false });
+  if ('error' in result) {
+    return result;
+  }
+
+  return { data: { id: finishOptionId } };
+}
+
+export async function getFinishOptions(): Promise<FinishOption[]> {
+  await requireRole('sales');
+
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from('finish_options')
+      .select('*')
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true });
+
+    if (isFinishOptionsTableMissing(error)) {
+      return getStoredActiveFinishOptions();
+    }
+
+    if (error) {
+      console.error('Failed to fetch finish options:', error.message);
+      return [];
+    }
+
+    return (data ?? []) as FinishOption[];
+  } catch (error) {
+    console.error('Failed to fetch finish options:', error);
+    return getStoredActiveFinishOptions();
+  }
+}
+
+export async function createFinishOption(input: CreateFinishOptionInput): Promise<FinishOptionResult> {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+  const name = normalizeName(input.name);
+
+  if (!name) {
+    return { error: { _form: ['Name is required.'] } };
+  }
+
+  const sortOrder = normalizeSortOrder(input.sort_order);
+
+  const { data: existing, error: existingError } = await supabase
+    .from('finish_options')
+    .select('*')
+    .ilike('name', name)
+    .maybeSingle();
+
+  if (isFinishOptionsTableMissing(existingError)) {
+    const result = await createStoredFinishOption({ name, sort_order: sortOrder });
+    if ('data' in result) {
+      await logAuditEvent({
+        actorType: user.role,
+        actorId: user.id,
+        action: 'FINISH_OPTION_CREATED',
+        entityType: 'finish_option',
+        entityId: result.data.id,
+        metadata: { name: result.data.name, sortOrder: result.data.sort_order, storageFallback: true },
+      });
+      revalidatePath('/admin/management');
+      revalidatePath('/dashboard');
+    }
+    return result;
+  }
+
+  if (existingError) {
+    return { error: { _form: [existingError.message] } };
+  }
+
+  if (existing) {
+    const { data: reactivated, error: updateError } = await supabase
+      .from('finish_options')
+      .update({ name, sort_order: sortOrder, is_active: true })
+      .eq('id', existing.id)
+      .select()
+      .single();
+
+    if (updateError) {
+      return { error: { _form: [updateError.message] } };
+    }
+
+    await logAuditEvent({
+      actorType: user.role,
+      actorId: user.id,
+      action: 'FINISH_OPTION_REACTIVATED',
+      entityType: 'finish_option',
+      entityId: reactivated.id,
+      metadata: { name: reactivated.name, sortOrder: reactivated.sort_order },
+    });
+
+    revalidatePath('/admin/management');
+    revalidatePath('/dashboard');
+    return { data: reactivated as FinishOption };
+  }
+
+  const { data, error } = await supabase
+    .from('finish_options')
+    .insert({ name, sort_order: sortOrder })
+    .select()
+    .single();
+
+  if (isFinishOptionsTableMissing(error)) {
+    const result = await createStoredFinishOption({ name, sort_order: sortOrder });
+    if ('data' in result) {
+      await logAuditEvent({
+        actorType: user.role,
+        actorId: user.id,
+        action: 'FINISH_OPTION_CREATED',
+        entityType: 'finish_option',
+        entityId: result.data.id,
+        metadata: { name: result.data.name, sortOrder: result.data.sort_order, storageFallback: true },
+      });
+      revalidatePath('/admin/management');
+      revalidatePath('/dashboard');
+    }
+    return result;
+  }
+
+  if (error) {
+    return { error: { _form: [error.message] } };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'FINISH_OPTION_CREATED',
+    entityType: 'finish_option',
+    entityId: data.id,
+    metadata: { name: data.name, sortOrder: data.sort_order },
+  });
+
+  revalidatePath('/admin/management');
+  revalidatePath('/dashboard');
+  return { data: data as FinishOption };
+}
+
+export async function updateFinishOption(
+  finishOptionId: string,
+  input: UpdateFinishOptionInput
+): Promise<FinishOptionResult> {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  const updates: UpdateFinishOptionInput = {};
+  if (input.name !== undefined) {
+    const name = normalizeName(input.name);
+    if (!name) {
+      return { error: { _form: ['Name is required.'] } };
+    }
+    updates.name = name;
+  }
+  if (input.sort_order !== undefined) {
+    updates.sort_order = normalizeSortOrder(input.sort_order);
+  }
+  if (input.is_active !== undefined) {
+    updates.is_active = input.is_active;
+  }
+
+  const { data, error } = await supabase
+    .from('finish_options')
+    .update(updates)
+    .eq('id', finishOptionId)
+    .select()
+    .single();
+
+  if (isFinishOptionsTableMissing(error)) {
+    const result = await updateStoredFinishOption(finishOptionId, input);
+    if ('data' in result) {
+      await logAuditEvent({
+        actorType: user.role,
+        actorId: user.id,
+        action: 'FINISH_OPTION_UPDATED',
+        entityType: 'finish_option',
+        entityId: result.data.id,
+        metadata: {
+          name: result.data.name,
+          sortOrder: result.data.sort_order,
+          isActive: result.data.is_active,
+          storageFallback: true,
+        },
+      });
+      revalidatePath('/admin/management');
+      revalidatePath('/dashboard');
+    }
+    return result;
+  }
+
+  if (error) {
+    return { error: { _form: [error.message] } };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'FINISH_OPTION_UPDATED',
+    entityType: 'finish_option',
+    entityId: data.id,
+    metadata: { name: data.name, sortOrder: data.sort_order, isActive: data.is_active },
+  });
+
+  revalidatePath('/admin/management');
+  revalidatePath('/dashboard');
+  return { data: data as FinishOption };
+}
+
+export async function deleteFinishOption(finishOptionId: string): Promise<DeleteFinishOptionResult> {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('finish_options')
+    .update({ is_active: false })
+    .eq('id', finishOptionId)
+    .select()
+    .single();
+
+  if (isFinishOptionsTableMissing(error)) {
+    const result = await deleteStoredFinishOption(finishOptionId);
+    if ('data' in result) {
+      await logAuditEvent({
+        actorType: user.role,
+        actorId: user.id,
+        action: 'FINISH_OPTION_DEACTIVATED',
+        entityType: 'finish_option',
+        entityId: finishOptionId,
+        metadata: { storageFallback: true },
+      });
+      revalidatePath('/admin/management');
+      revalidatePath('/dashboard');
+    }
+    return result;
+  }
+
+  if (error) {
+    return { error: { _form: [error.message] } };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'FINISH_OPTION_DEACTIVATED',
+    entityType: 'finish_option',
+    entityId: finishOptionId,
+    metadata: { name: data.name },
+  });
+
+  revalidatePath('/admin/management');
+  revalidatePath('/dashboard');
+  return { data: { id: finishOptionId } };
+}

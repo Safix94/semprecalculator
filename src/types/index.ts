@@ -66,6 +66,15 @@ export interface ProductType {
   created_at: string;
 }
 
+export interface FinishOption {
+  id: string;
+  name: string;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Rfq {
   id: string;
   created_by: string;

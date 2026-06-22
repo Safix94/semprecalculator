@@ -1,8 +1,10 @@
 import { requireRole } from '@/lib/auth';
+import { getFinishOptions } from '@/actions/finish-options';
 import { getMaterials } from '@/actions/materials';
 import { getProductTypes } from '@/actions/product-types';
 import { getSuppliers } from '@/actions/suppliers';
 import { listUsersWithRoles } from '@/actions/users';
+import { FinishOptionManagement } from '@/components/finish-option-management';
 import { MaterialManagement } from '@/components/material-management';
 import { ProductTypeManagement } from '@/components/product-type-management';
 import { SupplierManagement } from '@/components/supplier-management';
@@ -12,10 +14,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export default async function ManagementPage() {
   const currentUser = await requireRole('sales');
 
-  const [materials, suppliers, productTypesResult, users] = await Promise.all([
+  const [materials, suppliers, productTypesResult, finishOptions, users] = await Promise.all([
     getMaterials(),
     getSuppliers(),
     getProductTypes(),
+    getFinishOptions(),
     currentUser.role === 'admin' ? listUsersWithRoles() : Promise.resolve([]),
   ]);
   const productTypes = 'data' in productTypesResult ? productTypesResult.data : [];
@@ -25,19 +28,28 @@ export default async function ManagementPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Management</h1>
         <p className="text-muted-foreground">
-          Manage materials, suppliers, product types, and (admin only) user roles.
+          Manage materials, finishes, suppliers, product types, and (admin only) user roles.
         </p>
       </div>
 
       <Tabs defaultValue="materials">
         <TabsList>
           <TabsTrigger value="materials">Materials</TabsTrigger>
+          <TabsTrigger value="finishes">Finishes</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="product-types">Product types</TabsTrigger>
           {currentUser.role === 'admin' && <TabsTrigger value="users">Users</TabsTrigger>}
         </TabsList>
         <TabsContent value="materials">
-          <MaterialManagement materials={materials} suppliers={suppliers} productTypes={productTypes} />
+          <MaterialManagement
+            materials={materials}
+            suppliers={suppliers}
+            productTypes={productTypes}
+            finishOptions={finishOptions}
+          />
+        </TabsContent>
+        <TabsContent value="finishes">
+          <FinishOptionManagement finishOptions={finishOptions} />
         </TabsContent>
         <TabsContent value="suppliers">
           <SupplierManagement suppliers={suppliers} materials={materials} />

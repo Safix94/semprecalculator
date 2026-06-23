@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getFinishOptions } from '@/actions/finish-options';
 import { getActiveMaterials, getSuppliersForMaterial } from '@/actions/materials';
 import { getProductTypes } from '@/actions/product-types';
+import { findSimilarRfqs } from '@/actions/rfq-search';
 import { createRfq, uploadAttachment } from '@/actions/rfq';
 import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
 import {
@@ -35,6 +36,8 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RfqDuplicateWarning } from '@/components/rfq-duplicate-warning';
+import type { RfqDuplicateWarning as RfqDuplicateWarningData } from '@/lib/rfq-match';
 import type { FinishOption, Material, ProductType, Supplier, UsageEnvironment } from '@/types';
 
 interface RfqCreateWizardProps {
@@ -145,6 +148,11 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<WizardData>(initialData);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
+  const [duplicateWarning, setDuplicateWarning] = useState<RfqDuplicateWarningData>({ exact: [], similar: [] });
+  const [duplicateWarningSignature, setDuplicateWarningSignature] = useState<string | null>(null);
+  const [duplicateLoading, setDuplicateLoading] = useState(false);
+  const [duplicateError, setDuplicateError] = useState<string | null>(null);
+  const [allowDuplicate, setAllowDuplicate] = useState(false);
 
   const [materials, setMaterials] = useState<Material[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
@@ -565,6 +573,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
   const updateData = <K extends keyof WizardData>(field: K, value: WizardData[K]) => {
     setData((prev) => ({ ...prev, [field]: value }));
+    setAllowDuplicate(false);
+    setDuplicateWarning({ exact: [], similar: [] });
+    setDuplicateWarningSignature(null);
+    setDuplicateError(null);
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: [] }));
     }
@@ -902,12 +914,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setCurrentStep((prev) => Math.max(prev - 1, 0));
   };
 
-  const handleSubmit = async () => {
-    if (!validateCurrentStep()) return;
+  const detailsStepIndex = showTableFoot ? 3 : 2;
 
-    setLoading(true);
-    setErrors({});
-
+  const buildCreateRfqInput = useCallback((allowDuplicateOverride = false) => {
     const isRound = data.shape === 'Round';
     const toNumber = (value: string, fallback = 0) => {
       const parsed = Number(value);
@@ -935,7 +944,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         ? [data.finish_table_top, data.finish_table_foot].filter(Boolean).join(' / ')
         : data.finish;
 
-    const input = {
+    return {
       customer_name: data.customer_name || null,
       product_type: data.product_type || null,
       material: materialSummary,
@@ -964,10 +973,118 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       supplier_ids: isTablesType ? undefined : data.supplier_ids,
       supplier_ids_table_top: isTablesType ? data.supplier_ids_table_top : undefined,
       supplier_ids_table_foot: showTableFoot ? data.supplier_ids_table_foot : undefined,
+      allow_duplicate: allowDuplicateOverride,
     };
+  }, [
+    data,
+    isTablesType,
+    isTableTopsType,
+    showTableFoot,
+    showDiameterField,
+    showLengthField,
+    showWidthField,
+    showHeightField,
+    showThicknessField,
+    showQuantityField,
+    showShapeField,
+    showModelField,
+    showUsageEnvironmentField,
+    showNotesField,
+  ]);
+
+  const duplicateCheckInput = useMemo(() => buildCreateRfqInput(false), [buildCreateRfqInput]);
+  const duplicateCheckSignature = useMemo(() => JSON.stringify(duplicateCheckInput), [duplicateCheckInput]);
+  const duplicateCheckReady = useMemo(() => {
+    const supplierCount = [
+      ...(duplicateCheckInput.supplier_ids ?? []),
+      ...(duplicateCheckInput.supplier_ids_table_top ?? []),
+      ...(duplicateCheckInput.supplier_ids_table_foot ?? []),
+    ].length;
+
+    return (
+      open &&
+      currentStep === detailsStepIndex &&
+      Boolean(duplicateCheckInput.product_type) &&
+      Boolean(duplicateCheckInput.material) &&
+      Boolean(duplicateCheckInput.finish) &&
+      supplierCount > 0 &&
+      Number.isFinite(duplicateCheckInput.length) &&
+      Number.isFinite(duplicateCheckInput.width) &&
+      Number.isFinite(duplicateCheckInput.height) &&
+      Number.isFinite(duplicateCheckInput.thickness)
+    );
+  }, [currentStep, detailsStepIndex, duplicateCheckInput, open]);
+
+  useEffect(() => {
+    setAllowDuplicate(false);
+
+    if (!duplicateCheckReady) {
+      setDuplicateWarning({ exact: [], similar: [] });
+      setDuplicateWarningSignature(null);
+      setDuplicateError(null);
+      setDuplicateLoading(false);
+      return;
+    }
+
+    let active = true;
+    setDuplicateLoading(true);
+    setDuplicateError(null);
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await findSimilarRfqs(duplicateCheckInput);
+        if (!active) return;
+
+        if ('error' in result) {
+          setDuplicateWarning({ exact: [], similar: [] });
+          setDuplicateWarningSignature(null);
+          setDuplicateError(result.error);
+        } else {
+          setDuplicateWarning(result.data);
+          setDuplicateWarningSignature(duplicateCheckSignature);
+          setDuplicateError(null);
+        }
+      } catch (error) {
+        if (!active) return;
+        console.error('Failed to check duplicate RFQs:', error);
+        setDuplicateWarning({ exact: [], similar: [] });
+        setDuplicateWarningSignature(null);
+        setDuplicateError('Duplicate check could not be completed.');
+      } finally {
+        if (active) {
+          setDuplicateLoading(false);
+        }
+      }
+    }, 500);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeout);
+    };
+  }, [duplicateCheckInput, duplicateCheckReady, duplicateCheckSignature]);
+
+  const handleSubmit = async () => {
+    if (!validateCurrentStep()) return;
+
+    setLoading(true);
+    setErrors({});
+
+    const hasCurrentExactDuplicateWarning =
+      duplicateWarning.exact.length > 0 && duplicateWarningSignature === duplicateCheckSignature;
+    const input = buildCreateRfqInput(allowDuplicate || hasCurrentExactDuplicateWarning);
 
     try {
       const result = await createRfq(input);
+
+      if ('duplicateWarning' in result && result.duplicateWarning) {
+        setDuplicateWarning(result.duplicateWarning);
+        setDuplicateWarningSignature(duplicateCheckSignature);
+        setAllowDuplicate(true);
+        setErrors({
+          _form: ['A possible duplicate was found. Review the existing request or click Create anyway to continue.'],
+        });
+        return;
+      }
 
       if (result.error) {
         const firstErrorMessage = Object.values(result.error)
@@ -997,6 +1114,11 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         setSuppliers([]);
         setSuppliersError(null);
         setAttachments([]);
+        setDuplicateWarning({ exact: [], similar: [] });
+        setDuplicateWarningSignature(null);
+        setDuplicateLoading(false);
+        setDuplicateError(null);
+        setAllowDuplicate(false);
 
         if (failedUploads.length > 0) {
           console.error('Some attachments failed to upload:', failedUploads);
@@ -1017,6 +1139,11 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setCurrentStep(0);
     setData(initialData);
     setErrors({});
+    setDuplicateWarning({ exact: [], similar: [] });
+    setDuplicateWarningSignature(null);
+    setDuplicateLoading(false);
+    setDuplicateError(null);
+    setAllowDuplicate(false);
     setSuppliers([]);
     setSuppliersError(null);
     setTableTopSuppliers([]);
@@ -1031,7 +1158,6 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
   const stepTitles = showTableFoot
     ? ['Material & finish', 'Suppliers - table top', 'Suppliers - table foot', 'Details & dimensions']
     : ['Material & finish', 'Suppliers', 'Details & dimensions'];
-  const detailsStepIndex = showTableFoot ? 3 : 2;
 
   return (
     <Dialog
@@ -1711,6 +1837,14 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
             </>
           )}
 
+          {currentStep === detailsStepIndex && (
+            <RfqDuplicateWarning
+              warning={duplicateWarning}
+              loading={duplicateLoading}
+              error={duplicateError}
+            />
+          )}
+
           {errors._form && <p className="text-destructive text-sm">{errors._form[0]}</p>}
         </div>
 
@@ -1732,7 +1866,11 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               </Button>
             ) : (
               <Button type="button" onClick={handleSubmit} disabled={loading}>
-                {loading ? 'Loading...' : 'Create'}
+                {loading
+                  ? 'Loading...'
+                  : duplicateWarning.exact.length > 0 || allowDuplicate
+                    ? 'Create anyway'
+                    : 'Create'}
               </Button>
             )}
           </div>

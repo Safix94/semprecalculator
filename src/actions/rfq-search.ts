@@ -2,6 +2,15 @@
 
 import { requireRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import {
+  buildRfqCandidateMatchInput,
+  buildRfqMatchInput,
+  hasEnoughRfqMatchInput,
+  reasonForScore,
+  scoreRfqMatch,
+  type RfqDuplicateMatch,
+  type RfqDuplicateWarning,
+} from '@/lib/rfq-match';
 import type { Rfq, RfqQuote, RfqSearchResponse, RfqSearchResult, Supplier } from '@/types';
 
 const DEFAULT_PAGE_SIZE = 25;
@@ -27,6 +36,7 @@ export interface SearchRfqsInput {
 
 type InviteRow = {
   supplier_id: string | null;
+  invite_part: 'default' | 'table_top' | 'table_foot' | 'table_both' | null;
   supplier: Supplier | Supplier[] | null;
 };
 
@@ -136,6 +146,18 @@ function rowToResult(row: RfqSearchRow): RfqSearchResult {
     ...(row.rfq_invites ?? []).map((invite) => invite.supplier_id),
     ...suppliers.map((supplier) => supplier.id),
   ]);
+  const supplierMatchKeys = uniqueSorted(
+    (row.rfq_invites ?? [])
+      .flatMap((invite) => {
+        if (!invite.supplier_id) return [];
+        if (invite.invite_part === 'table_top') return [`table_top:${invite.supplier_id}`];
+        if (invite.invite_part === 'table_foot') return [`table_foot:${invite.supplier_id}`];
+        if (invite.invite_part === 'table_both') {
+          return [`table_top:${invite.supplier_id}`, `table_foot:${invite.supplier_id}`];
+        }
+        return [`default:${invite.supplier_id}`];
+      })
+  );
   const quotes = row.rfq_quotes ?? [];
   const bestFinalPrice = quotes
     .map((quote) => Number(quote.final_price_calculated))
@@ -149,6 +171,7 @@ function rowToResult(row: RfqSearchRow): RfqSearchResult {
     rfq,
     supplierNames,
     supplierIds,
+    supplierMatchKeys,
     quoteCount: quotes.length,
     bestFinalPrice,
   };
@@ -181,6 +204,7 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
         *,
         rfq_invites (
           supplier_id,
+          invite_part,
           supplier:suppliers (
             id,
             name,
@@ -259,5 +283,104 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
   } catch (error) {
     console.error('Failed to search RFQs:', error);
     return { error: 'RFQ history could not be loaded.' };
+  }
+}
+
+
+export interface FindSimilarRfqsInput {
+  product_type?: string | null;
+  material?: string | null;
+  material_table_top?: string | null;
+  material_table_foot?: string | null;
+  finish?: string | null;
+  finish_top?: string | null;
+  finish_edge?: string | null;
+  finish_color?: string | null;
+  finish_table_top?: string | null;
+  finish_table_foot?: string | null;
+  supplier_ids?: string[];
+  supplier_ids_table_top?: string[];
+  supplier_ids_table_foot?: string[];
+  shape?: string | null;
+  length?: number | string | null;
+  width?: number | string | null;
+  height?: number | string | null;
+  thickness?: number | string | null;
+  excludeRfqId?: string | null;
+}
+
+export async function findSimilarRfqs(
+  input: FindSimilarRfqsInput
+): Promise<{ data: RfqDuplicateWarning } | { error: string }> {
+  await requireRole('sales');
+
+  const matchInput = buildRfqMatchInput(input);
+  if (!hasEnoughRfqMatchInput(matchInput)) {
+    return { data: { exact: [], similar: [] } };
+  }
+
+  try {
+    const firstPage = await searchRfqs({
+      productType: input.product_type,
+      material: matchInput.materials[0] ?? null,
+      pageSize: 100,
+    });
+
+    if ('error' in firstPage) {
+      return firstPage;
+    }
+
+    const allResults = [...firstPage.data.results];
+    for (let page = 2; page <= firstPage.data.totalPages; page += 1) {
+      const nextPage = await searchRfqs({
+        productType: input.product_type,
+        material: matchInput.materials[0] ?? null,
+        page,
+        pageSize: 100,
+      });
+
+      if ('error' in nextPage) {
+        return nextPage;
+      }
+
+      allResults.push(...nextPage.data.results);
+    }
+
+    const exact: RfqDuplicateMatch[] = [];
+    const similar: RfqDuplicateMatch[] = [];
+
+    for (const result of allResults) {
+      if (input.excludeRfqId && result.rfq.id === input.excludeRfqId) {
+        continue;
+      }
+
+      const candidateInput = buildRfqCandidateMatchInput(result.rfq, result.supplierMatchKeys);
+      const score = scoreRfqMatch(candidateInput, matchInput);
+      if (!score) {
+        continue;
+      }
+
+      const match: RfqDuplicateMatch = {
+        ...result,
+        matchScore: score,
+        reason: reasonForScore(score),
+      };
+
+      if (score === 'exact') {
+        exact.push(match);
+      } else {
+        similar.push(match);
+      }
+    }
+
+    return {
+      data: {
+        exact: exact.slice(0, 5),
+        similar: similar.slice(0, 5),
+      },
+    };
+  } catch (error) {
+    console.error('Failed to find similar RFQs:', error);
+    return { error: 'Duplicate check could not be completed.' };
   }
 }

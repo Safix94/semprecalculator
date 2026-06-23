@@ -26,6 +26,7 @@ import {
   isTableTopsProductType,
   isTablesProductType,
 } from '@/lib/rfq-format';
+import { findSimilarRfqs } from './rfq-search';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } from '@/types';
@@ -251,6 +252,7 @@ export async function createRfq(input: CreateRfqInput) {
       supplier_ids,
       supplier_ids_table_top,
       supplier_ids_table_foot,
+      allow_duplicate,
       ...rfqData
     } = parsed.data;
     const normalizedRfqData = {
@@ -265,6 +267,23 @@ export async function createRfq(input: CreateRfqInput) {
       finish_table_top: rfqData.finish_table_top?.trim() || null,
       finish_table_foot: rfqData.finish_table_foot?.trim() || null,
     };
+
+    if (allow_duplicate !== true) {
+      const duplicateResult = await findSimilarRfqs({
+        ...normalizedRfqData,
+        supplier_ids,
+        supplier_ids_table_top,
+        supplier_ids_table_foot,
+      });
+
+      if ('error' in duplicateResult) {
+        return { error: { _form: [duplicateResult.error] } };
+      }
+
+      if (duplicateResult.data.exact.length > 0) {
+        return { duplicateWarning: duplicateResult.data };
+      }
+    }
 
     const insertPayload = {
       ...normalizedRfqData,
@@ -428,6 +447,7 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
   delete parsedUpdateData.supplier_ids;
   delete parsedUpdateData.supplier_ids_table_top;
   delete parsedUpdateData.supplier_ids_table_foot;
+  delete parsedUpdateData.allow_duplicate;
 
   const updateData: Partial<CreateRfqInput> = {
     ...parsedUpdateData,

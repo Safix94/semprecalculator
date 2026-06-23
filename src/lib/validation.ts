@@ -30,6 +30,7 @@ const rfqSchemaBase = z.object({
   supplier_ids: z.array(z.string().uuid()).optional(),
   supplier_ids_table_top: z.array(z.string().uuid()).optional(),
   supplier_ids_table_foot: z.array(z.string().uuid()).optional(),
+  allow_duplicate: z.boolean().optional(),
 });
 
 const validateShapeThickness = (

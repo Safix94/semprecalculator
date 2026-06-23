@@ -193,6 +193,7 @@ export interface RfqSearchResult {
   rfq: Rfq;
   supplierNames: string[];
   supplierIds: string[];
+  supplierMatchKeys: string[];
   quoteCount: number;
   bestFinalPrice: number | null;
 }

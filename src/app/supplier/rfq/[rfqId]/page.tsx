@@ -1,5 +1,6 @@
 import { validateSupplierToken } from '@/actions/quote';
 import { listSupplierComments } from '@/actions/rfq-comments';
+import { SupplierAttachmentList } from '@/components/supplier-attachment-list';
 import { SupplierCommentThread } from '@/components/supplier-comment-thread';
 import { SupplierQuoteForm } from '@/components/supplier-quote-form';
 import { SupplierQuoteReadOnly } from '@/components/supplier-quote-readonly';
@@ -188,18 +189,11 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
               )}
             </dl>
 
-            {rfq.attachments && rfq.attachments.length > 0 && (
-              <div className="border-t border-border pt-4">
-                <h3 className="mb-2 text-xs uppercase text-muted-foreground">Attachments</h3>
-                <ul className="space-y-1">
-                  {rfq.attachments.map((att: { id: string; file_name: string }) => (
-                    <li key={att.id} className="text-sm text-primary">
-                      {att.file_name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <SupplierAttachmentList
+              rfqId={rfqId}
+              token={supplierToken}
+              attachments={rfq.attachments ?? []}
+            />
           </CardContent>
         </Card>
 

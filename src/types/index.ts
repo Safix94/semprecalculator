@@ -188,6 +188,23 @@ export interface RfqWithRelations extends Rfq {
   material_details?: Material;
 }
 
+
+export interface RfqSearchResult {
+  rfq: Rfq;
+  supplierNames: string[];
+  supplierIds: string[];
+  quoteCount: number;
+  bestFinalPrice: number | null;
+}
+
+export interface RfqSearchResponse {
+  results: RfqSearchResult[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  pageSize: number;
+}
+
 export interface InviteWithSupplier extends RfqInvite {
   supplier: Supplier;
   quote?: RfqQuote | null;

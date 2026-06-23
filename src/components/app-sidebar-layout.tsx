@@ -4,7 +4,7 @@ import type { ComponentType, ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileText, ScrollText, Settings } from 'lucide-react';
+import { FileText, Search, ScrollText, Settings } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
 import { RfqCreateWizard } from '@/components/rfq-create-wizard';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -41,11 +41,16 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Price request', href: '/dashboard', icon: FileText },
+  { label: 'RFQ history', href: '/dashboard/history', icon: Search },
   { label: 'Management', href: '/admin/management', icon: Settings },
   { label: 'Audit Logs', href: '/admin/logs', icon: ScrollText, adminOnly: true },
 ];
 
 function isNavItemActive(pathname: string, href: string): boolean {
+  if (href === '/dashboard') {
+    return pathname === href;
+  }
+
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 

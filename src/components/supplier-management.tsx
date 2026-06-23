@@ -148,6 +148,27 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
     updateFormData('material_ids', updatedMaterialIds);
   };
 
+  const handleSupplierLanguageChange = async (supplierId: string, value: string) => {
+    const preferredLanguage = normalizeSupplierLanguage(value);
+    const previousSuppliers = suppliers;
+
+    setError(null);
+    setSuppliers(prev =>
+      prev.map(supplier =>
+        supplier.id === supplierId
+          ? { ...supplier, preferred_language: preferredLanguage }
+          : supplier
+      )
+    );
+
+    const result = await updateSupplier(supplierId, { preferred_language: preferredLanguage });
+
+    if (result.error) {
+      setSuppliers(previousSuppliers);
+      setError(result.error._form?.[0] || 'Supplier language could not be updated');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {error && (
@@ -181,8 +202,26 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 <TableRow key={supplier.id}>
                   <TableCell className="font-medium">{supplier.name}</TableCell>
                   <TableCell className="text-muted-foreground">{supplier.email}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {SUPPLIER_LANGUAGE_LABELS[normalizeSupplierLanguage(supplier.preferred_language)]}
+                  <TableCell>
+                    <Select
+                      value={normalizeSupplierLanguage(supplier.preferred_language)}
+                      onValueChange={(value) => handleSupplierLanguageChange(supplier.id, value)}
+                    >
+                      <SelectTrigger
+                        aria-label={`Preferred language for ${supplier.name}`}
+                        className="w-[170px]"
+                        size="sm"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUPPLIER_LANGUAGES.map((language) => (
+                          <SelectItem key={language} value={language}>
+                            {SUPPLIER_LANGUAGE_LABELS[language]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {supplier.available_materials && supplier.available_materials.length > 0
@@ -225,7 +264,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
 
       {/* Create/Edit Supplier Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingSupplier ? 'Edit supplier' : 'New supplier'}
@@ -267,7 +306,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                   updateFormData('preferred_language', normalizeSupplierLanguage(value))
                 }
               >
-                <SelectTrigger id="supplier-language">
+                <SelectTrigger id="supplier-language" className="w-full">
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
                 <SelectContent>

@@ -177,7 +177,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
             </div>
             {(!isRound || typedRfq.thickness > 0) && (
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
+                <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
                 <dd className="mt-1 text-sm font-medium">{typedRfq.thickness} cm</dd>
               </div>
             )}

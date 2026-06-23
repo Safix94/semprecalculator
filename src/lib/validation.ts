@@ -21,7 +21,7 @@ const rfqSchemaBase = z.object({
   length: z.coerce.number().positive('Length must be positive'),
   width: z.coerce.number().positive('Width must be positive'),
   height: z.coerce.number().min(0, 'Height must be zero or positive'),
-  thickness: z.coerce.number().min(0, 'Thickness must be zero or positive'),
+  thickness: z.coerce.number().min(0, 'Thickness top must be zero or positive'),
   quantity: z.coerce.number().int('Quantity must be a whole number').positive('Quantity must be at least 1').default(1),
   shape: z.string().min(1, 'Shape is required'),
   model: z.string().optional().nullable(),
@@ -47,7 +47,7 @@ const validateShapeThickness = (
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['thickness'],
-        message: 'Thickness must be positive',
+        message: 'Thickness top must be positive',
       });
     }
     return;
@@ -60,7 +60,7 @@ const validateShapeThickness = (
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['thickness'],
-        message: 'Thickness must be zero or positive for Round shapes',
+        message: 'Thickness top must be zero or positive for Round shapes',
       });
     }
     return;
@@ -70,7 +70,7 @@ const validateShapeThickness = (
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['thickness'],
-      message: 'Thickness must be positive',
+      message: 'Thickness top must be positive',
     });
   }
 };
@@ -227,7 +227,7 @@ export const updateRfqDetailsSchema = z
     length: z.coerce.number().positive('Length must be positive').optional(),
     width: z.coerce.number().positive('Width must be positive').optional(),
     height: z.coerce.number().positive('Height must be positive').optional(),
-    thickness: z.coerce.number().min(0, 'Thickness must be zero or positive').optional(),
+    thickness: z.coerce.number().min(0, 'Thickness top must be zero or positive').optional(),
     model: z.string().optional().nullable(),
     shape: z.string().optional().nullable(),
   })

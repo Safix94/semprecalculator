@@ -35,10 +35,10 @@ export function formatRfqDimensionsWithOptions(
   if (isRoundShape(input.shape)) {
     const base = `Ø ${input.length} x ${input.height} cm`;
     return options.includeThickness && input.thickness > 0
-      ? `${base} (+ ${input.thickness} cm thickness)`
+      ? `${base} (+ ${input.thickness} cm thickness top)`
       : base;
   }
 
   const base = `${input.length} x ${input.width} x ${input.height} cm`;
-  return options.includeThickness && input.thickness > 0 ? `${base} (d:${input.thickness})` : base;
+  return options.includeThickness && input.thickness > 0 ? `${base} (thickness top: ${input.thickness} cm)` : base;
 }

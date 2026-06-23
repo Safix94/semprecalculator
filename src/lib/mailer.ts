@@ -53,6 +53,32 @@ function toExcerpt(text: string, maxLength = 240): string {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}\u2026`;
 }
 
+function cleanTitlePart(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function prefixProductType(title: string, productType: string | null | undefined) {
+  const normalizedProductType = cleanTitlePart(productType);
+  return normalizedProductType ? `${normalizedProductType} - ${title}` : title;
+}
+
+function buildPricingRequestTitle(params: {
+  productType?: string | null;
+  material?: string | null;
+  shape?: string | null;
+}) {
+  const detail = [cleanTitlePart(params.material), cleanTitlePart(params.shape)].filter(Boolean).join(' - ');
+  return `New price request: ${prefixProductType(detail || 'RFQ', params.productType)}`;
+}
+
+function buildSupplierRequestTitle(params: {
+  productType?: string | null;
+  subjectMaterial: string;
+}) {
+  return `Request for quotation: ${prefixProductType(params.subjectMaterial, params.productType)}`;
+}
+
 function buildSupplierRfqLink(rfqId: string, token: string): string {
   const path = `/supplier/rfq/${rfqId}`;
 
@@ -117,6 +143,7 @@ export async function sendSupplierInviteEmail(params: {
   rfqId: string;
   token: string;
   material: string;
+  productType?: string | null;
   shape: string;
   finish?: string | null;
   invitePart?: 'default' | 'table_top' | 'table_foot' | 'table_both';
@@ -183,6 +210,10 @@ export async function sendSupplierInviteEmail(params: {
     ].filter(Boolean) as string[];
   }
 
+  if (params.productType) {
+    detailLines.unshift(`<li><strong>Product type:</strong> ${params.productType}</li>`);
+  }
+
   if (params.dimensionsText) {
     detailLines.push(`<li><strong>Dimensions:</strong> ${params.dimensionsText}</li>`);
   }
@@ -201,9 +232,9 @@ export async function sendSupplierInviteEmail(params: {
 
   return sendEmail({
     to: { email: params.supplierEmail, name: params.supplierName },
-    subject: `Request for quotation: ${subjectMaterial}`,
+    subject: buildSupplierRequestTitle({ productType: params.productType, subjectMaterial }),
     htmlContent: `
-      <h2>New request for quotation</h2>
+      <h2>New request for quotation${params.productType ? `: ${params.productType}` : ''}</h2>
       <p>Dear ${params.supplierName},</p>
       <p>${introText}</p>
       <ul>${detailLines.join('')}</ul>
@@ -244,16 +275,24 @@ export async function sendPricingTeamRfqNotification(params: {
   pricingEmails: string[];
   rfqId: string;
   rfqSummary: string;
+  productType?: string | null;
+  material?: string | null;
+  shape?: string | null;
 }) {
   const link = `${APP_URL}/dashboard/rfqs/${params.rfqId}`;
+  const title = buildPricingRequestTitle({
+    productType: params.productType,
+    material: params.material,
+    shape: params.shape,
+  });
 
   const results = await Promise.all(
     params.pricingEmails.map(async (email) => {
       const emailResult = await sendEmail({
         to: { email },
-        subject: 'New price request ready for review',
+        subject: title,
         htmlContent: `
-          <h2>New price request ready for review</h2>
+          <h2>${title}</h2>
           <p>A new draft request is available for pricing review.</p>
           <p><strong>Summary:</strong> ${params.rfqSummary}</p>
           <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open request</a></p>

@@ -160,6 +160,8 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     : null;
 
   const canManageRfq = userRole === 'admin' || userRole === 'sales';
+  const canEditRfqDetails =
+    canManageRfq && (detail?.rfq.status === 'draft' || detail?.rfq.status === 'sent_to_pricing');
   const isRound = detail ? isRoundShape(detail.rfq.shape) : false;
   const isTablesType = isTablesProductType(detail?.rfq.product_type);
   const isTableTopsType = isTableTopsProductType(detail?.rfq.product_type);
@@ -428,7 +430,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <CardTitle>Details</CardTitle>
-                  {canManageRfq && !detailsEditing && (
+                  {canEditRfqDetails && !detailsEditing && (
                     <Button type="button" variant="outline" size="sm" onClick={startDetailsEdit}>
                       Edit
                     </Button>
@@ -517,11 +519,11 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                   </div>
                   {!detailsEditing && (!isRound || detail.rfq.thickness > 0 || canManageRfq) && (
                     <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
+                      <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
                       <dd className="mt-1 text-sm font-medium">{detail.rfq.thickness} cm</dd>
                     </div>
                   )}
-                  {detailsEditing && canManageRfq && (
+                  {detailsEditing && canEditRfqDetails && (
                     <div className="col-span-2 rounded-md border p-3 md:col-span-4">
                       <p className="mb-3 text-xs uppercase text-muted-foreground">Edit details</p>
                       {isTablesType && (
@@ -580,7 +582,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                           />
                         </label>
                         <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                          <span>Thickness (cm)</span>
+                          <span>Thickness top (cm)</span>
                           <Input
                             type="number"
                             min={0}

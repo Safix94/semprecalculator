@@ -25,7 +25,8 @@ export type AuditAction =
   | 'SUPPLIER_COMMENT_ADDED'
   | 'INTERNAL_COMMENT_ADDED'
   | 'SUPPLIER_LINK_SENT'
-  | 'EMAIL_SENT';
+  | 'EMAIL_SENT'
+  | 'USER_CREATED';
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';
 export type UsageEnvironment = 'Indoor' | 'Outdoor';

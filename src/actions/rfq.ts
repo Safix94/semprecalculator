@@ -473,7 +473,7 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
     .from('rfqs')
     .update(updateData)
     .eq('id', rfqId)
-    .eq('status', 'draft')
+    .in('status', ['draft', 'sent_to_pricing'])
     .select()
     .single();
 
@@ -502,12 +502,16 @@ export async function updateRfqDetails(rfqId: string, input: UpdateRfqDetailsInp
   const supabase = await createClient();
   const { data: existingRfq, error: existingRfqError } = await supabase
     .from('rfqs')
-    .select('id, shape, model')
+    .select('id, shape, model, status')
     .eq('id', rfqId)
     .single();
 
   if (existingRfqError || !existingRfq) {
     return { error: { _form: [existingRfqError?.message ?? 'RFQ not found'] } };
+  }
+
+  if (existingRfq.status !== 'draft' && existingRfq.status !== 'sent_to_pricing') {
+    return { error: { _form: ['RFQ details can only be edited before sending to suppliers'] } };
   }
 
   const parsed = updateRfqDetailsSchema.safeParse({
@@ -930,6 +934,7 @@ export async function sendRfq(rfqId: string) {
       rfqId,
       token,
       material: materialName,
+      productType: rfq.product_type,
       shape: rfq.shape,
       finish: rfq.finish,
       finishTop: rfq.finish_top,
@@ -1072,6 +1077,9 @@ export async function sendToPricingTeam(rfqId: string) {
     pricingEmails,
     rfqId,
     rfqSummary,
+    productType: rfq.product_type,
+    material: rfq.material,
+    shape: rfq.shape,
   });
 
   if (emailResult.sent === 0) {

@@ -342,15 +342,14 @@ export async function submitQuote(
     return { error: `Failed to check existing quote: ${existingQuoteError.message}` };
   }
 
-  if (invite.used_at) {
-    console.info('Quote submission blocked: invite already used.', {
+  if (invite.used_at && !existingQuote) {
+    console.info('Quote submission blocked: invite marked used without an existing quote.', {
       rfqId,
       inviteId: invite.id,
       supplierId: invite.supplier_id,
       usedAt: invite.used_at,
-      hasExistingQuote: Boolean(existingQuote),
     });
-    return { error: 'A quote has already been submitted via this link' };
+    return { error: 'This quote link was already used and no editable quote was found' };
   }
 
   let quote: RfqQuote | null = null;

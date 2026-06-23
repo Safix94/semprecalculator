@@ -863,9 +863,9 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         validatePositiveNumber('height', 'Height');
       }
       if (showThicknessField && isThicknessRequired) {
-        validatePositiveNumber('thickness', 'Thickness');
+        validatePositiveNumber('thickness', 'Thickness top');
       } else if (showThicknessField) {
-        validateOptionalNonNegativeNumber('thickness', 'Thickness');
+        validateOptionalNonNegativeNumber('thickness', 'Thickness top');
       }
 
       if (showQuantityField) {
@@ -1625,7 +1625,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                 {showThicknessField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="thickness">Thickness (cm) {isThicknessRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="thickness">Thickness top (cm) {isThicknessRequired ? '*' : '(optional)'}</Label>
                     <Input
                       id="thickness"
                       type="number"

@@ -85,7 +85,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const invitePart = invite.invite_part ?? 'default';
   const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
   const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
-  const canSubmitOrUpdateQuote = !invite.used_at;
+  const canSubmitOrUpdateQuote = !invite.used_at || Boolean(existingQuote);
   const quoteInitialValues = existingQuote
     ? {
         basePrice: Number(existingQuote.base_price),
@@ -101,7 +101,9 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
         <Card className="mb-6">
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
-              <h1 className="text-xl font-bold">Request for quotation</h1>
+              <h1 className="text-xl font-bold">
+                Request for quotation{rfq.product_type ? `: ${rfq.product_type}` : ''}
+              </h1>
               <span className="text-sm text-muted-foreground">{supplier?.name}</span>
             </div>
 
@@ -174,7 +176,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
               </div>
               {(!isRound || rfq.thickness > 0) && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Thickness</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.thickness} cm</dd>
                 </div>
               )}

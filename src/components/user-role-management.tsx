@@ -1,10 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { setUserRole } from '@/actions/users';
+import { createUserWithRole, setUserRole } from '@/actions/users';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -28,10 +30,29 @@ interface UserRoleManagementProps {
   currentUserId: string;
 }
 
+interface CreatedUserResult {
+  id: string;
+  email: string;
+  role: UserRole;
+  temporaryPassword: string;
+}
+
 function getRoleLabel(role: UserRole | null) {
   if (role === 'admin') return 'Admin';
   if (role === 'sales') return 'Sales';
   return 'Geen rol';
+}
+
+function getActionErrorMessage(error: unknown) {
+  if (typeof error === 'string') return error;
+  if (error && typeof error === 'object') {
+    const values = Object.values(error as Record<string, unknown>);
+    const firstMessage = values
+      .flatMap((value) => (Array.isArray(value) ? value : []))
+      .find((value): value is string => typeof value === 'string');
+    if (firstMessage) return firstMessage;
+  }
+  return 'An error occurred';
 }
 
 export function UserRoleManagement({
@@ -47,9 +68,39 @@ export function UserRoleManagement({
   );
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createEmail, setCreateEmail] = useState('');
+  const [createRole, setCreateRole] = useState<UserRole>('sales');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createdUser, setCreatedUser] = useState<CreatedUserResult | null>(null);
 
   const handleDraftRoleChange = (userId: string, role: UserRole) => {
     setDraftRoles((prev) => ({ ...prev, [userId]: role }));
+  };
+
+  const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setCreateLoading(true);
+    setError(null);
+    setCreatedUser(null);
+
+    const result = await createUserWithRole({ email: createEmail, role: createRole });
+
+    if ('error' in result) {
+      setError(getActionErrorMessage(result.error));
+      setCreateLoading(false);
+      return;
+    }
+
+    const newUser = result.data;
+    setUsers((prev) => [
+      { id: newUser.id, email: newUser.email, role: newUser.role },
+      ...prev.filter((user) => user.id !== newUser.id),
+    ]);
+    setDraftRoles((prev) => ({ ...prev, [newUser.id]: newUser.role }));
+    setCreatedUser(newUser);
+    setCreateEmail('');
+    setCreateRole('sales');
+    setCreateLoading(false);
   };
 
   const handleSaveRole = async (userId: string) => {
@@ -61,8 +112,8 @@ export function UserRoleManagement({
 
     const result = await setUserRole(userId, role);
 
-    if (result.error) {
-      setError(result.error._form?.[0] || 'An error occurred');
+    if ('error' in result) {
+      setError(getActionErrorMessage(result.error));
       setLoadingUserId(null);
       return;
     }
@@ -73,6 +124,11 @@ export function UserRoleManagement({
     setLoadingUserId(null);
   };
 
+  const copyTemporaryPassword = async () => {
+    if (!createdUser) return;
+    await navigator.clipboard.writeText(createdUser.temporaryPassword);
+  };
+
   return (
     <div className="space-y-6">
       {error && (
@@ -80,6 +136,63 @@ export function UserRoleManagement({
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
+
+      {createdUser && (
+        <Alert className="border-emerald-500/40 bg-emerald-500/10">
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-medium">User created: {createdUser.email}</p>
+              <p className="text-sm text-muted-foreground">
+                Temporary password. Copy it now; it will not be shown again.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <code className="rounded bg-background px-2 py-1 text-sm">
+                  {createdUser.temporaryPassword}
+                </code>
+                <Button type="button" size="sm" variant="outline" onClick={copyTemporaryPassword}>
+                  Copy password
+                </Button>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Create user</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleCreateUser} className="grid gap-4 md:grid-cols-[1fr_180px_auto] md:items-end">
+            <div className="space-y-1.5">
+              <Label htmlFor="new-user-email">Email</Label>
+              <Input
+                id="new-user-email"
+                type="email"
+                value={createEmail}
+                onChange={(event) => setCreateEmail(event.target.value)}
+                placeholder="name@example.com"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={createRole} onValueChange={(value) => setCreateRole(value as UserRole)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sales">Sales</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" disabled={createLoading}>
+              {createLoading ? 'Creating...' : 'Create user'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Users</h2>

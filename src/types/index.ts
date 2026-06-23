@@ -30,11 +30,13 @@ export type AuditAction =
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';
 export type UsageEnvironment = 'Indoor' | 'Outdoor';
+export type { SupplierLanguage } from '@/lib/supplier-language';
 
 export interface Supplier {
   id: string;
   name: string;
   email: string;
+  preferred_language: import('@/lib/supplier-language').SupplierLanguage;
   materials: string[];
   is_active: boolean;
   created_at: string;

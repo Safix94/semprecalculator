@@ -969,6 +969,7 @@ export async function sendRfq(rfqId: string) {
       usageEnvironment: rfq.usage_environment,
       dimensionsText,
       quantity,
+      language: invite.supplier.preferred_language,
     });
 
     await logAuditEvent({

@@ -6,16 +6,18 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import type { RfqComment } from '@/types';
+import { getSupplierTranslations, normalizeSupplierLanguage, SUPPLIER_LANGUAGE_LOCALES } from '@/lib/supplier-language';
+import type { RfqComment, SupplierLanguage } from '@/types';
 
 interface SupplierCommentThreadProps {
   rfqId: string;
   token: string;
   initialComments: RfqComment[];
+  language: SupplierLanguage;
 }
 
-function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString('en-GB', {
+function formatTimestamp(value: string, language: SupplierLanguage) {
+  return new Date(value).toLocaleString(SUPPLIER_LANGUAGE_LOCALES[normalizeSupplierLanguage(language)], {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -24,7 +26,8 @@ function formatTimestamp(value: string) {
   });
 }
 
-export function SupplierCommentThread({ rfqId, token, initialComments }: SupplierCommentThreadProps) {
+export function SupplierCommentThread({ rfqId, token, initialComments, language }: SupplierCommentThreadProps) {
+  const t = getSupplierTranslations(normalizeSupplierLanguage(language));
   const [comments, setComments] = useState(initialComments);
   const [body, setBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -36,7 +39,7 @@ export function SupplierCommentThread({ rfqId, token, initialComments }: Supplie
 
     const trimmedBody = body.trim();
     if (!trimmedBody) {
-      setError('Message is required');
+      setError(t.messageRequired);
       return;
     }
 
@@ -45,7 +48,7 @@ export function SupplierCommentThread({ rfqId, token, initialComments }: Supplie
     setSubmitting(false);
 
     if ('error' in result) {
-      setError(result.error ?? 'Could not send message');
+      setError(result.error ?? t.couldNotSendMessage);
       return;
     }
 
@@ -56,18 +59,18 @@ export function SupplierCommentThread({ rfqId, token, initialComments }: Supplie
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Conversation</CardTitle>
+        <CardTitle>{t.conversation}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {comments.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No messages yet.</p>
+          <p className="text-sm text-muted-foreground">{t.noMessagesYet}</p>
         ) : (
           <ul className="space-y-3">
             {comments.map((comment) => (
               <li key={comment.id} className="rounded-md border px-3 py-2">
                 <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                  <span>{comment.author_type === 'internal' ? 'Sempre team' : 'You'}</span>
-                  <span>{formatTimestamp(comment.created_at)}</span>
+                  <span>{comment.author_type === 'internal' ? t.sempreTeam : t.you}</span>
+                  <span>{formatTimestamp(comment.created_at, language)}</span>
                 </div>
                 <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
               </li>
@@ -82,7 +85,7 @@ export function SupplierCommentThread({ rfqId, token, initialComments }: Supplie
             onChange={(event) => setBody(event.target.value)}
             rows={4}
             maxLength={2000}
-            placeholder="Ask a question or share an update..."
+            placeholder={t.messagePlaceholder}
             disabled={submitting}
           />
 
@@ -93,7 +96,7 @@ export function SupplierCommentThread({ rfqId, token, initialComments }: Supplie
           )}
 
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Sending...' : 'Send message'}
+            {submitting ? t.sending : t.sendMessage}
           </Button>
         </form>
       </CardContent>

@@ -4,18 +4,34 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
+import { normalizeSupplierLanguage } from '@/lib/supplier-language';
 import type { Material, Supplier, SupplierWithMaterials } from '@/types';
+import type { SupplierLanguage } from '@/lib/supplier-language';
 
 export interface CreateSupplierInput {
   name: string;
   email: string;
   material_ids?: string[];
+  preferred_language?: SupplierLanguage;
+}
+
+
+function isMissingPreferredLanguageColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return error?.code === '42703' || message.includes('preferred_language');
+}
+
+function withoutPreferredLanguage<T extends { preferred_language?: SupplierLanguage }>(input: T) {
+  const rest = { ...input };
+  delete rest.preferred_language;
+  return rest;
 }
 
 export interface UpdateSupplierInput {
   name?: string;
   email?: string;
   material_ids?: string[];
+  preferred_language?: SupplierLanguage;
 }
 
 /**
@@ -59,6 +75,7 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
         id: supplier.id,
         name: supplier.name,
         email: supplier.email,
+        preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
         materials: supplier.materials ?? [],
         is_active: supplier.is_active,
         created_at: supplier.created_at,
@@ -82,15 +99,39 @@ export async function createSupplier(input: CreateSupplierInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
   const materialIds = [...new Set(input.material_ids ?? [])];
+  const preferredLanguage = normalizeSupplierLanguage(input.preferred_language);
 
-  const { data: supplier, error } = await supabase
+  const insertPayload = {
+    name: input.name,
+    email: input.email,
+    preferred_language: preferredLanguage,
+  };
+
+  let { data: supplier, error } = await supabase
     .from('suppliers')
-    .insert({
-      name: input.name,
-      email: input.email,
-    })
+    .insert(insertPayload)
     .select()
     .single();
+
+  if (error && isMissingPreferredLanguageColumnError(error)) {
+    if (preferredLanguage !== 'en') {
+      return {
+        error: {
+          _form: [
+            'Supplier language could not be saved because the database migration is not applied yet.',
+          ],
+        },
+      };
+    }
+
+    const retryResult = await supabase
+      .from('suppliers')
+      .insert(withoutPreferredLanguage(insertPayload))
+      .select()
+      .single();
+    supplier = retryResult.data;
+    error = retryResult.error;
+  }
 
   if (error) {
     return { error: { _form: [error.message] } };
@@ -113,7 +154,7 @@ export async function createSupplier(input: CreateSupplierInput) {
         action: 'SUPPLIER_CREATED',
         entityType: 'supplier',
         entityId: supplier.id,
-        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, materialIds },
+        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, preferredLanguage, materialIds },
       });
 
       revalidatePath('/admin/management');
@@ -131,7 +172,7 @@ export async function createSupplier(input: CreateSupplierInput) {
     action: 'SUPPLIER_CREATED',
     entityType: 'supplier',
     entityId: supplier.id,
-    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, materialIds },
+    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, preferredLanguage, materialIds },
   });
 
   revalidatePath('/admin/management');
@@ -144,17 +185,44 @@ export async function createSupplier(input: CreateSupplierInput) {
 export async function updateSupplier(supplierId: string, input: UpdateSupplierInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
-  const { material_ids, ...supplierFields } = input;
+  const { material_ids, ...supplierFieldsInput } = input;
+  const supplierFields = {
+    ...supplierFieldsInput,
+    ...(supplierFieldsInput.preferred_language !== undefined
+      ? { preferred_language: normalizeSupplierLanguage(supplierFieldsInput.preferred_language) }
+      : {}),
+  };
   const hasSupplierFieldUpdates = Object.keys(supplierFields).length > 0;
   let supplier: Supplier | null = null;
 
   if (hasSupplierFieldUpdates) {
-    const { data: updatedSupplier, error } = await supabase
+    let { data: updatedSupplier, error } = await supabase
       .from('suppliers')
       .update(supplierFields)
       .eq('id', supplierId)
       .select()
       .single();
+
+    if (error && isMissingPreferredLanguageColumnError(error)) {
+      if (supplierFields.preferred_language !== undefined && supplierFields.preferred_language !== 'en') {
+        return {
+          error: {
+            _form: [
+              'Supplier language could not be saved because the database migration is not applied yet.',
+            ],
+          },
+        };
+      }
+
+      const retryResult = await supabase
+        .from('suppliers')
+        .update(withoutPreferredLanguage(supplierFields))
+        .eq('id', supplierId)
+        .select()
+        .single();
+      updatedSupplier = retryResult.data;
+      error = retryResult.error;
+    }
 
     if (error) {
       return { error: { _form: [error.message] } };

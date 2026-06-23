@@ -9,6 +9,7 @@ import {
   isRoundShape,
   isTableTopsProductType,
 } from '@/lib/rfq-format';
+import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -78,6 +79,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   }
 
   const { rfq, supplier, invite, existingQuote } = result.data!;
+  const language = normalizeSupplierLanguage(supplier?.preferred_language);
+  const labels = getSupplierTranslations(language);
   const commentResult = await listSupplierComments(rfqId, supplierToken);
   const initialComments = 'data' in commentResult ? commentResult.data : [];
   const isRound = isRoundShape(rfq.shape);
@@ -103,7 +106,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
               <h1 className="text-xl font-bold">
-                Request for quotation{rfq.product_type ? `: ${rfq.product_type}` : ''}
+                {labels.requestForQuotation}{rfq.product_type ? `: ${rfq.product_type}` : ''}
               </h1>
               <span className="text-sm text-muted-foreground">{supplier?.name}</span>
             </div>
@@ -111,79 +114,79 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             <dl className="grid grid-cols-2 gap-4">
               {!isTablesType && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Material</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">{labels.material}</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
                 </div>
               )}
               {isTableTopsType && (
                 <>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Top finish</dt>
-                    <dd className="mt-1 text-sm font-medium">{rfq.finish_top || 'N/A'}</dd>
+                    <dt className="text-xs uppercase text-muted-foreground">{labels.topFinish}</dt>
+                    <dd className="mt-1 text-sm font-medium">{rfq.finish_top || labels.na}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Edge finish</dt>
-                    <dd className="mt-1 text-sm font-medium">{rfq.finish_edge || 'N/A'}</dd>
+                    <dt className="text-xs uppercase text-muted-foreground">{labels.edgeFinish}</dt>
+                    <dd className="mt-1 text-sm font-medium">{rfq.finish_edge || labels.na}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Color finish</dt>
-                    <dd className="mt-1 text-sm font-medium">{rfq.finish_color || 'N/A'}</dd>
+                    <dt className="text-xs uppercase text-muted-foreground">{labels.colorFinish}</dt>
+                    <dd className="mt-1 text-sm font-medium">{rfq.finish_color || labels.na}</dd>
                   </div>
                 </>
               )}
               {showTableTop && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Table top</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">{labels.tableTop}</dt>
                   <dd className="mt-1 text-sm font-medium">
-                    {rfq.material_table_top || 'N/A'}
+                    {rfq.material_table_top || labels.na}
                     {rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}
                   </dd>
                 </div>
               )}
               {showTableFoot && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Table foot</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">{labels.tableFoot}</dt>
                   <dd className="mt-1 text-sm font-medium">
-                    {rfq.material_table_foot || 'N/A'}
+                    {rfq.material_table_foot || labels.na}
                     {rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}
                   </dd>
                 </div>
               )}
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
+                <dt className="text-xs uppercase text-muted-foreground">{labels.shape}</dt>
                 <dd className="mt-1 text-sm font-medium">{rfq.shape}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">Use</dt>
-                <dd className="mt-1 text-sm font-medium">{rfq.usage_environment || 'N/A'}</dd>
+                <dt className="text-xs uppercase text-muted-foreground">{labels.use}</dt>
+                <dd className="mt-1 text-sm font-medium">{translateUsageEnvironment(rfq.usage_environment, language) || labels.na}</dd>
               </div>
               {rfq.model && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Model</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">{labels.model}</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.model}</dd>
                 </div>
               )}
               <div>
                 <dt className="text-xs uppercase text-muted-foreground">
-                  {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
+                  {isRound ? labels.dimensionsRound : labels.dimensionsDefault}
                 </dt>
                 <dd className="mt-1 text-sm font-medium">
                   {formatRfqDimensionsWithOptions(rfq, { includeThickness: false })}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
+                <dt className="text-xs uppercase text-muted-foreground">{labels.quantity}</dt>
                 <dd className="mt-1 text-sm font-medium">{rfq.quantity}</dd>
               </div>
               {(!isRound || rfq.thickness > 0) && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">{labels.thicknessTop}</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.thickness} cm</dd>
                 </div>
               )}
               {rfq.notes && (
                 <div className="col-span-2">
-                  <dt className="text-xs uppercase text-muted-foreground">Notes</dt>
+                  <dt className="text-xs uppercase text-muted-foreground">{labels.notes}</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-sm">{rfq.notes}</dd>
                 </div>
               )}
@@ -193,18 +196,20 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
               rfqId={rfqId}
               token={supplierToken}
               attachments={rfq.attachments ?? []}
+              language={language}
             />
           </CardContent>
         </Card>
 
         {existingQuote && !canSubmitOrUpdateQuote ? (
-          <SupplierQuoteReadOnly quote={existingQuote} />
+          <SupplierQuoteReadOnly quote={existingQuote} language={language} />
         ) : (
           <SupplierQuoteForm
             rfqId={rfqId}
             token={supplierToken}
             initialValues={quoteInitialValues}
             isUpdate={Boolean(existingQuote)}
+            language={language}
           />
         )}
 
@@ -213,6 +218,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             rfqId={rfqId}
             token={supplierToken}
             initialComments={initialComments}
+            language={language}
           />
         </div>
       </div>

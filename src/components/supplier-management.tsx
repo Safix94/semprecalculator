@@ -23,13 +23,21 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   createSupplier,
   updateSupplier,
   deleteSupplier,
 } from '@/actions/suppliers';
-import type { Material, SupplierWithMaterials } from '@/types';
+import { SUPPLIER_LANGUAGE_LABELS, SUPPLIER_LANGUAGES, normalizeSupplierLanguage } from '@/lib/supplier-language';
+import type { Material, SupplierLanguage, SupplierWithMaterials } from '@/types';
 
 interface SupplierManagementProps {
   suppliers: SupplierWithMaterials[];
@@ -40,12 +48,14 @@ interface SupplierFormData {
   name: string;
   email: string;
   material_ids: string[];
+  preferred_language: SupplierLanguage;
 }
 
 const initialFormData: SupplierFormData = {
   name: '',
   email: '',
   material_ids: [],
+  preferred_language: 'en',
 };
 
 export function SupplierManagement({ suppliers: initialSuppliers, materials }: SupplierManagementProps) {
@@ -77,6 +87,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
       name: supplier.name,
       email: supplier.email,
       material_ids: supplier.available_materials?.map(material => material.id) ?? [],
+      preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
     });
     setDialogOpen(true);
   };
@@ -92,12 +103,14 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
         name: formData.name,
         email: formData.email,
         material_ids: formData.material_ids,
+        preferred_language: formData.preferred_language,
       });
     } else {
       result = await createSupplier({
         name: formData.name,
         email: formData.email,
         material_ids: formData.material_ids,
+        preferred_language: formData.preferred_language,
       });
     }
 
@@ -158,6 +171,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Language</TableHead>
                 <TableHead>Materials</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -167,6 +181,9 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 <TableRow key={supplier.id}>
                   <TableCell className="font-medium">{supplier.name}</TableCell>
                   <TableCell className="text-muted-foreground">{supplier.email}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {SUPPLIER_LANGUAGE_LABELS[normalizeSupplierLanguage(supplier.preferred_language)]}
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     {supplier.available_materials && supplier.available_materials.length > 0
                       ? supplier.available_materials.map((material) => material.name).join(', ')
@@ -196,7 +213,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               ))}
               {suppliers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     No suppliers created yet.
                   </TableCell>
                 </TableRow>
@@ -240,6 +257,30 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 placeholder="e.g. info@supplier.com"
                 required
               />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="supplier-language">Preferred language *</Label>
+              <Select
+                value={formData.preferred_language}
+                onValueChange={(value) =>
+                  updateFormData('preferred_language', normalizeSupplierLanguage(value))
+                }
+              >
+                <SelectTrigger id="supplier-language">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SUPPLIER_LANGUAGES.map((language) => (
+                    <SelectItem key={language} value={language}>
+                      {SUPPLIER_LANGUAGE_LABELS[language]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Supplier emails and their magic-link page use this language.
+              </p>
             </div>
 
             <div className="space-y-3">

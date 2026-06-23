@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
+import type { SupplierLanguage } from '@/types';
 
 interface SupplierQuoteFormProps {
   rfqId: string;
@@ -19,6 +21,7 @@ interface SupplierQuoteFormProps {
     comment: string | null;
   } | null;
   isUpdate?: boolean;
+  language: SupplierLanguage;
 }
 
 export function SupplierQuoteForm({
@@ -26,7 +29,9 @@ export function SupplierQuoteForm({
   token,
   initialValues = null,
   isUpdate = false,
+  language,
 }: SupplierQuoteFormProps) {
+  const t = getSupplierTranslations(normalizeSupplierLanguage(language));
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]> | string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -62,12 +67,12 @@ export function SupplierQuoteForm({
         <CardContent className="py-8 text-center">
           <div className="text-chart-2 text-4xl mb-4">✓</div>
           <h2 className="text-lg font-semibold text-chart-2 mb-2">
-            {isUpdate ? 'Quote updated' : 'Quote submitted'}
+            {isUpdate ? t.quoteUpdated : t.quoteSubmitted}
           </h2>
           <p className="text-muted-foreground">
             {isUpdate
-              ? 'Your latest quote has been saved. You can close this page.'
-              : 'Thank you for your quote. You can close this page.'}
+              ? t.quoteUpdatedThanks
+              : t.quoteSubmittedThanks}
           </p>
         </CardContent>
       </Card>
@@ -84,13 +89,13 @@ export function SupplierQuoteForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isUpdate ? 'Update quote' : 'Submit quote'}</CardTitle>
+        <CardTitle>{isUpdate ? t.updateQuote : t.submitQuote}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="basePrice">Base price (EUR) *</Label>
+              <Label htmlFor="basePrice">{t.basePriceEur}</Label>
               <Input
                 id="basePrice"
                 name="basePrice"
@@ -107,7 +112,7 @@ export function SupplierQuoteForm({
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="volumeM3">{'Volume (m\u00b3) *'}</Label>
+              <Label htmlFor="volumeM3">{t.volumeM3Required}</Label>
               <Input
                 id="volumeM3"
                 name="volumeM3"
@@ -126,7 +131,7 @@ export function SupplierQuoteForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="leadTimeDays">Lead time (days, optional)</Label>
+            <Label htmlFor="leadTimeDays">{t.leadTimeOptional}</Label>
             <Input
               id="leadTimeDays"
               name="leadTimeDays"
@@ -137,7 +142,7 @@ export function SupplierQuoteForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="comment">Comment (optional)</Label>
+            <Label htmlFor="comment">{t.commentOptional}</Label>
             <Textarea
               id="comment"
               name="comment"
@@ -154,7 +159,7 @@ export function SupplierQuoteForm({
           )}
 
           <Button type="submit" disabled={loading} className="w-full">
-            {loading ? 'Submitting...' : isUpdate ? 'Update quote' : 'Submit quote'}
+            {loading ? t.submitting : isUpdate ? t.updateQuote : t.submitQuote}
           </Button>
         </form>
       </CardContent>

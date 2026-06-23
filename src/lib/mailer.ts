@@ -1,3 +1,6 @@
+import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
+import type { SupplierLanguage } from '@/lib/supplier-language';
+
 /**
  * Brevo (formerly SendInBlue) email helper.
  * Sends transactional emails via Brevo HTTP API.
@@ -75,8 +78,9 @@ function buildPricingRequestTitle(params: {
 function buildSupplierRequestTitle(params: {
   productType?: string | null;
   subjectMaterial: string;
+  requestLabel?: string;
 }) {
-  return `Request for quotation: ${prefixProductType(params.subjectMaterial, params.productType)}`;
+  return `${params.requestLabel ?? 'Request for quotation'}: ${prefixProductType(params.subjectMaterial, params.productType)}`;
 }
 
 function buildSupplierRfqLink(rfqId: string, token: string): string {
@@ -158,89 +162,94 @@ export async function sendSupplierInviteEmail(params: {
   usageEnvironment?: 'Indoor' | 'Outdoor' | null;
   dimensionsText?: string;
   quantity?: number;
+  language?: SupplierLanguage;
 }) {
+  const language = normalizeSupplierLanguage(params.language);
+  const t = getSupplierTranslations(language);
   const inviteLink = buildSupplierRfqLink(params.rfqId, params.token);
   const invitePart = params.invitePart ?? 'default';
-  const topMaterial = params.materialTableTop || 'Table top';
-  const footMaterial = params.materialTableFoot || 'Table foot';
+  const topMaterial = params.materialTableTop || t.tableTop;
+  const footMaterial = params.materialTableFoot || t.tableFoot;
   const topFinishText = params.finishTableTop ? ` (${params.finishTableTop})` : '';
   const footFinishText = params.finishTableFoot ? ` (${params.finishTableFoot})` : '';
 
   let subjectMaterial = `${params.material} - ${params.shape}${params.finish ? ` (${params.finish})` : ''}`;
-  let introText = `There is a new request for quotation for <strong>${params.material}</strong> (${params.shape}).`;
+  let introText = t.emailIntroDefault(escapeHtml(params.material), escapeHtml(params.shape));
   let detailLines: string[] = [
-    `<li><strong>Shape:</strong> ${params.shape}</li>`,
+    `<li><strong>${t.shape}:</strong> ${escapeHtml(params.shape)}</li>`,
   ];
 
   if (invitePart === 'table_top') {
-    subjectMaterial = `Table top - ${topMaterial}${topFinishText}`;
-    introText = `There is a new request for quotation for a <strong>table top</strong>.`;
+    subjectMaterial = `${t.tableTop} - ${topMaterial}${topFinishText}`;
+    introText = t.emailIntroTableTop;
     detailLines = [
-      `<li><strong>Part:</strong> Table top</li>`,
-      `<li><strong>Material:</strong> ${topMaterial}</li>`,
-      params.finishTableTop ? `<li><strong>Finish:</strong> ${params.finishTableTop}</li>` : null,
-      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+      `<li><strong>${t.part}:</strong> ${t.tableTop}</li>`,
+      `<li><strong>${t.material}:</strong> ${escapeHtml(topMaterial)}</li>`,
+      params.finishTableTop ? `<li><strong>${t.finish}:</strong> ${escapeHtml(params.finishTableTop)}</li>` : null,
+      `<li><strong>${t.shape}:</strong> ${escapeHtml(params.shape)}</li>`,
     ].filter(Boolean) as string[];
   } else if (invitePart === 'table_foot') {
-    subjectMaterial = `Table foot - ${footMaterial}${footFinishText}`;
-    introText = `There is a new request for quotation for a <strong>table foot</strong>.`;
+    subjectMaterial = `${t.tableFoot} - ${footMaterial}${footFinishText}`;
+    introText = t.emailIntroTableFoot;
     detailLines = [
-      `<li><strong>Part:</strong> Table foot</li>`,
-      `<li><strong>Material:</strong> ${footMaterial}</li>`,
-      params.finishTableFoot ? `<li><strong>Finish:</strong> ${params.finishTableFoot}</li>` : null,
-      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+      `<li><strong>${t.part}:</strong> ${t.tableFoot}</li>`,
+      `<li><strong>${t.material}:</strong> ${escapeHtml(footMaterial)}</li>`,
+      params.finishTableFoot ? `<li><strong>${t.finish}:</strong> ${escapeHtml(params.finishTableFoot)}</li>` : null,
+      `<li><strong>${t.shape}:</strong> ${escapeHtml(params.shape)}</li>`,
     ].filter(Boolean) as string[];
   } else if (invitePart === 'table_both') {
-    subjectMaterial = `Table top + foot - ${params.shape}`;
-    introText = 'There is a new combined request for quotation for a <strong>table top and table foot</strong>.';
+    subjectMaterial = `${t.tableTopAndFoot} - ${params.shape}`;
+    introText = t.emailIntroTableBoth;
     detailLines = [
-      `<li><strong>Part:</strong> Table top + table foot</li>`,
-      `<li><strong>Table top:</strong> ${topMaterial}${topFinishText}</li>`,
-      `<li><strong>Table foot:</strong> ${footMaterial}${footFinishText}</li>`,
-      `<li><strong>Shape:</strong> ${params.shape}</li>`,
+      `<li><strong>${t.part}:</strong> ${t.tableTopAndFoot}</li>`,
+      `<li><strong>${t.tableTop}:</strong> ${escapeHtml(topMaterial)}${escapeHtml(topFinishText)}</li>`,
+      `<li><strong>${t.tableFoot}:</strong> ${escapeHtml(footMaterial)}${escapeHtml(footFinishText)}</li>`,
+      `<li><strong>${t.shape}:</strong> ${escapeHtml(params.shape)}</li>`,
     ];
   } else {
     detailLines = [
-      `<li><strong>Material:</strong> ${params.material}</li>`,
-      `<li><strong>Shape:</strong> ${params.shape}</li>`,
-      params.finish ? `<li><strong>Finish:</strong> ${params.finish}</li>` : null,
-      params.finishTop ? `<li><strong>Top finish:</strong> ${params.finishTop}</li>` : null,
-      params.finishEdge ? `<li><strong>Edge finish:</strong> ${params.finishEdge}</li>` : null,
-      params.finishColor ? `<li><strong>Color finish:</strong> ${params.finishColor}</li>` : null,
+      `<li><strong>${t.material}:</strong> ${escapeHtml(params.material)}</li>`,
+      `<li><strong>${t.shape}:</strong> ${escapeHtml(params.shape)}</li>`,
+      params.finish ? `<li><strong>${t.finish}:</strong> ${escapeHtml(params.finish)}</li>` : null,
+      params.finishTop ? `<li><strong>${t.topFinish}:</strong> ${escapeHtml(params.finishTop)}</li>` : null,
+      params.finishEdge ? `<li><strong>${t.edgeFinish}:</strong> ${escapeHtml(params.finishEdge)}</li>` : null,
+      params.finishColor ? `<li><strong>${t.colorFinish}:</strong> ${escapeHtml(params.finishColor)}</li>` : null,
     ].filter(Boolean) as string[];
   }
 
   if (params.productType) {
-    detailLines.unshift(`<li><strong>Product type:</strong> ${params.productType}</li>`);
+    detailLines.unshift(`<li><strong>${t.productType}:</strong> ${escapeHtml(params.productType)}</li>`);
   }
 
   if (params.dimensionsText) {
-    detailLines.push(`<li><strong>Dimensions:</strong> ${params.dimensionsText}</li>`);
+    detailLines.push(`<li><strong>${t.dimensions}:</strong> ${escapeHtml(params.dimensionsText)}</li>`);
   }
 
   if (params.quantity !== undefined) {
-    detailLines.push(`<li><strong>Quantity:</strong> ${params.quantity}</li>`);
+    detailLines.push(`<li><strong>${t.quantity}:</strong> ${params.quantity}</li>`);
   }
 
   if (params.model) {
-    detailLines.push(`<li><strong>Model:</strong> ${params.model}</li>`);
+    detailLines.push(`<li><strong>${t.model}:</strong> ${escapeHtml(params.model)}</li>`);
   }
 
   if (params.usageEnvironment) {
-    detailLines.push(`<li><strong>Use:</strong> ${params.usageEnvironment}</li>`);
+    detailLines.push(
+      `<li><strong>${t.use}:</strong> ${escapeHtml(translateUsageEnvironment(params.usageEnvironment, language) ?? params.usageEnvironment)}</li>`
+    );
   }
 
   return sendEmail({
     to: { email: params.supplierEmail, name: params.supplierName },
-    subject: buildSupplierRequestTitle({ productType: params.productType, subjectMaterial }),
+    subject: buildSupplierRequestTitle({ productType: params.productType, subjectMaterial, requestLabel: t.requestForQuotation }),
     htmlContent: `
-      <h2>New request for quotation${params.productType ? `: ${params.productType}` : ''}</h2>
-      <p>Dear ${params.supplierName},</p>
+      <h2>${t.newRequestForQuotation}${params.productType ? `: ${escapeHtml(params.productType)}` : ''}</h2>
+      <p>${t.dear} ${escapeHtml(params.supplierName)},</p>
       <p>${introText}</p>
       <ul>${detailLines.join('')}</ul>
-      <p>Click the link below to view the request and submit a quote:</p>
-      <p><a href="${inviteLink}" style="${EMAIL_BUTTON_STYLE}">Submit quote</a></p>
-      <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
+      <p>${t.clickToView}</p>
+      <p><a href="${inviteLink}" style="${EMAIL_BUTTON_STYLE}">${t.submitQuote}</a></p>
+      <p style="color:#666;font-size:12px;">${t.linkValid}</p>
     `,
   });
 }

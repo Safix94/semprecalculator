@@ -36,6 +36,7 @@ export interface Supplier {
   id: string;
   name: string;
   email: string;
+  additional_emails: string[];
   preferred_language: import('@/lib/supplier-language').SupplierLanguage;
   materials: string[];
   is_active: boolean;

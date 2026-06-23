@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { requireRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { sendSupplierThreadReplyEmail } from '@/lib/mailer';
+import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { rfqCommentBodySchema } from '@/lib/validation';
 import {
   assertTokenHashingConfigured,
@@ -18,6 +19,11 @@ const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 type ActionError = { error: string };
 
+function isMissingAdditionalEmailsColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return error?.code === '42703' || message.includes('additional_emails');
+}
+
 interface ListRfqThreadsData {
   rfqStatus: RfqStatus;
   invites: (RfqInvite & { supplier: Supplier | null })[];
@@ -27,7 +33,7 @@ interface ListRfqThreadsData {
 interface RefreshInviteData {
   token: string;
   invite: RfqInvite;
-  supplier: { id: string; name: string; email: string };
+  supplier: { id: string; name: string; email: string; additional_emails?: string[] | null };
   rfqStatus: RfqStatus;
 }
 
@@ -46,7 +52,7 @@ async function refreshInviteToken(params: {
   }
 
   const supabase = await createClient();
-  const [{ data: invite, error: inviteError }, { data: supplier, error: supplierError }, { data: rfq, error: rfqError }] = await Promise.all([
+  const [{ data: invite, error: inviteError }, supplierResult, { data: rfq, error: rfqError }] = await Promise.all([
     supabase
       .from('rfq_invites')
       .select('*')
@@ -55,7 +61,7 @@ async function refreshInviteToken(params: {
       .single(),
     supabase
       .from('suppliers')
-      .select('id, name, email')
+      .select('id, name, email, additional_emails')
       .eq('id', params.supplierId)
       .single(),
     supabase
@@ -64,6 +70,19 @@ async function refreshInviteToken(params: {
       .eq('id', params.rfqId)
       .single(),
   ]);
+
+  let supplier = supplierResult.data;
+  let supplierError = supplierResult.error;
+
+  if (supplierError && isMissingAdditionalEmailsColumnError(supplierError)) {
+    const fallbackSupplierResult = await supabase
+      .from('suppliers')
+      .select('id, name, email')
+      .eq('id', params.supplierId)
+      .single();
+    supplier = fallbackSupplierResult.data ? { ...fallbackSupplierResult.data, additional_emails: [] } : null;
+    supplierError = fallbackSupplierResult.error;
+  }
 
   if (inviteError || !invite) {
     return { error: 'Supplier invite not found' };
@@ -208,8 +227,9 @@ export async function replyToSupplierThread(params: {
     return { error: `Could not save reply: ${commentError?.message ?? 'Unknown error'}` };
   }
 
+  const supplierEmails = getSupplierRecipientEmails(refreshResult.data.supplier);
   const emailResult = await sendSupplierThreadReplyEmail({
-    supplierEmail: refreshResult.data.supplier.email,
+    supplierEmails,
     supplierName: refreshResult.data.supplier.name,
     rfqId: params.rfqId,
     token: refreshResult.data.token,
@@ -241,7 +261,8 @@ export async function replyToSupplierThread(params: {
       requestUpdatedQuote: params.requestUpdatedQuote === true,
       success: emailResult.success,
       error: emailResult.error,
-      recipient: refreshResult.data.supplier.email,
+      recipients: supplierEmails,
+      emailResults: emailResult.results,
     },
   });
 
@@ -272,8 +293,9 @@ export async function resendSupplierMagicLink(params: {
     return { error: refreshResult.error };
   }
 
+  const supplierEmails = getSupplierRecipientEmails(refreshResult.data.supplier);
   const emailResult = await sendSupplierThreadReplyEmail({
-    supplierEmail: refreshResult.data.supplier.email,
+    supplierEmails,
     supplierName: refreshResult.data.supplier.name,
     rfqId: params.rfqId,
     token: refreshResult.data.token,
@@ -293,7 +315,8 @@ export async function resendSupplierMagicLink(params: {
       requestUpdatedQuote: false,
       success: emailResult.success,
       error: emailResult.error,
-      recipient: refreshResult.data.supplier.email,
+      recipients: supplierEmails,
+      emailResults: emailResult.results,
       resendOnly: true,
     },
   });

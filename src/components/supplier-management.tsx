@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, Edit, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -37,6 +37,7 @@ import {
   deleteSupplier,
 } from '@/actions/suppliers';
 import { SUPPLIER_LANGUAGE_LABELS, SUPPLIER_LANGUAGES, normalizeSupplierLanguage } from '@/lib/supplier-language';
+import { MAX_SUPPLIER_ADDITIONAL_EMAILS, parseEmailList } from '@/lib/email-recipients';
 import type { Material, SupplierLanguage, SupplierWithMaterials } from '@/types';
 
 interface SupplierManagementProps {
@@ -47,6 +48,7 @@ interface SupplierManagementProps {
 interface SupplierFormData {
   name: string;
   email: string;
+  additional_emails: string[];
   material_ids: string[];
   preferred_language: SupplierLanguage;
 }
@@ -54,6 +56,7 @@ interface SupplierFormData {
 const initialFormData: SupplierFormData = {
   name: '',
   email: '',
+  additional_emails: [],
   material_ids: [],
   preferred_language: 'en',
 };
@@ -62,6 +65,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
   const [suppliers, setSuppliers] = useState(initialSuppliers);
   const [editingSupplier, setEditingSupplier] = useState<SupplierWithMaterials | null>(null);
   const [formData, setFormData] = useState<SupplierFormData>(initialFormData);
+  const [additionalEmailInput, setAdditionalEmailInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,6 +77,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
   const resetForm = () => {
     setFormData(initialFormData);
     setEditingSupplier(null);
+    setAdditionalEmailInput('');
     setError(null);
   };
 
@@ -82,10 +87,12 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
   };
 
   const openEditDialog = (supplier: SupplierWithMaterials) => {
+    setAdditionalEmailInput('');
     setEditingSupplier(supplier);
     setFormData({
       name: supplier.name,
       email: supplier.email,
+      additional_emails: supplier.additional_emails ?? [],
       material_ids: supplier.available_materials?.map(material => material.id) ?? [],
       preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
     });
@@ -97,11 +104,19 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
     setLoading(true);
     setError(null);
 
+    const pendingAdditionalEmails = parseEmailList(additionalEmailInput);
+    const submittedAdditionalEmails = Array.from(
+      new Set([...formData.additional_emails, ...pendingAdditionalEmails])
+    )
+      .filter((email) => email !== formData.email.trim().toLowerCase())
+      .slice(0, MAX_SUPPLIER_ADDITIONAL_EMAILS);
+
     let result;
     if (editingSupplier) {
       result = await updateSupplier(editingSupplier.id, {
         name: formData.name,
         email: formData.email,
+        additional_emails: submittedAdditionalEmails,
         material_ids: formData.material_ids,
         preferred_language: formData.preferred_language,
       });
@@ -109,6 +124,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
       result = await createSupplier({
         name: formData.name,
         email: formData.email,
+        additional_emails: submittedAdditionalEmails,
         material_ids: formData.material_ids,
         preferred_language: formData.preferred_language,
       });
@@ -146,6 +162,33 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
       : formData.material_ids.filter(id => id !== materialId);
 
     updateFormData('material_ids', updatedMaterialIds);
+  };
+
+
+  const addAdditionalEmails = (rawInput: string) => {
+    const parsedEmails = parseEmailList(rawInput);
+    if (parsedEmails.length === 0) {
+      return;
+    }
+
+    const primaryEmail = formData.email.trim().toLowerCase();
+    const uniqueEmails = Array.from(new Set([...formData.additional_emails, ...parsedEmails]))
+      .filter((email) => email !== primaryEmail);
+
+    if (uniqueEmails.length > MAX_SUPPLIER_ADDITIONAL_EMAILS) {
+      setError(`Maximum ${MAX_SUPPLIER_ADDITIONAL_EMAILS} additional emails per supplier.`);
+      return;
+    }
+
+    updateFormData('additional_emails', uniqueEmails);
+    setAdditionalEmailInput('');
+  };
+
+  const removeAdditionalEmail = (email: string) => {
+    updateFormData(
+      'additional_emails',
+      formData.additional_emails.filter((additionalEmail) => additionalEmail !== email)
+    );
   };
 
   const handleSupplierLanguageChange = async (supplierId: string, value: string) => {
@@ -201,7 +244,19 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               {suppliers.map((supplier) => (
                 <TableRow key={supplier.id}>
                   <TableCell className="font-medium">{supplier.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{supplier.email}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <div className="space-y-0.5">
+                      <div>{supplier.email}</div>
+                      {(supplier.additional_emails?.length ?? 0) > 0 && (
+                        <div
+                          className="text-xs"
+                          title={supplier.additional_emails.join(', ')}
+                        >
+                          +{supplier.additional_emails.length} extra
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <Select
                       value={normalizeSupplierLanguage(supplier.preferred_language)}
@@ -298,6 +353,64 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               />
             </div>
 
+
+            <div className="space-y-2">
+              <Label htmlFor="supplier-additional-email">Additional emails</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="supplier-additional-email"
+                  type="text"
+                  value={additionalEmailInput}
+                  onChange={(e) => setAdditionalEmailInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ',') {
+                      e.preventDefault();
+                      addAdditionalEmails(additionalEmailInput);
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const pastedText = e.clipboardData.getData('text');
+                    if (parseEmailList(pastedText).length > 1) {
+                      e.preventDefault();
+                      addAdditionalEmails(pastedText);
+                    }
+                  }}
+                  placeholder="e.g. estimating@supplier.com"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => addAdditionalEmails(additionalEmailInput)}
+                  disabled={formData.additional_emails.length >= MAX_SUPPLIER_ADDITIONAL_EMAILS}
+                >
+                  Add
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Optional. RFQ invites and supplier thread notifications are sent to the primary email plus these addresses.
+              </p>
+              {formData.additional_emails.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.additional_emails.map((email) => (
+                    <span
+                      key={email}
+                      className="inline-flex items-center gap-1 rounded-full border bg-muted px-2 py-1 text-xs"
+                    >
+                      {email}
+                      <button
+                        type="button"
+                        onClick={() => removeAdditionalEmail(email)}
+                        className="text-muted-foreground hover:text-foreground"
+                        aria-label={`Remove ${email}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1.5">
               <Label htmlFor="supplier-language">Preferred language *</Label>
               <Select
@@ -347,7 +460,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
             </div>
 
             <DialogFooter>
-              <Button type="button" variant="secondary" onClick={() => setDialogOpen(false)}>
+              <Button type="button" variant="secondary" onClick={() => { setDialogOpen(false); setAdditionalEmailInput(''); }}>
                 Cancel
               </Button>
               <Button type="submit" disabled={loading}>

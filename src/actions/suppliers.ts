@@ -5,12 +5,14 @@ import { createClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
 import { normalizeSupplierLanguage } from '@/lib/supplier-language';
+import { validateSupplierAdditionalEmails } from '@/lib/email-recipients';
 import type { Material, Supplier, SupplierWithMaterials } from '@/types';
 import type { SupplierLanguage } from '@/lib/supplier-language';
 
 export interface CreateSupplierInput {
   name: string;
   email: string;
+  additional_emails?: string[];
   material_ids?: string[];
   preferred_language?: SupplierLanguage;
 }
@@ -21,15 +23,27 @@ function isMissingPreferredLanguageColumnError(error: { code?: string; message?:
   return error?.code === '42703' || message.includes('preferred_language');
 }
 
+function isMissingAdditionalEmailsColumnError(error: { code?: string; message?: string } | null | undefined) {
+  const message = error?.message?.toLowerCase() ?? '';
+  return error?.code === '42703' || message.includes('additional_emails');
+}
+
 function withoutPreferredLanguage<T extends { preferred_language?: SupplierLanguage }>(input: T) {
   const rest = { ...input };
   delete rest.preferred_language;
   return rest;
 }
 
+function withoutAdditionalEmails<T extends { additional_emails?: string[] }>(input: T) {
+  const rest = { ...input };
+  delete rest.additional_emails;
+  return rest;
+}
+
 export interface UpdateSupplierInput {
   name?: string;
   email?: string;
+  additional_emails?: string[];
   material_ids?: string[];
   preferred_language?: SupplierLanguage;
 }
@@ -75,6 +89,7 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
         id: supplier.id,
         name: supplier.name,
         email: supplier.email,
+        additional_emails: supplier.additional_emails ?? [],
         preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
         materials: supplier.materials ?? [],
         is_active: supplier.is_active,
@@ -100,10 +115,16 @@ export async function createSupplier(input: CreateSupplierInput) {
   const supabase = await createClient();
   const materialIds = [...new Set(input.material_ids ?? [])];
   const preferredLanguage = normalizeSupplierLanguage(input.preferred_language);
+  const emailValidation = validateSupplierAdditionalEmails(input.email, input.additional_emails);
+
+  if (emailValidation.error) {
+    return { error: { _form: [emailValidation.error] } };
+  }
 
   const insertPayload = {
     name: input.name,
-    email: input.email,
+    email: input.email.trim().toLowerCase(),
+    additional_emails: emailValidation.emails,
     preferred_language: preferredLanguage,
   };
 
@@ -133,6 +154,26 @@ export async function createSupplier(input: CreateSupplierInput) {
     error = retryResult.error;
   }
 
+  if (error && isMissingAdditionalEmailsColumnError(error)) {
+    if (emailValidation.emails.length > 0) {
+      return {
+        error: {
+          _form: [
+            'Additional supplier emails could not be saved because the database migration is not applied yet.',
+          ],
+        },
+      };
+    }
+
+    const retryResult = await supabase
+      .from('suppliers')
+      .insert(withoutAdditionalEmails(insertPayload))
+      .select()
+      .single();
+    supplier = retryResult.data;
+    error = retryResult.error;
+  }
+
   if (error) {
     return { error: { _form: [error.message] } };
   }
@@ -154,7 +195,7 @@ export async function createSupplier(input: CreateSupplierInput) {
         action: 'SUPPLIER_CREATED',
         entityType: 'supplier',
         entityId: supplier.id,
-        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, preferredLanguage, materialIds },
+        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds },
       });
 
       revalidatePath('/admin/management');
@@ -172,7 +213,7 @@ export async function createSupplier(input: CreateSupplierInput) {
     action: 'SUPPLIER_CREATED',
     entityType: 'supplier',
     entityId: supplier.id,
-    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, preferredLanguage, materialIds },
+    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds },
   });
 
   revalidatePath('/admin/management');
@@ -186,8 +227,55 @@ export async function updateSupplier(supplierId: string, input: UpdateSupplierIn
   const user = await requireRole('sales');
   const supabase = await createClient();
   const { material_ids, ...supplierFieldsInput } = input;
+  let additionalEmails: string[] | undefined;
+
+  if (supplierFieldsInput.additional_emails !== undefined || supplierFieldsInput.email !== undefined) {
+    let { data: currentEmailSupplier, error: currentEmailError } = await supabase
+      .from('suppliers')
+      .select('email, additional_emails')
+      .eq('id', supplierId)
+      .single();
+
+    if (currentEmailError && isMissingAdditionalEmailsColumnError(currentEmailError)) {
+      if ((supplierFieldsInput.additional_emails ?? []).length > 0) {
+        return {
+          error: {
+            _form: [
+              'Additional supplier emails could not be saved because the database migration is not applied yet.',
+            ],
+          },
+        };
+      }
+
+      const fallbackResult = await supabase
+        .from('suppliers')
+        .select('email')
+        .eq('id', supplierId)
+        .single();
+      currentEmailSupplier = fallbackResult.data ? { ...fallbackResult.data, additional_emails: [] } : null;
+      currentEmailError = fallbackResult.error;
+    }
+
+    if (currentEmailError || !currentEmailSupplier) {
+      return { error: { _form: [currentEmailError?.message ?? 'Supplier email could not be loaded'] } };
+    }
+
+    const emailValidation = validateSupplierAdditionalEmails(
+      supplierFieldsInput.email ?? currentEmailSupplier.email,
+      supplierFieldsInput.additional_emails ?? currentEmailSupplier.additional_emails ?? []
+    );
+
+    if (emailValidation.error) {
+      return { error: { _form: [emailValidation.error] } };
+    }
+
+    additionalEmails = emailValidation.emails;
+  }
+
   const supplierFields = {
     ...supplierFieldsInput,
+    ...(supplierFieldsInput.email !== undefined ? { email: supplierFieldsInput.email.trim().toLowerCase() } : {}),
+    ...(additionalEmails !== undefined ? { additional_emails: additionalEmails } : {}),
     ...(supplierFieldsInput.preferred_language !== undefined
       ? { preferred_language: normalizeSupplierLanguage(supplierFieldsInput.preferred_language) }
       : {}),
@@ -217,6 +305,27 @@ export async function updateSupplier(supplierId: string, input: UpdateSupplierIn
       const retryResult = await supabase
         .from('suppliers')
         .update(withoutPreferredLanguage(supplierFields))
+        .eq('id', supplierId)
+        .select()
+        .single();
+      updatedSupplier = retryResult.data;
+      error = retryResult.error;
+    }
+
+    if (error && isMissingAdditionalEmailsColumnError(error)) {
+      if (additionalEmails !== undefined && additionalEmails.length > 0) {
+        return {
+          error: {
+            _form: [
+              'Additional supplier emails could not be saved because the database migration is not applied yet.',
+            ],
+          },
+        };
+      }
+
+      const retryResult = await supabase
+        .from('suppliers')
+        .update(withoutAdditionalEmails(supplierFields))
         .eq('id', supplierId)
         .select()
         .single();

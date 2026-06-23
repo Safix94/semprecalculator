@@ -1,4 +1,5 @@
 import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
+import { dedupeEmails, isValidEmail } from '@/lib/email-recipients';
 import type { SupplierLanguage } from '@/lib/supplier-language';
 
 /**
@@ -142,7 +143,7 @@ async function sendEmail(params: SendEmailParams): Promise<{ success: boolean; m
  * Send supplier invite email with magic link.
  */
 export async function sendSupplierInviteEmail(params: {
-  supplierEmail: string;
+  supplierEmails: string[];
   supplierName: string;
   rfqId: string;
   token: string;
@@ -239,10 +240,9 @@ export async function sendSupplierInviteEmail(params: {
     );
   }
 
-  return sendEmail({
-    to: { email: params.supplierEmail, name: params.supplierName },
-    subject: buildSupplierRequestTitle({ productType: params.productType, subjectMaterial, requestLabel: t.requestForQuotation }),
-    htmlContent: `
+  const supplierEmails = dedupeEmails(params.supplierEmails).filter(isValidEmail);
+  const subject = buildSupplierRequestTitle({ productType: params.productType, subjectMaterial, requestLabel: t.requestForQuotation });
+  const htmlContent = `
       <h2>${t.newRequestForQuotation}${params.productType ? `: ${escapeHtml(params.productType)}` : ''}</h2>
       <p>${t.dear} ${escapeHtml(params.supplierName)},</p>
       <p>${introText}</p>
@@ -250,8 +250,30 @@ export async function sendSupplierInviteEmail(params: {
       <p>${t.clickToView}</p>
       <p><a href="${inviteLink}" style="${EMAIL_BUTTON_STYLE}">${t.submitQuote}</a></p>
       <p style="color:#666;font-size:12px;">${t.linkValid}</p>
-    `,
-  });
+    `;
+
+  const results = await Promise.all(
+    supplierEmails.map(async (email) => ({
+      email,
+      ...(await sendEmail({
+        to: { email, name: params.supplierName },
+        subject,
+        htmlContent,
+      })),
+    }))
+  );
+
+  const sent = results.filter((result) => result.success).length;
+  const failedEmails = results.filter((result) => !result.success).map((result) => result.email);
+  return {
+    success: sent > 0,
+    sent,
+    total: supplierEmails.length,
+    results,
+    error: failedEmails.length > 0
+      ? `Failed to send to ${failedEmails.length}/${supplierEmails.length} supplier email(s): ${failedEmails.join(', ')}`
+      : undefined,
+  };
 }
 
 /**
@@ -434,7 +456,7 @@ export async function sendInternalSupplierCommentEmail(params: {
 }
 
 export async function sendSupplierThreadReplyEmail(params: {
-  supplierEmail: string;
+  supplierEmails: string[];
   supplierName: string;
   rfqId: string;
   token: string;
@@ -447,10 +469,9 @@ export async function sendSupplierThreadReplyEmail(params: {
     ? '<p><strong>You can now submit an updated quote using this fresh link.</strong></p>'
     : '';
 
-  return sendEmail({
-    to: { email: params.supplierEmail, name: params.supplierName },
-    subject: `New message about RFQ ${params.rfqId}`,
-    htmlContent: `
+  const supplierEmails = dedupeEmails(params.supplierEmails).filter(isValidEmail);
+  const subject = `New message about RFQ ${params.rfqId}`;
+  const htmlContent = `
       <h2>There is a new message about your RFQ</h2>
       <p>Dear ${escapeHtml(params.supplierName)},</p>
       <p>There is a new message in your RFQ thread.</p>
@@ -459,6 +480,28 @@ export async function sendSupplierThreadReplyEmail(params: {
       <p>Open the link to view full history.</p>
       <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open RFQ thread</a></p>
       <p style="color:#666;font-size:12px;">This link is valid for 30 days.</p>
-    `,
-  });
+    `;
+
+  const results = await Promise.all(
+    supplierEmails.map(async (email) => ({
+      email,
+      ...(await sendEmail({
+        to: { email, name: params.supplierName },
+        subject,
+        htmlContent,
+      })),
+    }))
+  );
+
+  const sent = results.filter((result) => result.success).length;
+  const failedEmails = results.filter((result) => !result.success).map((result) => result.email);
+  return {
+    success: sent > 0,
+    sent,
+    total: supplierEmails.length,
+    results,
+    error: failedEmails.length > 0
+      ? `Failed to send to ${failedEmails.length}/${supplierEmails.length} supplier email(s): ${failedEmails.join(', ')}`
+      : undefined,
+  };
 }

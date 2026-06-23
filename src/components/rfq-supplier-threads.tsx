@@ -100,7 +100,9 @@ export function RfqSupplierThreads({
     setInfoBySupplierId((current) => ({
       ...current,
       [supplierId]: result.data.emailSent
-        ? 'Reply sent and supplier email delivered.'
+        ? result.data.emailError
+          ? `Reply sent, but some supplier emails failed: ${result.data.emailError}`
+          : 'Reply sent and supplier email delivered.'
         : `Reply saved, but email failed: ${result.data.emailError ?? 'unknown error'}`,
     }));
   }
@@ -129,7 +131,9 @@ export function RfqSupplierThreads({
     setInfoBySupplierId((current) => ({
       ...current,
       [supplierId]: result.data.emailSent
-        ? 'Fresh magic link sent to supplier.'
+        ? result.data.emailError
+          ? `Fresh magic link sent, but some supplier emails failed: ${result.data.emailError}`
+          : 'Fresh magic link sent to supplier.'
         : `Link refreshed, but email failed: ${result.data.emailError ?? 'unknown error'}`,
     }));
   }

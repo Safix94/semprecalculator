@@ -21,6 +21,7 @@ import {
   sendPricingTeamRfqNotification,
   sendSupplierInviteEmail,
 } from '@/lib/mailer';
+import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import {
   formatRfqDimensionsWithOptions,
   isTableTopsProductType,
@@ -948,8 +949,9 @@ export async function sendRfq(rfqId: string) {
       ? rfq.material_details[0]
       : rfq.material_details;
     const materialName = materialDetails?.name || rfq.material;
+    const supplierEmails = getSupplierRecipientEmails(invite.supplier);
     const emailResult = await sendSupplierInviteEmail({
-      supplierEmail: invite.supplier.email,
+      supplierEmails,
       supplierName: invite.supplier.name,
       rfqId,
       token,
@@ -981,7 +983,8 @@ export async function sendRfq(rfqId: string) {
       metadata: {
         success: emailResult.success,
         error: emailResult.error,
-        supplierEmail: invite.supplier.email,
+        supplierEmails,
+        emailResults: emailResult.results,
         invitePart: invite.invite_part ?? 'default',
       },
     });

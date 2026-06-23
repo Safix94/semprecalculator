@@ -7,12 +7,7 @@ import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
 import { RfqAttachmentList } from '@/components/rfq-attachment-list';
-import {
-  formatRfqDimensionsWithOptions,
-  isRoundShape,
-  isTableTopsProductType,
-  isTablesProductType,
-} from '@/lib/rfq-format';
+import { RfqDirectDetailsCard } from '@/components/rfq-direct-details-card';
 import type { Rfq, RfqAttachment, RfqComment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -73,10 +68,8 @@ export default async function RfqDetailPage({ params }: PageProps) {
   ]);
 
   const typedRfq = rfq as Rfq;
-  const isRound = isRoundShape(typedRfq.shape);
-  const isTablesType = isTablesProductType(typedRfq.product_type);
-  const isTableTopsType = isTableTopsProductType(typedRfq.product_type);
   const canManageRfq = user.role === 'admin' || user.role === 'sales';
+  const requestTitle = [typedRfq.product_type, typedRfq.material, typedRfq.shape].filter(Boolean).join(' - ');
   const status = statusLabels[typedRfq.status] ?? {
     label: typedRfq.status,
     color: 'bg-muted text-muted-foreground',
@@ -87,7 +80,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            {typedRfq.material} - {typedRfq.shape}
+            {requestTitle}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Created on {new Date(typedRfq.created_at).toLocaleDateString('en-GB')}
@@ -109,89 +102,19 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      <RfqDirectDetailsCard rfq={typedRfq} userRole={user.role} />
+
       <Card>
         <CardHeader>
-          <CardTitle>Details</CardTitle>
+          <CardTitle>Notes</CardTitle>
         </CardHeader>
         <CardContent>
-          <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            {!isTablesType && (
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Material</dt>
-                <dd className="mt-1 text-sm font-medium">{typedRfq.material}</dd>
-              </div>
-            )}
-            {isTableTopsType && (
-              <>
-                <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Top finish</dt>
-                  <dd className="mt-1 text-sm font-medium">{typedRfq.finish_top || '-'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Edge finish</dt>
-                  <dd className="mt-1 text-sm font-medium">{typedRfq.finish_edge || '-'}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs uppercase text-muted-foreground">Color finish</dt>
-                  <dd className="mt-1 text-sm font-medium">{typedRfq.finish_color || '-'}</dd>
-                </div>
-              </>
-            )}
-            {isTablesType && typedRfq.material_table_top && (
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Tafelblad</dt>
-                <dd className="mt-1 text-sm font-medium">
-                  {typedRfq.material_table_top}
-                  {typedRfq.finish_table_top ? ` (${typedRfq.finish_table_top})` : ''}
-                </dd>
-              </div>
-            )}
-            {isTablesType && typedRfq.material_table_foot && (
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Tafelpoot</dt>
-                <dd className="mt-1 text-sm font-medium">
-                  {typedRfq.material_table_foot}
-                  {typedRfq.finish_table_foot ? ` (${typedRfq.finish_table_foot})` : ''}
-                </dd>
-              </div>
-            )}
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
-              <dd className="mt-1 text-sm font-medium">{typedRfq.shape}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
-              <dd className="mt-1 text-sm font-medium">{typedRfq.customer_name || '-'}</dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">
-                {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
-              </dt>
-              <dd className="mt-1 text-sm font-medium">
-                {formatRfqDimensionsWithOptions(typedRfq, { includeThickness: false })}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
-              <dd className="mt-1 text-sm font-medium">{typedRfq.quantity}</dd>
-            </div>
-            {(!isRound || typedRfq.thickness > 0) && (
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
-                <dd className="mt-1 text-sm font-medium">{typedRfq.thickness} cm</dd>
-              </div>
-            )}
-          </dl>
-
-          <div className="mt-4 border-t pt-4">
-            <h3 className="mb-2 text-xs uppercase text-muted-foreground">Notes</h3>
-            <RfqNotesEditor
-              key={`rfq-notes-${rfqId}`}
-              rfqId={rfqId}
-              initialNotes={typedRfq.notes}
-              disabled={typedRfq.status === 'closed'}
-            />
-          </div>
+          <RfqNotesEditor
+            key={`rfq-notes-${rfqId}`}
+            rfqId={rfqId}
+            initialNotes={typedRfq.notes}
+            disabled={typedRfq.status === 'closed'}
+          />
         </CardContent>
       </Card>
 

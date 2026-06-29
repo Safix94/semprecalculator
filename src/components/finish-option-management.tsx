@@ -249,6 +249,7 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
         </p>
       </div>
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
       <Card>
         <CardContent className="p-4">
           <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
@@ -313,6 +314,7 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
           )}
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

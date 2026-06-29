@@ -571,7 +571,7 @@ export function MaterialManagement({
 
       {/* Create/Edit Material Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[calc(100vh-2rem)] w-[96vw] sm:!max-w-[96vw] 2xl:!max-w-[1500px] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingMaterial ? 'Edit material' : 'New material'}
@@ -581,7 +581,9 @@ export function MaterialManagement({
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.2fr)] xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,0.8fr)]">
+              <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="material-name">Name *</Label>
               <Input
@@ -595,7 +597,7 @@ export function MaterialManagement({
 
             <div className="space-y-3">
               <Label>Product types *</Label>
-              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+              <div className="space-y-2 max-h-[42vh] overflow-y-auto border rounded-md p-2">
                 {productTypes.map((productType) => (
                   <div key={productType.id} className="flex items-center space-x-2">
                     <Checkbox
@@ -610,6 +612,8 @@ export function MaterialManagement({
                 ))}
               </div>
             </div>
+              </div>
+              <div className="space-y-4">
 
             <div className="space-y-1.5">
               <Label htmlFor="finish-options">
@@ -697,10 +701,12 @@ export function MaterialManagement({
                 Advanced table/table-top finish options are hidden until you select `Tables` or `Table tops`.
               </div>
             )}
+              </div>
+              <div className="space-y-3 rounded-lg border p-4">
 
             <div className="space-y-3">
               <Label>Link suppliers (optional)</Label>
-              <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+              <div className="space-y-2 max-h-[42vh] overflow-y-auto border rounded-md p-2">
                 {suppliers.map((supplier) => (
                   <div key={supplier.id} className="flex items-center space-x-2">
                     <Checkbox
@@ -715,6 +721,8 @@ export function MaterialManagement({
                     </Label>
                   </div>
                 ))}
+              </div>
+            </div>
               </div>
             </div>
 
@@ -732,7 +740,7 @@ export function MaterialManagement({
 
       {/* Link Supplier Dialog */}
       <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[calc(100vh-2rem)] w-[92vw] sm:!max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               Link supplier to {selectedMaterial?.name}

@@ -408,8 +408,8 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(260px,380px)_1fr]">
-          <Card className="lg:sticky lg:top-4 lg:self-start">
+        <div className="grid gap-4 xl:grid-cols-[minmax(300px,420px)_minmax(0,1fr)]">
+          <Card className="xl:sticky xl:top-4 xl:self-start">
             <CardContent className="space-y-4 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>

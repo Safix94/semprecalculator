@@ -522,7 +522,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
 
       {/* Create/Edit Supplier Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl overflow-y-auto">
+        <DialogContent className="max-h-[calc(100vh-2rem)] w-[96vw] sm:!max-w-[96vw] 2xl:!max-w-[1500px] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingSupplier ? 'Edit supplier' : 'New supplier'}
@@ -533,7 +533,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
           </DialogHeader>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.05fr)_minmax(0,0.8fr)]">
               <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="supplier-name">Name *</Label>
@@ -779,14 +779,12 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               </div>
             </div>
               </div>
-            </div>
-
-            <div className="space-y-3">
+              <div className="space-y-3 rounded-lg border p-4">
               <Label>Link materials (optional)</Label>
               {materials.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No materials created yet.</p>
               ) : (
-                <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
+                <div className="space-y-2 max-h-[42vh] overflow-y-auto border rounded-md p-2">
                   {materials.map((material) => (
                     <div key={material.id} className="flex items-center space-x-2">
                       <Checkbox
@@ -803,6 +801,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                   ))}
                 </div>
               )}
+              </div>
             </div>
 
             <DialogFooter>

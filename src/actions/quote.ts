@@ -380,6 +380,7 @@ export async function submitQuote(
     currency: 'EUR',
     supplier_input_price: convertedBasePrice.supplierInputPrice,
     supplier_input_currency: convertedBasePrice.supplierInputCurrency,
+    supplier_input_exchange_rate_per_eur: convertedBasePrice.supplierInputExchangeRatePerEur,
     supplier_input_exchange_rate_idr_per_eur: convertedBasePrice.supplierInputExchangeRateIdrPerEur,
     supplier_input_converted_at: convertedBasePrice.supplierInputConvertedAt,
   };
@@ -504,6 +505,7 @@ export async function submitQuote(
       supplierInputPrice: convertedBasePrice.supplierInputPrice,
       supplierInputCurrency: convertedBasePrice.supplierInputCurrency,
       basePriceEur: convertedBasePrice.basePriceEur,
+      exchangeRatePerEur: convertedBasePrice.supplierInputExchangeRatePerEur,
       exchangeRateIdrPerEur: convertedBasePrice.supplierInputExchangeRateIdrPerEur,
       volumeM3,
       shippingCostCalculated,

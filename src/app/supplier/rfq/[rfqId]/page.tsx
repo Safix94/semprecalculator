@@ -10,7 +10,7 @@ import {
   isTableTopsProductType,
 } from '@/lib/rfq-format';
 import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
-import { IDR_PER_EUR_RATE, normalizeQuotePriceCurrency } from '@/lib/currency';
+import { IDR_PER_EUR_RATE, USD_PER_EUR_RATE, normalizeQuotePriceCurrency } from '@/lib/currency';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -97,7 +97,11 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
       ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
         ? Number(existingQuote.supplier_input_price)
         : Math.round(Number(existingQuote.base_price) * IDR_PER_EUR_RATE)
-      : Number(existingQuote.base_price)
+      : supplierQuoteCurrency === 'USD'
+        ? existingQuote.supplier_input_currency === 'USD' && existingQuote.supplier_input_price
+          ? Number(existingQuote.supplier_input_price)
+          : Math.round(Number(existingQuote.base_price) * USD_PER_EUR_RATE * 100) / 100
+        : Number(existingQuote.base_price)
     : null;
   const quoteInitialValues = existingQuote
     ? {

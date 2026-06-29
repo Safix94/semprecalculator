@@ -39,6 +39,7 @@ import {
 import { SUPPLIER_LANGUAGE_LABELS, SUPPLIER_LANGUAGES, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { MAX_SUPPLIER_ADDITIONAL_EMAILS, parseEmailList } from '@/lib/email-recipients';
 import { DEFAULT_TRUCK_MULTIPLIER_FACTOR } from '@/lib/pricing';
+import { QUOTE_PRICE_CURRENCY_LABELS } from '@/lib/currency';
 import type { Material, QuotePriceCurrency, SupplierLanguage, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 
 interface SupplierManagementProps {
@@ -427,14 +428,14 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                           Margin {Number(supplier.pricing_profile.product_margin_factor).toFixed(3)} · Retail ×{Number(supplier.pricing_profile.retail_multiplier_factor).toFixed(3)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Basisprijs: {supplier.quote_price_currency === 'IDR' ? 'IDR → EUR' : 'EUR'}
+                          Basisprijs: {supplier.quote_price_currency === 'EUR' ? 'EUR' : `${supplier.quote_price_currency} → EUR`}
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-0.5 text-sm">
                         <div>Default container</div>
                         <div className="text-xs text-muted-foreground">
-                          Basisprijs: {supplier.quote_price_currency === 'IDR' ? 'IDR → EUR' : 'EUR'}
+                          Basisprijs: {supplier.quote_price_currency === 'EUR' ? 'EUR' : `${supplier.quote_price_currency} → EUR`}
                         </div>
                       </div>
                     )}
@@ -650,22 +651,26 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 </p>
               </div>
 
-              <div className="flex items-start gap-2 rounded-md border p-3">
-                <Checkbox
-                  id="supplier-idr-pricing"
-                  checked={formData.quote_price_currency === 'IDR'}
-                  onCheckedChange={(checked) =>
-                    updateFormData('quote_price_currency', checked === true ? 'IDR' : 'EUR')
+              <div className="space-y-1.5">
+                <Label htmlFor="supplier-quote-price-currency">Basisprijs valuta *</Label>
+                <Select
+                  value={formData.quote_price_currency}
+                  onValueChange={(value) =>
+                    updateFormData('quote_price_currency', value as QuotePriceCurrency)
                   }
-                />
-                <div className="space-y-1">
-                  <Label htmlFor="supplier-idr-pricing">
-                    Supplier geeft basisprijs in Indonesische rupiah (IDR)
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Op de supplier quote pagina wordt het ingevulde bedrag automatisch omgerekend naar EUR.
-                  </p>
-                </div>
+                >
+                  <SelectTrigger id="supplier-quote-price-currency" className="w-full">
+                    <SelectValue placeholder="Kies valuta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EUR">{QUOTE_PRICE_CURRENCY_LABELS.EUR}</SelectItem>
+                    <SelectItem value="USD">{QUOTE_PRICE_CURRENCY_LABELS.USD}</SelectItem>
+                    <SelectItem value="IDR">{QUOTE_PRICE_CURRENCY_LABELS.IDR}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  De supplier vult zijn basisprijs in deze valuta in. De app rekent automatisch om naar EUR voor de berekening.
+                </p>
               </div>
 
               <div className="space-y-1.5">

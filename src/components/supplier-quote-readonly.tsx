@@ -1,5 +1,5 @@
 import { getSupplierTranslations, normalizeSupplierLanguage, SUPPLIER_LANGUAGE_LOCALES } from '@/lib/supplier-language';
-import { formatIdrAmount } from '@/lib/currency';
+import { formatSupplierInputAmount } from '@/lib/currency';
 import type { RfqQuote, SupplierLanguage } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -12,9 +12,13 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
   const normalizedLanguage = normalizeSupplierLanguage(language);
   const t = getSupplierTranslations(normalizedLanguage);
   const volumeValue = Number(quote.volume_m3).toFixed(3);
-  const isIdrQuote = quote.supplier_input_currency === 'IDR' && quote.supplier_input_price;
-  const submittedBasePrice = isIdrQuote
-    ? formatIdrAmount(quote.supplier_input_price)
+  const isConvertedQuote = Boolean(
+    quote.supplier_input_currency &&
+      quote.supplier_input_currency !== 'EUR' &&
+      quote.supplier_input_price
+  );
+  const submittedBasePrice = isConvertedQuote
+    ? formatSupplierInputAmount(quote.supplier_input_price, quote.supplier_input_currency)
     : `€${Number(quote.base_price).toFixed(2)}`;
 
   return (
@@ -37,7 +41,7 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
           <div>
             <dt className="text-xs uppercase text-muted-foreground">{t.basePrice}</dt>
             <dd className="mt-1 text-sm font-medium">{submittedBasePrice}</dd>
-            {isIdrQuote && (
+            {isConvertedQuote && (
               <dd className="mt-1 text-xs text-muted-foreground">
                 Converted: €{Number(quote.base_price).toFixed(2)}
               </dd>

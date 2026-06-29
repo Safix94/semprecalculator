@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { RfqInvite, RfqQuote, Supplier } from '@/types';
-import { formatIdrAmount } from '@/lib/currency';
+import { formatSupplierInputAmount } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -69,8 +69,8 @@ function formatSupplierBasePrice(quote: RfqQuote | undefined) {
     return '-';
   }
 
-  if (quote.supplier_input_currency === 'IDR' && quote.supplier_input_price) {
-    return `${formatIdrAmount(quote.supplier_input_price)} → ${formatCurrency(quote.base_price)}`;
+  if (quote.supplier_input_currency && quote.supplier_input_currency !== 'EUR' && quote.supplier_input_price) {
+    return `${formatSupplierInputAmount(quote.supplier_input_price, quote.supplier_input_currency)} → ${formatCurrency(quote.base_price)}`;
   }
 
   return formatCurrency(quote.base_price);

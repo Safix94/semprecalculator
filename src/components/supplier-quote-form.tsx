@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
-import { IDR_PER_EUR_RATE } from '@/lib/currency';
+import { IDR_PER_EUR_RATE, USD_PER_EUR_RATE } from '@/lib/currency';
 import type { QuotePriceCurrency, SupplierLanguage } from '@/types';
 
 interface SupplierQuoteFormProps {
@@ -39,6 +39,21 @@ export function SupplierQuoteForm({
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
+  const usdRateLabel = USD_PER_EUR_RATE.toLocaleString('nl-BE', {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
+  const basePriceLabel = quotePriceCurrency === 'IDR'
+    ? t.basePriceIdr
+    : quotePriceCurrency === 'USD'
+      ? t.basePriceUsd
+      : t.basePriceEur;
+  const basePriceStep = quotePriceCurrency === 'IDR' ? '1' : '0.01';
+  const basePricePlaceholder = quotePriceCurrency === 'IDR'
+    ? '1000000'
+    : quotePriceCurrency === 'USD'
+      ? '100.00'
+      : '0.00';
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]> | string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -102,23 +117,26 @@ export function SupplierQuoteForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="basePrice">
-                {quotePriceCurrency === 'IDR' ? t.basePriceIdr : t.basePriceEur}
-              </Label>
+              <Label htmlFor="basePrice">{basePriceLabel}</Label>
               <Input
                 id="basePrice"
                 name="basePrice"
                 type="number"
-                step={quotePriceCurrency === 'IDR' ? '1' : '0.01'}
+                step={basePriceStep}
                 min="0.01"
                 required
-                placeholder={quotePriceCurrency === 'IDR' ? '1000000' : '0.00'}
+                placeholder={basePricePlaceholder}
                 defaultValue={initialValues?.basePrice ?? ''}
                 aria-invalid={Boolean(typeof errors === 'object' && errors?.basePrice)}
               />
               {quotePriceCurrency === 'IDR' && (
                 <p className="text-xs text-muted-foreground">
                   {t.basePriceIdrHelp} 1 EUR = {idrRateLabel} IDR.
+                </p>
+              )}
+              {quotePriceCurrency === 'USD' && (
+                <p className="text-xs text-muted-foreground">
+                  {t.basePriceUsdHelp} 1 EUR = {usdRateLabel} USD.
                 </p>
               )}
               {typeof errors === 'object' && errors?.basePrice && (

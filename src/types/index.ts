@@ -160,6 +160,7 @@ export interface RfqQuote {
   base_price: number;
   supplier_input_price?: number | null;
   supplier_input_currency?: import('@/lib/currency').QuotePriceCurrency | null;
+  supplier_input_exchange_rate_per_eur?: number | null;
   supplier_input_exchange_rate_idr_per_eur?: number | null;
   supplier_input_converted_at?: string | null;
   area_m2?: number | null;

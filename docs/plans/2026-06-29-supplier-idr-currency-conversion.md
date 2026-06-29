@@ -2,9 +2,9 @@
 
 > **For Hermes:** Use this plan task-by-task. Keep `base_price` and all pricing formulas in EUR internally; only supplier input can be IDR.
 
-**Goal:** Add a supplier-level checkbox so selected suppliers can enter their quote base price in Indonesian rupiah (IDR), while the app automatically converts that amount to EUR before existing pricing formulas run.
+**Goal:** Add a supplier-level currency dropdown so suppliers can enter their quote base price in EUR, USD, or Indonesian rupiah (IDR), while the app automatically converts non-EUR amounts to EUR before existing pricing formulas run.
 
-**Architecture:** Store a supplier quote input currency setting (`EUR` or `IDR`) on the supplier. Keep the existing quote calculation pipeline EUR-based to avoid breaking transport/margin/retail logic. Store a quote-level snapshot of the supplier-entered amount, currency, and exchange rate so historic quotes remain auditable even if the rate changes later.
+**Architecture:** Store a supplier quote input currency setting (`EUR`, `USD`, or `IDR`) on the supplier. Keep the existing quote calculation pipeline EUR-based to avoid breaking transport/margin/retail logic. Store a quote-level snapshot of the supplier-entered amount, currency, and exchange rate so historic quotes remain auditable even if the rate changes later.
 
 **Tech Stack:** Next.js 16 App Router, React, Supabase, TypeScript, existing supplier/RFQ quote actions.
 

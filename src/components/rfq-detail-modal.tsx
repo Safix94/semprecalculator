@@ -643,6 +643,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                   rfqId={detail.rfq.id}
                   attachments={detail.attachments}
                   canOpen={canManageRfq}
+                  canDelete={canManageRfq && detail.rfq.status !== 'closed'}
                 />
 
                 {detail.rfq.status !== 'closed' && (

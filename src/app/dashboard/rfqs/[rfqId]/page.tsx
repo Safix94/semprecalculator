@@ -127,6 +127,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
             rfqId={rfqId}
             attachments={(attachments as RfqAttachment[]) ?? []}
             canOpen={canManageRfq}
+            canDelete={canManageRfq && typedRfq.status !== 'closed'}
           />
           {typedRfq.status !== 'closed' && (
             <div className="mt-4">

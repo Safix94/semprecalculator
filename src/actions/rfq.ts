@@ -776,11 +776,104 @@ export async function uploadAttachment(rfqId: string, formData: FormData) {
   });
 
   if (dbError) {
+    try {
+      const serviceRoleSupabase = createServiceRoleClient();
+      await serviceRoleSupabase.storage.from('rfq-attachments').remove([storagePath]);
+    } catch (cleanupError) {
+      console.error('Failed to clean up attachment after database save failure:', cleanupError);
+    }
+
     return { error: `Save failed: ${dbError.message}` };
   }
 
+  revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
   return { success: true };
+}
+
+function isMissingStorageObjectError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const maybeError = error as { message?: string; statusCode?: string | number };
+  return (
+    maybeError.statusCode === 404 ||
+    maybeError.statusCode === '404' ||
+    maybeError.message?.toLowerCase().includes('not found') === true
+  );
+}
+
+export async function deleteAttachment(rfqId: string, attachmentId: string) {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select('id, status')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    return { error: 'RFQ not found' };
+  }
+
+  if (rfq.status === 'closed') {
+    return { error: 'Cannot delete attachments from a closed RFQ' };
+  }
+
+  const { data: attachment, error: attachmentError } = await supabase
+    .from('rfq_attachments')
+    .select('id, rfq_id, storage_path, file_name')
+    .eq('id', attachmentId)
+    .eq('rfq_id', rfqId)
+    .single();
+
+  if (attachmentError || !attachment) {
+    return { error: 'Attachment not found' };
+  }
+
+  try {
+    const serviceRoleSupabase = createServiceRoleClient();
+    const { error: storageError } = await serviceRoleSupabase.storage
+      .from('rfq-attachments')
+      .remove([attachment.storage_path]);
+
+    if (storageError && !isMissingStorageObjectError(storageError)) {
+      return { error: `Delete failed: ${storageError.message}` };
+    }
+
+    const { error: deleteError } = await serviceRoleSupabase
+      .from('rfq_attachments')
+      .delete()
+      .eq('id', attachment.id)
+      .eq('rfq_id', rfqId);
+
+    if (deleteError) {
+      return { error: `Delete failed: ${deleteError.message}` };
+    }
+
+    await logAuditEvent({
+      actorType: user.role,
+      actorId: user.id,
+      action: 'RFQ_ATTACHMENT_DELETED',
+      entityType: 'rfq_attachment',
+      entityId: attachment.id,
+      metadata: {
+        rfqId,
+        fileName: attachment.file_name,
+        storagePath: attachment.storage_path,
+        storageObjectMissing: Boolean(storageError),
+      },
+    });
+
+    revalidatePath('/dashboard');
+    revalidatePath(`/dashboard/rfqs/${rfqId}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete attachment:', error);
+    return { error: 'Could not delete attachment' };
+  }
 }
 
 export async function updateRfqNotes(rfqId: string, notes: string | null) {

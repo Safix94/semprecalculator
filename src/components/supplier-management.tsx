@@ -38,6 +38,7 @@ import {
 } from '@/actions/suppliers';
 import { SUPPLIER_LANGUAGE_LABELS, SUPPLIER_LANGUAGES, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { MAX_SUPPLIER_ADDITIONAL_EMAILS, parseEmailList } from '@/lib/email-recipients';
+import { DEFAULT_TRUCK_MULTIPLIER_FACTOR } from '@/lib/pricing';
 import type { Material, SupplierLanguage, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 
 interface SupplierManagementProps {
@@ -69,7 +70,7 @@ const defaultPricingProfileFormData: SupplierPricingProfileFormData = {
   container_volume_m3: '67',
   product_margin_factor: '2.1',
   retail_multiplier_factor: '2.4',
-  truck_multiplier_factor: '',
+  truck_multiplier_factor: DEFAULT_TRUCK_MULTIPLIER_FACTOR.toString(),
 };
 
 const initialFormData: SupplierFormData = {
@@ -98,7 +99,7 @@ function toPricingProfileFormData(profile?: SupplierPricingProfile | null): Supp
     container_volume_m3: profile.container_volume_m3?.toString() ?? '',
     product_margin_factor: profile.product_margin_factor.toString(),
     retail_multiplier_factor: profile.retail_multiplier_factor.toString(),
-    truck_multiplier_factor: profile.truck_multiplier_factor?.toString() ?? '',
+    truck_multiplier_factor: profile.truck_multiplier_factor?.toString() ?? DEFAULT_TRUCK_MULTIPLIER_FACTOR.toString(),
   };
 }
 
@@ -118,7 +119,7 @@ function pricingFormToInput(profile: SupplierPricingProfileFormData) {
     container_volume_m3: profile.transport_mode === 'container' ? parseDecimal(profile.container_volume_m3) : null,
     product_margin_factor: parseDecimal(profile.product_margin_factor) ?? 0,
     retail_multiplier_factor: parseDecimal(profile.retail_multiplier_factor) ?? 0,
-    truck_multiplier_factor: profile.transport_mode === 'truck' ? parseDecimal(profile.truck_multiplier_factor) : null,
+    truck_multiplier_factor: profile.transport_mode === 'truck' ? parseDecimal(profile.truck_multiplier_factor) ?? DEFAULT_TRUCK_MULTIPLIER_FACTOR : null,
   };
 }
 
@@ -142,6 +143,28 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
     setFormData(prev => ({
       ...prev,
       pricing_profile: { ...prev.pricing_profile, [field]: value },
+    }));
+  };
+
+  const handleTransportModeChange = (transportMode: TransportMode) => {
+    setFormData(prev => ({
+      ...prev,
+      pricing_profile: {
+        ...prev.pricing_profile,
+        transport_mode: transportMode,
+        container_price_eur:
+          transportMode === 'container' && !prev.pricing_profile.container_price_eur
+            ? defaultPricingProfileFormData.container_price_eur
+            : prev.pricing_profile.container_price_eur,
+        container_volume_m3:
+          transportMode === 'container' && !prev.pricing_profile.container_volume_m3
+            ? defaultPricingProfileFormData.container_volume_m3
+            : prev.pricing_profile.container_volume_m3,
+        truck_multiplier_factor:
+          transportMode === 'truck' && !prev.pricing_profile.truck_multiplier_factor
+            ? DEFAULT_TRUCK_MULTIPLIER_FACTOR.toString()
+            : prev.pricing_profile.truck_multiplier_factor,
+      },
     }));
   };
 
@@ -537,7 +560,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 <Label htmlFor="supplier-transport-mode">Transport calculation *</Label>
                 <Select
                   value={formData.pricing_profile.transport_mode}
-                  onValueChange={(value) => updatePricingProfile('transport_mode', value as TransportMode)}
+                  onValueChange={(value) => handleTransportModeChange(value as TransportMode)}
                 >
                   <SelectTrigger id="supplier-transport-mode" className="w-full">
                     <SelectValue placeholder="Select transport calculation" />
@@ -545,7 +568,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                   <SelectContent>
                     <SelectItem value="none">Geen transport</SelectItem>
                     <SelectItem value="container">Container</SelectItem>
-                    <SelectItem value="truck" disabled>Camion / vrachtwagen (later)</SelectItem>
+                    <SelectItem value="truck">Camion / vrachtwagen</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -577,6 +600,23 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 </div>
               )}
 
+              {formData.pricing_profile.transport_mode === 'truck' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="truck-multiplier">Truck multiplier</Label>
+                  <Input
+                    id="truck-multiplier"
+                    inputMode="decimal"
+                    value={formData.pricing_profile.truck_multiplier_factor}
+                    onChange={(event) => updatePricingProfile('truck_multiplier_factor', event.target.value)}
+                    placeholder="1.5"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Used to calculate the transport-adjusted base price: supplier base price × truck multiplier.
+                  </p>
+                </div>
+              )}
+
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="product-margin">Product margin</Label>
@@ -603,10 +643,27 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               </div>
 
               <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-                <p className="font-medium text-foreground">Container formula</p>
-                <p>Transport cost = (container price / container volume) × supplier volume</p>
-                <p>Cost incl. transport = supplier base price × product margin + transport cost</p>
-                <p>Retail price = cost incl. transport × retail multiplier</p>
+                {formData.pricing_profile.transport_mode === 'container' && (
+                  <>
+                    <p className="font-medium text-foreground">Container formula</p>
+                    <p>Transport cost = (container price / container volume) × supplier volume</p>
+                    <p>Cost incl. transport = supplier base price × product margin + transport cost</p>
+                    <p>Retail price = cost incl. transport × retail multiplier</p>
+                  </>
+                )}
+                {formData.pricing_profile.transport_mode === 'truck' && (
+                  <>
+                    <p className="font-medium text-foreground">Truck formula</p>
+                    <p>Transport-adjusted base price = supplier base price × truck multiplier</p>
+                    <p>Retail price = transport-adjusted base price × product margin × retail multiplier</p>
+                  </>
+                )}
+                {formData.pricing_profile.transport_mode === 'none' && (
+                  <>
+                    <p className="font-medium text-foreground">No transport formula</p>
+                    <p>Retail price = supplier base price × product margin × retail multiplier</p>
+                  </>
+                )}
               </div>
             </div>
 

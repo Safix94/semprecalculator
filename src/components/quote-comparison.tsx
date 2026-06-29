@@ -44,6 +44,14 @@ function formatCurrency(value: number | string | null | undefined, decimals = 2)
   return `\u20ac${Number(value).toFixed(decimals)}`;
 }
 
+function formatNumber(value: number | string | null | undefined, decimals = 3) {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+
+  return Number(value).toFixed(decimals);
+}
+
 function formatPricingMethod(quote: RfqQuote | undefined) {
   if (!quote?.pricing_method) {
     return '-';
@@ -81,8 +89,8 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                 <TableHead>Transport</TableHead>
                 <TableHead className="text-right">Supplier base price</TableHead>
                 <TableHead className="text-right">Volume</TableHead>
-                <TableHead className="text-right">Transport cost</TableHead>
-                <TableHead className="text-right">Cost incl. transport</TableHead>
+                <TableHead className="text-right">Transport cost / truck multiplier</TableHead>
+                <TableHead className="text-right">Calculation base</TableHead>
                 <TableHead className="text-right">Retail price</TableHead>
                 <TableHead className="text-right">Lead time</TableHead>
                 <TableHead>Comment</TableHead>
@@ -99,9 +107,15 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                       ? { label: 'Replied', color: 'text-chart-2' }
                       : { label: 'Pending', color: 'text-primary' };
                 const isLowest = quote && quote.final_price_calculated === lowestPrice;
-                const costIncludingTransport =
-                  quote?.cost_including_transport ??
-                  (quote ? Number(quote.base_price) + Number(quote.shipping_cost_calculated) : null);
+                const calculationBase = quote?.pricing_method === 'truck'
+                  ? quote.transport_adjusted_base_price
+                  : quote?.cost_including_transport ??
+                    (quote ? Number(quote.base_price) + Number(quote.shipping_cost_calculated) : null);
+                const transportDetail = quote?.pricing_method === 'truck'
+                  ? `×${formatNumber(quote.truck_multiplier_factor, 3)}`
+                  : quote
+                    ? formatCurrency(quote.transport_cost_calculated ?? quote.shipping_cost_calculated, 3)
+                    : '-';
 
                 return (
                   <TableRow
@@ -118,10 +132,10 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                     </TableCell>
                     <TableCell className="text-right">{formatQuoteVolume(quote)}</TableCell>
                     <TableCell className="text-right">
-                      {quote ? formatCurrency(quote.transport_cost_calculated ?? quote.shipping_cost_calculated, 3) : '-'}
+                      {transportDetail}
                     </TableCell>
                     <TableCell className="text-right">
-                      {quote ? formatCurrency(costIncludingTransport) : '-'}
+                      {quote ? formatCurrency(calculationBase) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       {quote ? (

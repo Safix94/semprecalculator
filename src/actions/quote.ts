@@ -346,6 +346,7 @@ export async function submitQuote(
     transportCostCalculated,
     productPriceAfterMargin,
     costIncludingTransport,
+    transportAdjustedBasePrice,
     finalPriceCalculated,
     pricingSettingsSnapshot,
   } = pricingResult;
@@ -355,6 +356,8 @@ export async function submitQuote(
     transport_cost_calculated: transportCostCalculated,
     product_price_after_margin: productPriceAfterMargin,
     cost_including_transport: costIncludingTransport,
+    transport_adjusted_base_price: transportAdjustedBasePrice,
+    truck_multiplier_factor: pricingProfile.transportMode === 'truck' ? pricingProfile.truckMultiplierFactor ?? 1.5 : null,
     final_price_calculated: finalPriceCalculated,
     pricing_method: pricingProfile.transportMode,
     pricing_formula_version: pricingProfile.formulaVersion,

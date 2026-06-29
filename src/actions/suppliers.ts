@@ -6,7 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
 import { normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { validateSupplierAdditionalEmails } from '@/lib/email-recipients';
-import { DEFAULT_PRICING_SETTINGS } from '@/lib/pricing';
+import { DEFAULT_PRICING_SETTINGS, DEFAULT_TRUCK_MULTIPLIER_FACTOR } from '@/lib/pricing';
 import type { Material, Supplier, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 import type { SupplierLanguage } from '@/lib/supplier-language';
 
@@ -72,7 +72,7 @@ function mapSupplierPricingProfileRow(row: Partial<SupplierPricingProfile> | nul
     container_volume_m3: normalizeNumber(row.container_volume_m3),
     product_margin_factor: Number(row.product_margin_factor ?? DEFAULT_PRICING_SETTINGS.productMarginFactor),
     retail_multiplier_factor: Number(row.retail_multiplier_factor ?? DEFAULT_PRICING_SETTINGS.shippingMarginFactor),
-    truck_multiplier_factor: normalizeNumber(row.truck_multiplier_factor),
+    truck_multiplier_factor: normalizeNumber(row.truck_multiplier_factor) ?? DEFAULT_TRUCK_MULTIPLIER_FACTOR,
     updated_by: row.updated_by,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -86,7 +86,7 @@ function defaultSupplierPricingProfileInput(): SupplierPricingProfileInput {
     container_volume_m3: DEFAULT_PRICING_SETTINGS.containerVolumeM3,
     product_margin_factor: DEFAULT_PRICING_SETTINGS.productMarginFactor,
     retail_multiplier_factor: DEFAULT_PRICING_SETTINGS.shippingMarginFactor,
-    truck_multiplier_factor: null,
+    truck_multiplier_factor: DEFAULT_TRUCK_MULTIPLIER_FACTOR,
   };
 }
 
@@ -103,7 +103,7 @@ function validatePricingProfileInput(input: SupplierPricingProfileInput): string
     );
   }
 
-  if (input.transport_mode === 'truck' && input.truck_multiplier_factor !== null && input.truck_multiplier_factor !== undefined) {
+  if (input.transport_mode === 'truck') {
     requiredPositiveFields.push([input.truck_multiplier_factor, 'Truck multiplier']);
   }
 
@@ -140,7 +140,7 @@ async function upsertSupplierPricingProfile(
         container_volume_m3: profileInput.transport_mode === 'container' ? profileInput.container_volume_m3 : null,
         product_margin_factor: profileInput.product_margin_factor,
         retail_multiplier_factor: profileInput.retail_multiplier_factor,
-        truck_multiplier_factor: profileInput.transport_mode === 'truck' ? profileInput.truck_multiplier_factor ?? null : null,
+        truck_multiplier_factor: profileInput.transport_mode === 'truck' ? profileInput.truck_multiplier_factor ?? DEFAULT_TRUCK_MULTIPLIER_FACTOR : DEFAULT_TRUCK_MULTIPLIER_FACTOR,
         updated_by: updatedBy,
       },
       { onConflict: 'supplier_id' }

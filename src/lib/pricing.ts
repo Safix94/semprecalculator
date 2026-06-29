@@ -25,10 +25,12 @@ export interface SupplierPricingProfile {
 }
 
 export interface SupplierPricingResult {
+  /** Legacy column alias. For non-container modes this is 0. */
   shippingCostCalculated: number;
   transportCostCalculated: number;
   productPriceAfterMargin: number;
   costIncludingTransport: number;
+  transportAdjustedBasePrice: number | null;
   finalPriceCalculated: number;
   pricingSettingsSnapshot: Record<string, unknown>;
 }
@@ -40,6 +42,7 @@ export const DEFAULT_PRICING_SETTINGS: PricingSettings = {
   shippingMarginFactor: 2.4,
 };
 
+export const DEFAULT_TRUCK_MULTIPLIER_FACTOR = 1.5;
 export const SUPPLIER_PRICING_FORMULA_VERSION = 'supplier_transport_v1';
 
 function roundTo(value: number, decimals: number): number {
@@ -99,28 +102,102 @@ export function calculateAllPricing(
   return { shippingCostCalculated, finalPriceCalculated };
 }
 
-function calculateTransportCost(volumeM3: number, profile: SupplierPricingProfile): number {
-  if (profile.transportMode === 'none') {
-    return 0;
-  }
+function baseSnapshot(profile: SupplierPricingProfile) {
+  return {
+    formulaVersion: profile.formulaVersion || SUPPLIER_PRICING_FORMULA_VERSION,
+    transportMode: profile.transportMode,
+    containerPriceEur: profile.containerPriceEur,
+    containerVolumeM3: profile.containerVolumeM3,
+    productMarginFactor: profile.productMarginFactor,
+    retailMultiplierFactor: profile.retailMultiplierFactor,
+    truckMultiplierFactor: profile.truckMultiplierFactor,
+  };
+}
 
-  if (profile.transportMode === 'container') {
-    assertPositiveNumber(profile.containerPriceEur, 'Container price');
-    assertPositiveNumber(profile.containerVolumeM3, 'Container volume');
-    return roundTo((profile.containerPriceEur / profile.containerVolumeM3) * volumeM3, 3);
-  }
+function calculateContainerPricing(
+  basePrice: number,
+  volumeM3: number,
+  profile: SupplierPricingProfile
+): SupplierPricingResult {
+  assertPositiveNumber(profile.containerPriceEur, 'Container price');
+  assertPositiveNumber(profile.containerVolumeM3, 'Container volume');
 
-  throw new Error('Truck pricing is not configured yet. Use container or no transport for now.');
+  const transportCostCalculated = roundTo((profile.containerPriceEur / profile.containerVolumeM3) * volumeM3, 3);
+  const productPriceAfterMargin = roundTo(basePrice * profile.productMarginFactor, 2);
+  const costIncludingTransport = roundTo(productPriceAfterMargin + transportCostCalculated, 2);
+  const finalPriceCalculated = roundTo(costIncludingTransport * profile.retailMultiplierFactor, 2);
+
+  return {
+    shippingCostCalculated: transportCostCalculated,
+    transportCostCalculated,
+    productPriceAfterMargin,
+    costIncludingTransport,
+    transportAdjustedBasePrice: null,
+    finalPriceCalculated,
+    pricingSettingsSnapshot: baseSnapshot(profile),
+  };
+}
+
+function calculateNoTransportPricing(
+  basePrice: number,
+  profile: SupplierPricingProfile
+): SupplierPricingResult {
+  const productPriceAfterMargin = roundTo(basePrice * profile.productMarginFactor, 2);
+  const finalPriceCalculated = roundTo(productPriceAfterMargin * profile.retailMultiplierFactor, 2);
+
+  return {
+    shippingCostCalculated: 0,
+    transportCostCalculated: 0,
+    productPriceAfterMargin,
+    costIncludingTransport: productPriceAfterMargin,
+    transportAdjustedBasePrice: null,
+    finalPriceCalculated,
+    pricingSettingsSnapshot: baseSnapshot(profile),
+  };
+}
+
+function calculateTruckPricing(
+  basePrice: number,
+  profile: SupplierPricingProfile
+): SupplierPricingResult {
+  const truckMultiplierFactor = profile.truckMultiplierFactor ?? DEFAULT_TRUCK_MULTIPLIER_FACTOR;
+  assertPositiveNumber(truckMultiplierFactor, 'Truck multiplier');
+
+  const transportAdjustedBasePrice = roundTo(basePrice * truckMultiplierFactor, 2);
+  const productPriceAfterMargin = roundTo(transportAdjustedBasePrice * profile.productMarginFactor, 2);
+  const finalPriceCalculated = roundTo(productPriceAfterMargin * profile.retailMultiplierFactor, 2);
+
+  return {
+    shippingCostCalculated: 0,
+    transportCostCalculated: 0,
+    productPriceAfterMargin,
+    costIncludingTransport: transportAdjustedBasePrice,
+    transportAdjustedBasePrice,
+    finalPriceCalculated,
+    pricingSettingsSnapshot: {
+      ...baseSnapshot({ ...profile, truckMultiplierFactor }),
+      transportAdjustedBasePrice,
+    },
+  };
 }
 
 /**
- * Supplier-level pricing v2.
+ * Supplier-level pricing.
  *
  * Container formula:
  * transportCost = (containerPriceEur / containerVolumeM3) * volumeM3
  * productPriceAfterMargin = basePrice * productMarginFactor
  * costIncludingTransport = productPriceAfterMargin + transportCost
  * retailPrice = costIncludingTransport * retailMultiplierFactor
+ *
+ * Truck formula:
+ * transportAdjustedBasePrice = basePrice * truckMultiplierFactor
+ * productPriceAfterMargin = transportAdjustedBasePrice * productMarginFactor
+ * retailPrice = productPriceAfterMargin * retailMultiplierFactor
+ *
+ * No transport formula:
+ * productPriceAfterMargin = basePrice * productMarginFactor
+ * retailPrice = productPriceAfterMargin * retailMultiplierFactor
  */
 export function calculateSupplierPricing(
   basePrice: number,
@@ -132,25 +209,13 @@ export function calculateSupplierPricing(
   assertPositiveNumber(profile.productMarginFactor, 'Product margin');
   assertPositiveNumber(profile.retailMultiplierFactor, 'Retail multiplier');
 
-  const transportCostCalculated = calculateTransportCost(volumeM3, profile);
-  const productPriceAfterMargin = roundTo(basePrice * profile.productMarginFactor, 2);
-  const costIncludingTransport = roundTo(productPriceAfterMargin + transportCostCalculated, 2);
-  const finalPriceCalculated = roundTo(costIncludingTransport * profile.retailMultiplierFactor, 2);
+  if (profile.transportMode === 'container') {
+    return calculateContainerPricing(basePrice, volumeM3, profile);
+  }
 
-  return {
-    shippingCostCalculated: transportCostCalculated,
-    transportCostCalculated,
-    productPriceAfterMargin,
-    costIncludingTransport,
-    finalPriceCalculated,
-    pricingSettingsSnapshot: {
-      formulaVersion: profile.formulaVersion || SUPPLIER_PRICING_FORMULA_VERSION,
-      transportMode: profile.transportMode,
-      containerPriceEur: profile.containerPriceEur,
-      containerVolumeM3: profile.containerVolumeM3,
-      productMarginFactor: profile.productMarginFactor,
-      retailMultiplierFactor: profile.retailMultiplierFactor,
-      truckMultiplierFactor: profile.truckMultiplierFactor,
-    },
-  };
+  if (profile.transportMode === 'truck') {
+    return calculateTruckPricing(basePrice, profile);
+  }
+
+  return calculateNoTransportPricing(basePrice, profile);
 }

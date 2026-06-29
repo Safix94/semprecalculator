@@ -165,6 +165,8 @@ export interface RfqQuote {
   product_price_after_margin?: number | null;
   transport_cost_calculated?: number | null;
   cost_including_transport?: number | null;
+  transport_adjusted_base_price?: number | null;
+  truck_multiplier_factor?: number | null;
   retail_multiplier_factor?: number | null;
   pricing_settings_snapshot?: Record<string, unknown> | null;
   currency: string;

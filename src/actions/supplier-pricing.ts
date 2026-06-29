@@ -1,7 +1,7 @@
 'use server';
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { DEFAULT_PRICING_SETTINGS, type SupplierPricingProfile } from '@/lib/pricing';
+import { DEFAULT_PRICING_SETTINGS, DEFAULT_TRUCK_MULTIPLIER_FACTOR, type SupplierPricingProfile } from '@/lib/pricing';
 
 interface SupplierPricingProfileRow {
   id: string;
@@ -38,7 +38,7 @@ function mapSupplierPricingProfile(
       containerVolumeM3: DEFAULT_PRICING_SETTINGS.containerVolumeM3,
       productMarginFactor: DEFAULT_PRICING_SETTINGS.productMarginFactor,
       retailMultiplierFactor: DEFAULT_PRICING_SETTINGS.shippingMarginFactor,
-      truckMultiplierFactor: null,
+      truckMultiplierFactor: DEFAULT_TRUCK_MULTIPLIER_FACTOR,
     };
   }
 
@@ -77,7 +77,7 @@ async function getGlobalPricingFallback(supplierId: string): Promise<SupplierPri
     containerVolumeM3: Number(data.container_volume_m3),
     productMarginFactor: Number(data.product_margin_factor),
     retailMultiplierFactor: Number(data.shipping_margin_factor),
-    truckMultiplierFactor: null,
+    truckMultiplierFactor: DEFAULT_TRUCK_MULTIPLIER_FACTOR,
   };
 }
 

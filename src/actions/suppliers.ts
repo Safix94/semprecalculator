@@ -1,13 +1,23 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
 import { normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { validateSupplierAdditionalEmails } from '@/lib/email-recipients';
-import type { Material, Supplier, SupplierWithMaterials } from '@/types';
+import { DEFAULT_PRICING_SETTINGS } from '@/lib/pricing';
+import type { Material, Supplier, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 import type { SupplierLanguage } from '@/lib/supplier-language';
+
+export interface SupplierPricingProfileInput {
+  transport_mode: TransportMode;
+  container_price_eur?: number | null;
+  container_volume_m3?: number | null;
+  product_margin_factor: number;
+  retail_multiplier_factor: number;
+  truck_multiplier_factor?: number | null;
+}
 
 export interface CreateSupplierInput {
   name: string;
@@ -15,6 +25,7 @@ export interface CreateSupplierInput {
   additional_emails?: string[];
   material_ids?: string[];
   preferred_language?: SupplierLanguage;
+  pricing_profile?: SupplierPricingProfileInput;
 }
 
 
@@ -40,12 +51,117 @@ function withoutAdditionalEmails<T extends { additional_emails?: string[] }>(inp
   return rest;
 }
 
+function normalizeNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  return typeof value === 'number' ? value : Number(value);
+}
+
+function mapSupplierPricingProfileRow(row: Partial<SupplierPricingProfile> | null | undefined): SupplierPricingProfile | null {
+  if (!row?.supplier_id) {
+    return null;
+  }
+
+  return {
+    id: row.id,
+    supplier_id: row.supplier_id,
+    transport_mode: row.transport_mode ?? 'container',
+    formula_version: row.formula_version ?? 'supplier_transport_v1',
+    container_price_eur: normalizeNumber(row.container_price_eur),
+    container_volume_m3: normalizeNumber(row.container_volume_m3),
+    product_margin_factor: Number(row.product_margin_factor ?? DEFAULT_PRICING_SETTINGS.productMarginFactor),
+    retail_multiplier_factor: Number(row.retail_multiplier_factor ?? DEFAULT_PRICING_SETTINGS.shippingMarginFactor),
+    truck_multiplier_factor: normalizeNumber(row.truck_multiplier_factor),
+    updated_by: row.updated_by,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function defaultSupplierPricingProfileInput(): SupplierPricingProfileInput {
+  return {
+    transport_mode: 'container',
+    container_price_eur: DEFAULT_PRICING_SETTINGS.containerPriceEur,
+    container_volume_m3: DEFAULT_PRICING_SETTINGS.containerVolumeM3,
+    product_margin_factor: DEFAULT_PRICING_SETTINGS.productMarginFactor,
+    retail_multiplier_factor: DEFAULT_PRICING_SETTINGS.shippingMarginFactor,
+    truck_multiplier_factor: null,
+  };
+}
+
+function validatePricingProfileInput(input: SupplierPricingProfileInput): string | null {
+  const requiredPositiveFields: Array<[number | null | undefined, string]> = [
+    [input.product_margin_factor, 'Product margin'],
+    [input.retail_multiplier_factor, 'Retail multiplier'],
+  ];
+
+  if (input.transport_mode === 'container') {
+    requiredPositiveFields.push(
+      [input.container_price_eur, 'Container price'],
+      [input.container_volume_m3, 'Container volume']
+    );
+  }
+
+  if (input.transport_mode === 'truck' && input.truck_multiplier_factor !== null && input.truck_multiplier_factor !== undefined) {
+    requiredPositiveFields.push([input.truck_multiplier_factor, 'Truck multiplier']);
+  }
+
+  for (const [value, label] of requiredPositiveFields) {
+    if (!Number.isFinite(value) || value === null || value === undefined || value <= 0) {
+      return `${label} must be a positive number.`;
+    }
+  }
+
+  return null;
+}
+
+async function upsertSupplierPricingProfile(
+  supplierId: string,
+  input: SupplierPricingProfileInput | undefined,
+  updatedBy: string
+): Promise<{ data?: SupplierPricingProfile; error?: string }> {
+  const profileInput = input ?? defaultSupplierPricingProfileInput();
+  const validationError = validatePricingProfileInput(profileInput);
+
+  if (validationError) {
+    return { error: validationError };
+  }
+
+  const serviceRoleSupabase = createServiceRoleClient();
+  const { data, error } = await serviceRoleSupabase
+    .from('supplier_pricing_profiles')
+    .upsert(
+      {
+        supplier_id: supplierId,
+        transport_mode: profileInput.transport_mode,
+        formula_version: 'supplier_transport_v1',
+        container_price_eur: profileInput.transport_mode === 'container' ? profileInput.container_price_eur : null,
+        container_volume_m3: profileInput.transport_mode === 'container' ? profileInput.container_volume_m3 : null,
+        product_margin_factor: profileInput.product_margin_factor,
+        retail_multiplier_factor: profileInput.retail_multiplier_factor,
+        truck_multiplier_factor: profileInput.transport_mode === 'truck' ? profileInput.truck_multiplier_factor ?? null : null,
+        updated_by: updatedBy,
+      },
+      { onConflict: 'supplier_id' }
+    )
+    .select('*')
+    .single();
+
+  if (error || !data) {
+    return { error: error?.message ?? 'Supplier pricing profile could not be saved.' };
+  }
+
+  return { data: mapSupplierPricingProfileRow(data as SupplierPricingProfile) ?? undefined };
+}
+
 export interface UpdateSupplierInput {
   name?: string;
   email?: string;
   additional_emails?: string[];
   material_ids?: string[];
   preferred_language?: SupplierLanguage;
+  pricing_profile?: SupplierPricingProfileInput;
 }
 
 /**
@@ -61,6 +177,7 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
       .from('suppliers')
       .select(`
         *,
+        supplier_pricing_profiles (*),
         material_suppliers (
           material:materials (
             id,
@@ -81,6 +198,7 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
     }
 
     type SupplierQueryRow = Supplier & {
+      supplier_pricing_profiles?: SupplierPricingProfile[] | null;
       material_suppliers?: Array<{ material: Material | null }> | null;
     };
 
@@ -94,6 +212,7 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
         materials: supplier.materials ?? [],
         is_active: supplier.is_active,
         created_at: supplier.created_at,
+        pricing_profile: mapSupplierPricingProfileRow(supplier.supplier_pricing_profiles?.[0]),
         available_materials: (supplier.material_suppliers ?? [])
           .map((materialSupplier) => materialSupplier.material)
           .filter((material): material is Material => Boolean(material && material.is_active)),
@@ -178,6 +297,16 @@ export async function createSupplier(input: CreateSupplierInput) {
     return { error: { _form: [error.message] } };
   }
 
+  const pricingProfileResult = await upsertSupplierPricingProfile(
+    supplier.id,
+    input.pricing_profile,
+    user.id
+  );
+
+  if (pricingProfileResult.error) {
+    return { error: { _form: [pricingProfileResult.error] } };
+  }
+
   if (materialIds.length > 0) {
     const materialSupplierRows = materialIds.map((materialId) => ({
       material_id: materialId,
@@ -195,7 +324,7 @@ export async function createSupplier(input: CreateSupplierInput) {
         action: 'SUPPLIER_CREATED',
         entityType: 'supplier',
         entityId: supplier.id,
-        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds },
+        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds, pricingProfile: pricingProfileResult.data },
       });
 
       revalidatePath('/admin/management');
@@ -213,7 +342,7 @@ export async function createSupplier(input: CreateSupplierInput) {
     action: 'SUPPLIER_CREATED',
     entityType: 'supplier',
     entityId: supplier.id,
-    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds },
+    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds, pricingProfile: pricingProfileResult.data },
   });
 
   revalidatePath('/admin/management');
@@ -226,7 +355,7 @@ export async function createSupplier(input: CreateSupplierInput) {
 export async function updateSupplier(supplierId: string, input: UpdateSupplierInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
-  const { material_ids, ...supplierFieldsInput } = input;
+  const { material_ids, pricing_profile, ...supplierFieldsInput } = input;
   let additionalEmails: string[] | undefined;
 
   if (supplierFieldsInput.additional_emails !== undefined || supplierFieldsInput.email !== undefined) {
@@ -399,13 +528,22 @@ export async function updateSupplier(supplierId: string, input: UpdateSupplierIn
     supplier = currentSupplier as Supplier;
   }
 
+  let pricingProfile: SupplierPricingProfile | undefined;
+  if (pricing_profile !== undefined) {
+    const pricingProfileResult = await upsertSupplierPricingProfile(supplierId, pricing_profile, user.id);
+    if (pricingProfileResult.error) {
+      return { error: { _form: [pricingProfileResult.error] } };
+    }
+    pricingProfile = pricingProfileResult.data;
+  }
+
   await logAuditEvent({
     actorType: user.role,
     actorId: user.id,
     action: 'SUPPLIER_UPDATED',
     entityType: 'supplier',
     entityId: supplierId,
-    metadata: { changes: supplierFields, materialIds: material_ids },
+    metadata: { changes: supplierFields, materialIds: material_ids, pricingProfile },
   });
 
   revalidatePath('/admin/management');

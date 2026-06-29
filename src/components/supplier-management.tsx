@@ -38,11 +38,20 @@ import {
 } from '@/actions/suppliers';
 import { SUPPLIER_LANGUAGE_LABELS, SUPPLIER_LANGUAGES, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { MAX_SUPPLIER_ADDITIONAL_EMAILS, parseEmailList } from '@/lib/email-recipients';
-import type { Material, SupplierLanguage, SupplierWithMaterials } from '@/types';
+import type { Material, SupplierLanguage, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 
 interface SupplierManagementProps {
   suppliers: SupplierWithMaterials[];
   materials: Material[];
+}
+
+interface SupplierPricingProfileFormData {
+  transport_mode: TransportMode;
+  container_price_eur: string;
+  container_volume_m3: string;
+  product_margin_factor: string;
+  retail_multiplier_factor: string;
+  truck_multiplier_factor: string;
 }
 
 interface SupplierFormData {
@@ -51,7 +60,17 @@ interface SupplierFormData {
   additional_emails: string[];
   material_ids: string[];
   preferred_language: SupplierLanguage;
+  pricing_profile: SupplierPricingProfileFormData;
 }
+
+const defaultPricingProfileFormData: SupplierPricingProfileFormData = {
+  transport_mode: 'container',
+  container_price_eur: '7500',
+  container_volume_m3: '67',
+  product_margin_factor: '2.1',
+  retail_multiplier_factor: '2.4',
+  truck_multiplier_factor: '',
+};
 
 const initialFormData: SupplierFormData = {
   name: '',
@@ -59,7 +78,49 @@ const initialFormData: SupplierFormData = {
   additional_emails: [],
   material_ids: [],
   preferred_language: 'en',
+  pricing_profile: defaultPricingProfileFormData,
 };
+
+function formatTransportMode(mode: TransportMode) {
+  if (mode === 'none') return 'Geen transport';
+  if (mode === 'container') return 'Container';
+  return 'Camion';
+}
+
+function toPricingProfileFormData(profile?: SupplierPricingProfile | null): SupplierPricingProfileFormData {
+  if (!profile) {
+    return defaultPricingProfileFormData;
+  }
+
+  return {
+    transport_mode: profile.transport_mode,
+    container_price_eur: profile.container_price_eur?.toString() ?? '',
+    container_volume_m3: profile.container_volume_m3?.toString() ?? '',
+    product_margin_factor: profile.product_margin_factor.toString(),
+    retail_multiplier_factor: profile.retail_multiplier_factor.toString(),
+    truck_multiplier_factor: profile.truck_multiplier_factor?.toString() ?? '',
+  };
+}
+
+function parseDecimal(value: string): number | null {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) {
+    return null;
+  }
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function pricingFormToInput(profile: SupplierPricingProfileFormData) {
+  return {
+    transport_mode: profile.transport_mode,
+    container_price_eur: profile.transport_mode === 'container' ? parseDecimal(profile.container_price_eur) : null,
+    container_volume_m3: profile.transport_mode === 'container' ? parseDecimal(profile.container_volume_m3) : null,
+    product_margin_factor: parseDecimal(profile.product_margin_factor) ?? 0,
+    retail_multiplier_factor: parseDecimal(profile.retail_multiplier_factor) ?? 0,
+    truck_multiplier_factor: profile.transport_mode === 'truck' ? parseDecimal(profile.truck_multiplier_factor) : null,
+  };
+}
 
 export function SupplierManagement({ suppliers: initialSuppliers, materials }: SupplierManagementProps) {
   const [suppliers, setSuppliers] = useState(initialSuppliers);
@@ -72,6 +133,16 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
 
   const updateFormData = <K extends keyof SupplierFormData>(field: K, value: SupplierFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const updatePricingProfile = <K extends keyof SupplierPricingProfileFormData>(
+    field: K,
+    value: SupplierPricingProfileFormData[K]
+  ) => {
+    setFormData(prev => ({
+      ...prev,
+      pricing_profile: { ...prev.pricing_profile, [field]: value },
+    }));
   };
 
   const resetForm = () => {
@@ -95,6 +166,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
       additional_emails: supplier.additional_emails ?? [],
       material_ids: supplier.available_materials?.map(material => material.id) ?? [],
       preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
+      pricing_profile: toPricingProfileFormData(supplier.pricing_profile),
     });
     setDialogOpen(true);
   };
@@ -112,6 +184,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
       .slice(0, MAX_SUPPLIER_ADDITIONAL_EMAILS);
 
     let result;
+    const pricingProfileInput = pricingFormToInput(formData.pricing_profile);
     if (editingSupplier) {
       result = await updateSupplier(editingSupplier.id, {
         name: formData.name,
@@ -119,6 +192,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
         additional_emails: submittedAdditionalEmails,
         material_ids: formData.material_ids,
         preferred_language: formData.preferred_language,
+        pricing_profile: pricingProfileInput,
       });
     } else {
       result = await createSupplier({
@@ -127,6 +201,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
         additional_emails: submittedAdditionalEmails,
         material_ids: formData.material_ids,
         preferred_language: formData.preferred_language,
+        pricing_profile: pricingProfileInput,
       });
     }
 
@@ -236,6 +311,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Language</TableHead>
+                <TableHead>Pricing</TableHead>
                 <TableHead>Materials</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -279,6 +355,20 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                     </Select>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
+                    {supplier.pricing_profile ? (
+                      <div className="space-y-0.5 text-sm">
+                        <div className="font-medium text-foreground">
+                          {formatTransportMode(supplier.pricing_profile.transport_mode)}
+                        </div>
+                        <div className="text-xs">
+                          Margin {Number(supplier.pricing_profile.product_margin_factor).toFixed(3)} · Retail ×{Number(supplier.pricing_profile.retail_multiplier_factor).toFixed(3)}
+                        </div>
+                      </div>
+                    ) : (
+                      'Default container'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {supplier.available_materials && supplier.available_materials.length > 0
                       ? supplier.available_materials.map((material) => material.name).join(', ')
                       : 'No materials'}
@@ -307,7 +397,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               ))}
               {suppliers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     No suppliers created yet.
                   </TableCell>
                 </TableRow>
@@ -433,6 +523,91 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               <p className="text-xs text-muted-foreground">
                 Supplier emails and their magic-link page use this language.
               </p>
+            </div>
+
+            <div className="space-y-4 rounded-lg border p-4">
+              <div>
+                <h3 className="text-sm font-medium">Pricing profile</h3>
+                <p className="text-xs text-muted-foreground">
+                  Supplier-specific transport and retail calculation settings. New quotes use these values.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="supplier-transport-mode">Transport calculation *</Label>
+                <Select
+                  value={formData.pricing_profile.transport_mode}
+                  onValueChange={(value) => updatePricingProfile('transport_mode', value as TransportMode)}
+                >
+                  <SelectTrigger id="supplier-transport-mode" className="w-full">
+                    <SelectValue placeholder="Select transport calculation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Geen transport</SelectItem>
+                    <SelectItem value="container">Container</SelectItem>
+                    <SelectItem value="truck" disabled>Camion / vrachtwagen (later)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {formData.pricing_profile.transport_mode === 'container' && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="container-price">Container price (€)</Label>
+                    <Input
+                      id="container-price"
+                      inputMode="decimal"
+                      value={formData.pricing_profile.container_price_eur}
+                      onChange={(event) => updatePricingProfile('container_price_eur', event.target.value)}
+                      placeholder="7500"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="container-volume">Container volume (m³)</Label>
+                    <Input
+                      id="container-volume"
+                      inputMode="decimal"
+                      value={formData.pricing_profile.container_volume_m3}
+                      onChange={(event) => updatePricingProfile('container_volume_m3', event.target.value)}
+                      placeholder="67"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="product-margin">Product margin</Label>
+                  <Input
+                    id="product-margin"
+                    inputMode="decimal"
+                    value={formData.pricing_profile.product_margin_factor}
+                    onChange={(event) => updatePricingProfile('product_margin_factor', event.target.value)}
+                    placeholder="2.1"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="retail-multiplier">Retail multiplier</Label>
+                  <Input
+                    id="retail-multiplier"
+                    inputMode="decimal"
+                    value={formData.pricing_profile.retail_multiplier_factor}
+                    onChange={(event) => updatePricingProfile('retail_multiplier_factor', event.target.value)}
+                    placeholder="2.4"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground">Container formula</p>
+                <p>Transport cost = (container price / container volume) × supplier volume</p>
+                <p>Cost incl. transport = supplier base price × product margin + transport cost</p>
+                <p>Retail price = cost incl. transport × retail multiplier</p>
+              </div>
             </div>
 
             <div className="space-y-3">

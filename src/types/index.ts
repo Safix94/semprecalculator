@@ -1,4 +1,5 @@
 export type UserRole = 'sales' | 'admin';
+export type TransportMode = 'none' | 'container' | 'truck';
 
 export type RfqStatus =
   | 'draft'
@@ -41,6 +42,21 @@ export interface Supplier {
   materials: string[];
   is_active: boolean;
   created_at: string;
+}
+
+export interface SupplierPricingProfile {
+  id?: string;
+  supplier_id: string;
+  transport_mode: TransportMode;
+  formula_version: string;
+  container_price_eur: number | null;
+  container_volume_m3: number | null;
+  product_margin_factor: number;
+  retail_multiplier_factor: number;
+  truck_multiplier_factor: number | null;
+  updated_by?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Material {
@@ -144,6 +160,13 @@ export interface RfqQuote {
   volume_m3: number;
   shipping_cost_calculated: number;
   final_price_calculated: number;
+  pricing_method?: 'legacy_container' | TransportMode | null;
+  pricing_formula_version?: string | null;
+  product_price_after_margin?: number | null;
+  transport_cost_calculated?: number | null;
+  cost_including_transport?: number | null;
+  retail_multiplier_factor?: number | null;
+  pricing_settings_snapshot?: Record<string, unknown> | null;
   currency: string;
   lead_time_days: number | null;
   comment: string | null;
@@ -181,6 +204,7 @@ export interface MaterialWithSuppliers extends Material {
 
 export interface SupplierWithMaterials extends Supplier {
   available_materials?: Material[];
+  pricing_profile?: SupplierPricingProfile | null;
 }
 
 export interface RfqWithRelations extends Rfq {

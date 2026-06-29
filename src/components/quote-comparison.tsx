@@ -36,6 +36,25 @@ function formatQuoteVolume(quote: RfqQuote | undefined) {
   return `${Number(quote.volume_m3).toFixed(3)} m\u00b3`;
 }
 
+function formatCurrency(value: number | string | null | undefined, decimals = 2) {
+  if (value === null || value === undefined) {
+    return '-';
+  }
+
+  return `\u20ac${Number(value).toFixed(decimals)}`;
+}
+
+function formatPricingMethod(quote: RfqQuote | undefined) {
+  if (!quote?.pricing_method) {
+    return '-';
+  }
+
+  if (quote.pricing_method === 'none') return 'Geen transport';
+  if (quote.pricing_method === 'container') return 'Container';
+  if (quote.pricing_method === 'truck') return 'Camion';
+  return 'Legacy container';
+}
+
 export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
   const mounted = useSyncExternalStore(subscribe, () => true, () => false);
 
@@ -59,10 +78,12 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead>Supplier</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Base price</TableHead>
+                <TableHead>Transport</TableHead>
+                <TableHead className="text-right">Supplier base price</TableHead>
                 <TableHead className="text-right">Volume</TableHead>
-                <TableHead className="text-right">Shipping</TableHead>
-                <TableHead className="text-right">Final price</TableHead>
+                <TableHead className="text-right">Transport cost</TableHead>
+                <TableHead className="text-right">Cost incl. transport</TableHead>
+                <TableHead className="text-right">Retail price</TableHead>
                 <TableHead className="text-right">Lead time</TableHead>
                 <TableHead>Comment</TableHead>
               </TableRow>
@@ -78,6 +99,9 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                       ? { label: 'Replied', color: 'text-chart-2' }
                       : { label: 'Pending', color: 'text-primary' };
                 const isLowest = quote && quote.final_price_calculated === lowestPrice;
+                const costIncludingTransport =
+                  quote?.cost_including_transport ??
+                  (quote ? Number(quote.base_price) + Number(quote.shipping_cost_calculated) : null);
 
                 return (
                   <TableRow
@@ -88,17 +112,21 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                     <TableCell>
                       <span className={`text-sm font-medium ${status.color}`}>{status.label}</span>
                     </TableCell>
+                    <TableCell>{formatPricingMethod(quote)}</TableCell>
                     <TableCell className="text-right">
-                      {quote ? `\u20ac${Number(quote.base_price).toFixed(2)}` : '-'}
+                      {quote ? formatCurrency(quote.base_price) : '-'}
                     </TableCell>
                     <TableCell className="text-right">{formatQuoteVolume(quote)}</TableCell>
                     <TableCell className="text-right">
-                      {quote ? `\u20ac${Number(quote.shipping_cost_calculated).toFixed(3)}` : '-'}
+                      {quote ? formatCurrency(quote.transport_cost_calculated ?? quote.shipping_cost_calculated, 3) : '-'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {quote ? formatCurrency(costIncludingTransport) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
                       {quote ? (
                         <span className={`font-semibold ${isLowest ? 'text-primary' : ''}`}>
-                          {`\u20ac${Number(quote.final_price_calculated).toFixed(2)}`}
+                          {formatCurrency(quote.final_price_calculated)}
                           {isLowest && ' \u2605'}
                         </span>
                       ) : '-'}

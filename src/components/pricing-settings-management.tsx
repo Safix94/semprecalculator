@@ -60,13 +60,15 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
 
     const supplierPrice = 100;
     const supplierVolumeM3 = 10;
-    const shippingCost = (containerPrice / containerVolume) * supplierVolumeM3;
-    const basisPrice = supplierPrice * productMargin * multi;
-    const finalPrice = basisPrice + shippingCost;
+    const transportCost = (containerPrice / containerVolume) * supplierVolumeM3;
+    const productPriceAfterMargin = supplierPrice * productMargin;
+    const costIncludingTransport = productPriceAfterMargin + transportCost;
+    const finalPrice = costIncludingTransport * multi;
 
     return {
-      shippingCost,
-      basisPrice,
+      transportCost,
+      productPriceAfterMargin,
+      costIncludingTransport,
       finalPrice,
     };
   }, [formData]);
@@ -107,7 +109,7 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
         <CardHeader>
           <CardTitle>Pricing settings</CardTitle>
           <CardDescription>
-            Configure the container cost, container capacity, product margin, and multiplier used for supplier quotes.
+            Configure the default container cost, container capacity, product margin, and retail multiplier used when new supplier pricing profiles are created.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -177,11 +179,11 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
               <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
                 <p className="font-medium text-foreground">Formula</p>
                 <p>
-                  Final price = supplier price × product margin × multiplier + (container price / container m³) × supplier m³
+                  Retail price = ((supplier price × product margin) + (container price / container m³ × supplier m³)) × retail multiplier
                 </p>
                 {preview && (
                   <p>
-                    Example with supplier price €100 and 10 m³: basis €{preview.basisPrice.toFixed(2)} + shipping €{preview.shippingCost.toFixed(2)} = €{preview.finalPrice.toFixed(2)}
+                    Example with supplier price €100 and 10 m³: product after margin €{preview.productPriceAfterMargin.toFixed(2)} + transport €{preview.transportCost.toFixed(2)} = cost incl. transport €{preview.costIncludingTransport.toFixed(2)} → retail €{preview.finalPrice.toFixed(2)}
                   </p>
                 )}
               </CardContent>

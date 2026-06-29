@@ -3,9 +3,9 @@
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { submitQuoteSchema } from '@/lib/validation';
 import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
-import { calculateAllPricing } from '@/lib/pricing';
+import { calculateSupplierPricing } from '@/lib/pricing';
 import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
-import { getEffectivePricingSettings } from './pricing-settings';
+import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
 import {
   checkSupplierLinkRateLimits,
   getSupplierLinkRequestContext,
@@ -326,10 +326,41 @@ export async function submitQuote(
     return { error: 'Request not found' };
   }
 
-  // Server-side pricing calculation
-  const pricingSettings = await getEffectivePricingSettings();
-  const { shippingCostCalculated, finalPriceCalculated } =
-    calculateAllPricing(basePrice, volumeM3, pricingSettings);
+  // Supplier-level pricing calculation. Supplier provides volume directly in m3.
+  const pricingProfile = await getEffectiveSupplierPricingProfile(invite.supplier_id);
+  let pricingResult;
+  try {
+    pricingResult = calculateSupplierPricing(basePrice, volumeM3, pricingProfile);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
+    console.error('Quote submission blocked: supplier pricing calculation failed.', {
+      rfqId,
+      supplierId: invite.supplier_id,
+      message,
+    });
+    return { error: message };
+  }
+
+  const {
+    shippingCostCalculated,
+    transportCostCalculated,
+    productPriceAfterMargin,
+    costIncludingTransport,
+    finalPriceCalculated,
+    pricingSettingsSnapshot,
+  } = pricingResult;
+
+  const quotePricingPayload = {
+    shipping_cost_calculated: shippingCostCalculated,
+    transport_cost_calculated: transportCostCalculated,
+    product_price_after_margin: productPriceAfterMargin,
+    cost_including_transport: costIncludingTransport,
+    final_price_calculated: finalPriceCalculated,
+    pricing_method: pricingProfile.transportMode,
+    pricing_formula_version: pricingProfile.formulaVersion,
+    retail_multiplier_factor: pricingProfile.retailMultiplierFactor,
+    pricing_settings_snapshot: pricingSettingsSnapshot,
+  };
 
   const { data: existingQuote, error: existingQuoteError } = await supabase
     .from('rfq_quotes')
@@ -362,8 +393,7 @@ export async function submitQuote(
         base_price: basePrice,
         area_m2: null,
         volume_m3: volumeM3,
-        shipping_cost_calculated: shippingCostCalculated,
-        final_price_calculated: finalPriceCalculated,
+        ...quotePricingPayload,
         lead_time_days: leadTimeDays ?? null,
         comment: comment ?? null,
         submitted_at: new Date().toISOString(),
@@ -387,8 +417,7 @@ export async function submitQuote(
         base_price: basePrice,
         area_m2: null,
         volume_m3: volumeM3,
-        shipping_cost_calculated: shippingCostCalculated,
-        final_price_calculated: finalPriceCalculated,
+        ...quotePricingPayload,
         lead_time_days: leadTimeDays ?? null,
         comment: comment ?? null,
       })
@@ -453,7 +482,13 @@ export async function submitQuote(
       basePrice,
       volumeM3,
       shippingCostCalculated,
+      transportCostCalculated,
+      productPriceAfterMargin,
+      costIncludingTransport,
       finalPriceCalculated,
+      pricingMethod: pricingProfile.transportMode,
+      pricingFormulaVersion: pricingProfile.formulaVersion,
+      retailMultiplierFactor: pricingProfile.retailMultiplierFactor,
     },
     ip: requestContext.ip,
     userAgent: requestContext.userAgent,

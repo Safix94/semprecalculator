@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Edit, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Edit, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -63,6 +63,8 @@ interface SupplierFormData {
   preferred_language: SupplierLanguage;
   pricing_profile: SupplierPricingProfileFormData;
 }
+
+const SUPPLIER_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 const defaultPricingProfileFormData: SupplierPricingProfileFormData = {
   transport_mode: 'container',
@@ -131,6 +133,15 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(SUPPLIER_PAGE_SIZE_OPTIONS[0]);
+
+  const totalSuppliers = suppliers.length;
+  const totalPages = Math.max(1, Math.ceil(totalSuppliers / pageSize));
+  const activePage = Math.min(currentPage, totalPages);
+  const startIndex = totalSuppliers === 0 ? 0 : (activePage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalSuppliers);
+  const paginatedSuppliers = suppliers.slice(startIndex, endIndex);
 
   const updateFormData = <K extends keyof SupplierFormData>(field: K, value: SupplierFormData[K]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -340,7 +351,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               </TableRow>
             </TableHeader>
             <TableBody>
-              {suppliers.map((supplier) => (
+              {paginatedSuppliers.map((supplier) => (
                 <TableRow key={supplier.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center justify-between gap-3">
@@ -434,6 +445,65 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
             </TableBody>
           </Table>
           </div>
+          {totalSuppliers > 0 && (
+            <div className="flex flex-col gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                Showing <span className="font-medium text-foreground">{startIndex + 1}</span>-
+                <span className="font-medium text-foreground">{endIndex}</span> of{' '}
+                <span className="font-medium text-foreground">{totalSuppliers}</span> suppliers
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span>Rows</span>
+                  <Select
+                    value={String(pageSize)}
+                    onValueChange={(value) => {
+                      setPageSize(Number(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-[82px]" aria-label="Rows per page">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPLIER_PAGE_SIZE_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>
+                    Page {activePage} of {totalPages}
+                  </span>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                      disabled={activePage <= 1}
+                      aria-label="Previous supplier page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                      disabled={activePage >= totalPages}
+                      aria-label="Next supplier page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

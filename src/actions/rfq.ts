@@ -30,13 +30,27 @@ import {
 import { findSimilarRfqs } from './rfq-search';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
-import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, Supplier } from '@/types';
+import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
 const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type InvitePart = 'default' | 'table_top' | 'table_foot' | 'table_both';
+type ReopenableRfqStatus = Exclude<RfqStatus, 'draft' | 'closed'>;
+
+const REOPENABLE_RFQ_STATUSES: ReopenableRfqStatus[] = [
+  'sent_to_pricing',
+  'sent_to_supplier',
+  'supplier_replied',
+  'waiting_for_technical_drawing',
+  'quotes_received',
+  'sent_to_pricing_crm',
+];
+
+function isReopenableRfqStatus(status: unknown): status is ReopenableRfqStatus {
+  return typeof status === 'string' && REOPENABLE_RFQ_STATUSES.includes(status as ReopenableRfqStatus);
+}
 
 interface InviteSelectionInput {
   supplierIds?: string[];
@@ -1417,15 +1431,84 @@ export async function sendToPricingCrm(rfqId: string) {
   return { data: { sent: emailResult.sent, total: emailResult.total } };
 }
 
+async function resolveReopenStatus(rfqId: string): Promise<ReopenableRfqStatus> {
+  const serviceRoleSupabase = createServiceRoleClient();
+
+  const { data: closeEvents } = await serviceRoleSupabase
+    .from('audit_logs')
+    .select('metadata')
+    .eq('entity_type', 'rfq')
+    .eq('entity_id', rfqId)
+    .eq('action', 'RFQ_UPDATED')
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  for (const event of closeEvents ?? []) {
+    const metadata = event.metadata as { status?: unknown; previousStatus?: unknown } | null;
+    if (metadata?.status === 'closed' && isReopenableRfqStatus(metadata.previousStatus)) {
+      return metadata.previousStatus;
+    }
+  }
+
+  const { data: rfqEvents } = await serviceRoleSupabase
+    .from('audit_logs')
+    .select('action')
+    .eq('entity_type', 'rfq')
+    .eq('entity_id', rfqId)
+    .in('action', ['RFQ_SENT_TO_PRICING_CRM', 'RFQ_SENT', 'RFQ_SENT_TO_PRICING'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const latestRfqAction = rfqEvents?.[0]?.action;
+  if (latestRfqAction === 'RFQ_SENT_TO_PRICING_CRM') {
+    return 'sent_to_pricing_crm';
+  }
+
+  const [{ count: quoteCount }, { count: inviteCount }] = await Promise.all([
+    serviceRoleSupabase
+      .from('rfq_quotes')
+      .select('id', { count: 'exact', head: true })
+      .eq('rfq_id', rfqId),
+    serviceRoleSupabase
+      .from('rfq_invites')
+      .select('id', { count: 'exact', head: true })
+      .eq('rfq_id', rfqId),
+  ]);
+
+  if ((quoteCount ?? 0) > 0) {
+    return 'quotes_received';
+  }
+
+  if (latestRfqAction === 'RFQ_SENT' || (inviteCount ?? 0) > 0) {
+    return 'sent_to_supplier';
+  }
+
+  return 'sent_to_pricing';
+}
+
 export async function closeRfq(rfqId: string) {
-  const user = await requireAuth();
+  const user = await requireRole('sales');
   const supabase = await createClient();
+
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select('id, status')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    return { error: rfqError?.message ?? 'RFQ not found' };
+  }
+
+  if (!isReopenableRfqStatus(rfq.status)) {
+    return { error: 'Only active supplier/pricing requests can be closed' };
+  }
 
   const { error } = await supabase
     .from('rfqs')
     .update({ status: 'closed' })
     .eq('id', rfqId)
-    .in('status', ['sent_to_pricing', 'sent_to_supplier', 'supplier_replied', 'quotes_received', 'sent_to_pricing_crm']);
+    .eq('status', rfq.status);
 
   if (error) {
     return { error: error.message };
@@ -1437,10 +1520,53 @@ export async function closeRfq(rfqId: string) {
     action: 'RFQ_UPDATED',
     entityType: 'rfq',
     entityId: rfqId,
-    metadata: { status: 'closed' },
+    metadata: { status: 'closed', previousStatus: rfq.status },
   });
 
   revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
   return { success: true };
+}
+
+export async function reopenRfq(rfqId: string) {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select('id, status')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    return { error: rfqError?.message ?? 'RFQ not found' };
+  }
+
+  if (rfq.status !== 'closed') {
+    return { error: 'Only closed RFQs can be reopened' };
+  }
+
+  const reopenedStatus = await resolveReopenStatus(rfqId);
+  const { error } = await supabase
+    .from('rfqs')
+    .update({ status: reopenedStatus })
+    .eq('id', rfqId)
+    .eq('status', 'closed');
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_UPDATED',
+    entityType: 'rfq',
+    entityId: rfqId,
+    metadata: { status: reopenedStatus, previousStatus: 'closed', reopened: true },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return { success: true, status: reopenedStatus };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSuppliersForMaterial } from '@/actions/materials';
-import { closeRfq, replaceRfqInvites, sendRfq, sendToPricingCrm, sendToPricingTeam } from '@/actions/rfq';
+import { closeRfq, reopenRfq, replaceRfqInvites, sendRfq, sendToPricingCrm, sendToPricingTeam } from '@/actions/rfq';
 import { isTablesProductType } from '@/lib/rfq-format';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -328,6 +328,28 @@ export function RfqActions({
     }
   }
 
+  async function handleReopen() {
+    if (!confirm('Are you sure you want to reopen this request?')) return;
+    setLoading(true);
+    setResult(null);
+
+    try {
+      const res = await reopenRfq(rfqId);
+      if ('error' in res) {
+        setResult(`Error: ${res.error}`);
+        return;
+      }
+
+      setResult('Request reopened');
+      router.refresh();
+    } catch (error) {
+      console.error('Failed to reopen RFQ:', error);
+      setResult('Error: Failed to reopen RFQ');
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleSendToPricing() {
     setPricingLoading(true);
     setResult(null);
@@ -469,6 +491,15 @@ export function RfqActions({
             variant="secondary"
           >
             {loading ? 'Loading...' : 'Close'}
+          </Button>
+        )}
+        {status === 'closed' && (
+          <Button
+            onClick={handleReopen}
+            disabled={loading || pricingLoading || pricingCrmLoading || saveAndSendLoading}
+            variant="secondary"
+          >
+            {loading ? 'Loading...' : 'Reopen'}
           </Button>
         )}
         {result && <span className="min-w-0 shrink text-sm text-muted-foreground">{result}</span>}

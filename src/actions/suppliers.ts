@@ -7,6 +7,7 @@ import { logAuditEvent } from './audit';
 import { normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { validateSupplierAdditionalEmails } from '@/lib/email-recipients';
 import { DEFAULT_PRICING_SETTINGS, DEFAULT_TRUCK_MULTIPLIER_FACTOR } from '@/lib/pricing';
+import { normalizeQuotePriceCurrency, type QuotePriceCurrency } from '@/lib/currency';
 import type { Material, Supplier, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 import type { SupplierLanguage } from '@/lib/supplier-language';
 
@@ -25,6 +26,7 @@ export interface CreateSupplierInput {
   additional_emails?: string[];
   material_ids?: string[];
   preferred_language?: SupplierLanguage;
+  quote_price_currency?: QuotePriceCurrency;
   pricing_profile?: SupplierPricingProfileInput;
 }
 
@@ -161,6 +163,7 @@ export interface UpdateSupplierInput {
   additional_emails?: string[];
   material_ids?: string[];
   preferred_language?: SupplierLanguage;
+  quote_price_currency?: QuotePriceCurrency;
   pricing_profile?: SupplierPricingProfileInput;
 }
 
@@ -209,6 +212,7 @@ export async function getSuppliers(): Promise<SupplierWithMaterials[]> {
         email: supplier.email,
         additional_emails: supplier.additional_emails ?? [],
         preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
+        quote_price_currency: normalizeQuotePriceCurrency(supplier.quote_price_currency),
         materials: supplier.materials ?? [],
         is_active: supplier.is_active,
         created_at: supplier.created_at,
@@ -234,6 +238,7 @@ export async function createSupplier(input: CreateSupplierInput) {
   const supabase = await createClient();
   const materialIds = [...new Set(input.material_ids ?? [])];
   const preferredLanguage = normalizeSupplierLanguage(input.preferred_language);
+  const quotePriceCurrency = normalizeQuotePriceCurrency(input.quote_price_currency);
   const emailValidation = validateSupplierAdditionalEmails(input.email, input.additional_emails);
 
   if (emailValidation.error) {
@@ -245,6 +250,7 @@ export async function createSupplier(input: CreateSupplierInput) {
     email: input.email.trim().toLowerCase(),
     additional_emails: emailValidation.emails,
     preferred_language: preferredLanguage,
+    quote_price_currency: quotePriceCurrency,
   };
 
   let { data: supplier, error } = await supabase
@@ -324,7 +330,7 @@ export async function createSupplier(input: CreateSupplierInput) {
         action: 'SUPPLIER_CREATED',
         entityType: 'supplier',
         entityId: supplier.id,
-        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds, pricingProfile: pricingProfileResult.data },
+        metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, quotePriceCurrency, materialIds, pricingProfile: pricingProfileResult.data },
       });
 
       revalidatePath('/admin/management');
@@ -342,7 +348,7 @@ export async function createSupplier(input: CreateSupplierInput) {
     action: 'SUPPLIER_CREATED',
     entityType: 'supplier',
     entityId: supplier.id,
-    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, materialIds, pricingProfile: pricingProfileResult.data },
+    metadata: { supplierName: supplier.name, supplierEmail: supplier.email, additionalEmails: emailValidation.emails, preferredLanguage, quotePriceCurrency, materialIds, pricingProfile: pricingProfileResult.data },
   });
 
   revalidatePath('/admin/management');
@@ -407,6 +413,9 @@ export async function updateSupplier(supplierId: string, input: UpdateSupplierIn
     ...(additionalEmails !== undefined ? { additional_emails: additionalEmails } : {}),
     ...(supplierFieldsInput.preferred_language !== undefined
       ? { preferred_language: normalizeSupplierLanguage(supplierFieldsInput.preferred_language) }
+      : {}),
+    ...(supplierFieldsInput.quote_price_currency !== undefined
+      ? { quote_price_currency: normalizeQuotePriceCurrency(supplierFieldsInput.quote_price_currency) }
       : {}),
   };
   const hasSupplierFieldUpdates = Object.keys(supplierFields).length > 0;

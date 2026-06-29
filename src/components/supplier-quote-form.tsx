@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
-import type { SupplierLanguage } from '@/types';
+import { IDR_PER_EUR_RATE } from '@/lib/currency';
+import type { QuotePriceCurrency, SupplierLanguage } from '@/types';
 
 interface SupplierQuoteFormProps {
   rfqId: string;
@@ -22,6 +23,7 @@ interface SupplierQuoteFormProps {
   } | null;
   isUpdate?: boolean;
   language: SupplierLanguage;
+  quotePriceCurrency: QuotePriceCurrency;
 }
 
 export function SupplierQuoteForm({
@@ -30,8 +32,13 @@ export function SupplierQuoteForm({
   initialValues = null,
   isUpdate = false,
   language,
+  quotePriceCurrency,
 }: SupplierQuoteFormProps) {
   const t = getSupplierTranslations(normalizeSupplierLanguage(language));
+  const idrRateLabel = IDR_PER_EUR_RATE.toLocaleString('nl-BE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]> | string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -95,18 +102,25 @@ export function SupplierQuoteForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="basePrice">{t.basePriceEur}</Label>
+              <Label htmlFor="basePrice">
+                {quotePriceCurrency === 'IDR' ? t.basePriceIdr : t.basePriceEur}
+              </Label>
               <Input
                 id="basePrice"
                 name="basePrice"
                 type="number"
-                step="0.01"
+                step={quotePriceCurrency === 'IDR' ? '1' : '0.01'}
                 min="0.01"
                 required
-                placeholder="0.00"
+                placeholder={quotePriceCurrency === 'IDR' ? '1000000' : '0.00'}
                 defaultValue={initialValues?.basePrice ?? ''}
                 aria-invalid={Boolean(typeof errors === 'object' && errors?.basePrice)}
               />
+              {quotePriceCurrency === 'IDR' && (
+                <p className="text-xs text-muted-foreground">
+                  {t.basePriceIdrHelp} 1 EUR = {idrRateLabel} IDR.
+                </p>
+              )}
               {typeof errors === 'object' && errors?.basePrice && (
                 <p className="text-destructive text-xs">{errors.basePrice[0]}</p>
               )}

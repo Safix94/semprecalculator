@@ -1,5 +1,6 @@
 export type UserRole = 'sales' | 'admin';
 export type TransportMode = 'none' | 'container' | 'truck';
+export type { QuotePriceCurrency } from '@/lib/currency';
 
 export type RfqStatus =
   | 'draft'
@@ -39,6 +40,7 @@ export interface Supplier {
   email: string;
   additional_emails: string[];
   preferred_language: import('@/lib/supplier-language').SupplierLanguage;
+  quote_price_currency: import('@/lib/currency').QuotePriceCurrency;
   materials: string[];
   is_active: boolean;
   created_at: string;
@@ -156,6 +158,10 @@ export interface RfqQuote {
   rfq_id: string;
   supplier_id: string;
   base_price: number;
+  supplier_input_price?: number | null;
+  supplier_input_currency?: import('@/lib/currency').QuotePriceCurrency | null;
+  supplier_input_exchange_rate_idr_per_eur?: number | null;
+  supplier_input_converted_at?: string | null;
   area_m2?: number | null;
   volume_m3: number;
   shipping_cost_calculated: number;

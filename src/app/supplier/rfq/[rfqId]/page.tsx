@@ -10,6 +10,7 @@ import {
   isTableTopsProductType,
 } from '@/lib/rfq-format';
 import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
+import { IDR_PER_EUR_RATE, normalizeQuotePriceCurrency } from '@/lib/currency';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -80,6 +81,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
 
   const { rfq, supplier, invite, existingQuote } = result.data!;
   const language = normalizeSupplierLanguage(supplier?.preferred_language);
+  const supplierQuoteCurrency = normalizeQuotePriceCurrency(supplier?.quote_price_currency);
   const labels = getSupplierTranslations(language);
   const commentResult = await listSupplierComments(rfqId, supplierToken);
   const initialComments = 'data' in commentResult ? commentResult.data : [];
@@ -90,9 +92,16 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
   const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
   const canSubmitOrUpdateQuote = !invite.used_at || Boolean(existingQuote);
+  const initialBasePrice = existingQuote
+    ? supplierQuoteCurrency === 'IDR'
+      ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
+        ? Number(existingQuote.supplier_input_price)
+        : Math.round(Number(existingQuote.base_price) * IDR_PER_EUR_RATE)
+      : Number(existingQuote.base_price)
+    : null;
   const quoteInitialValues = existingQuote
     ? {
-        basePrice: Number(existingQuote.base_price),
+        basePrice: initialBasePrice ?? 0,
         volumeM3: Number(existingQuote.volume_m3),
         leadTimeDays: existingQuote.lead_time_days,
         comment: existingQuote.comment,
@@ -210,6 +219,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             initialValues={quoteInitialValues}
             isUpdate={Boolean(existingQuote)}
             language={language}
+            quotePriceCurrency={supplierQuoteCurrency}
           />
         )}
 

@@ -4,6 +4,10 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { submitQuoteSchema } from '@/lib/validation';
 import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
 import { calculateSupplierPricing } from '@/lib/pricing';
+import {
+  convertSupplierBasePriceToEur,
+  normalizeQuotePriceCurrency,
+} from '@/lib/currency';
 import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
 import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
 import {
@@ -279,7 +283,7 @@ export async function submitQuote(
 
   const { data: invite, error: inviteError } = await supabase
     .from('rfq_invites')
-    .select('*')
+    .select('*, supplier:suppliers(quote_price_currency)')
     .eq('rfq_id', rfqId)
     .eq('token_hash', tokenHash)
     .is('revoked_at', null)
@@ -327,10 +331,20 @@ export async function submitQuote(
   }
 
   // Supplier-level pricing calculation. Supplier provides volume directly in m3.
+  const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
+  const quotePriceCurrency = normalizeQuotePriceCurrency(inviteSupplier?.quote_price_currency);
+  let convertedBasePrice;
+  try {
+    convertedBasePrice = convertSupplierBasePriceToEur(basePrice, quotePriceCurrency);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Supplier base price could not be converted.';
+    return { error: message };
+  }
+
   const pricingProfile = await getEffectiveSupplierPricingProfile(invite.supplier_id);
   let pricingResult;
   try {
-    pricingResult = calculateSupplierPricing(basePrice, volumeM3, pricingProfile);
+    pricingResult = calculateSupplierPricing(convertedBasePrice.basePriceEur, volumeM3, pricingProfile);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
     console.error('Quote submission blocked: supplier pricing calculation failed.', {
@@ -363,6 +377,11 @@ export async function submitQuote(
     pricing_formula_version: pricingProfile.formulaVersion,
     retail_multiplier_factor: pricingProfile.retailMultiplierFactor,
     pricing_settings_snapshot: pricingSettingsSnapshot,
+    currency: 'EUR',
+    supplier_input_price: convertedBasePrice.supplierInputPrice,
+    supplier_input_currency: convertedBasePrice.supplierInputCurrency,
+    supplier_input_exchange_rate_idr_per_eur: convertedBasePrice.supplierInputExchangeRateIdrPerEur,
+    supplier_input_converted_at: convertedBasePrice.supplierInputConvertedAt,
   };
 
   const { data: existingQuote, error: existingQuoteError } = await supabase
@@ -393,7 +412,7 @@ export async function submitQuote(
     const { data: updatedQuote, error: updateQuoteError } = await supabase
       .from('rfq_quotes')
       .update({
-        base_price: basePrice,
+        base_price: convertedBasePrice.basePriceEur,
         area_m2: null,
         volume_m3: volumeM3,
         ...quotePricingPayload,
@@ -417,7 +436,7 @@ export async function submitQuote(
       .insert({
         rfq_id: rfqId,
         supplier_id: invite.supplier_id,
-        base_price: basePrice,
+        base_price: convertedBasePrice.basePriceEur,
         area_m2: null,
         volume_m3: volumeM3,
         ...quotePricingPayload,
@@ -482,7 +501,10 @@ export async function submitQuote(
     entityId: quote.id,
     metadata: {
       rfqId,
-      basePrice,
+      supplierInputPrice: convertedBasePrice.supplierInputPrice,
+      supplierInputCurrency: convertedBasePrice.supplierInputCurrency,
+      basePriceEur: convertedBasePrice.basePriceEur,
+      exchangeRateIdrPerEur: convertedBasePrice.supplierInputExchangeRateIdrPerEur,
       volumeM3,
       shippingCostCalculated,
       transportCostCalculated,

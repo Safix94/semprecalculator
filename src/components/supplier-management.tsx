@@ -39,7 +39,7 @@ import {
 import { SUPPLIER_LANGUAGE_LABELS, SUPPLIER_LANGUAGES, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { MAX_SUPPLIER_ADDITIONAL_EMAILS, parseEmailList } from '@/lib/email-recipients';
 import { DEFAULT_TRUCK_MULTIPLIER_FACTOR } from '@/lib/pricing';
-import type { Material, SupplierLanguage, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
+import type { Material, QuotePriceCurrency, SupplierLanguage, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
 
 interface SupplierManagementProps {
   suppliers: SupplierWithMaterials[];
@@ -61,6 +61,7 @@ interface SupplierFormData {
   additional_emails: string[];
   material_ids: string[];
   preferred_language: SupplierLanguage;
+  quote_price_currency: QuotePriceCurrency;
   pricing_profile: SupplierPricingProfileFormData;
 }
 
@@ -81,6 +82,7 @@ const initialFormData: SupplierFormData = {
   additional_emails: [],
   material_ids: [],
   preferred_language: 'en',
+  quote_price_currency: 'EUR',
   pricing_profile: defaultPricingProfileFormData,
 };
 
@@ -200,6 +202,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
       additional_emails: supplier.additional_emails ?? [],
       material_ids: supplier.available_materials?.map(material => material.id) ?? [],
       preferred_language: normalizeSupplierLanguage(supplier.preferred_language),
+      quote_price_currency: supplier.quote_price_currency === 'IDR' ? 'IDR' : 'EUR',
       pricing_profile: toPricingProfileFormData(supplier.pricing_profile),
     });
     setDialogOpen(true);
@@ -226,6 +229,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
         additional_emails: submittedAdditionalEmails,
         material_ids: formData.material_ids,
         preferred_language: formData.preferred_language,
+        quote_price_currency: formData.quote_price_currency,
         pricing_profile: pricingProfileInput,
       });
     } else {
@@ -235,6 +239,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
         additional_emails: submittedAdditionalEmails,
         material_ids: formData.material_ids,
         preferred_language: formData.preferred_language,
+        quote_price_currency: formData.quote_price_currency,
         pricing_profile: pricingProfileInput,
       });
     }
@@ -421,9 +426,17 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                         <div className="text-xs">
                           Margin {Number(supplier.pricing_profile.product_margin_factor).toFixed(3)} · Retail ×{Number(supplier.pricing_profile.retail_multiplier_factor).toFixed(3)}
                         </div>
+                        <div className="text-xs text-muted-foreground">
+                          Basisprijs: {supplier.quote_price_currency === 'IDR' ? 'IDR → EUR' : 'EUR'}
+                        </div>
                       </div>
                     ) : (
-                      'Default container'
+                      <div className="space-y-0.5 text-sm">
+                        <div>Default container</div>
+                        <div className="text-xs text-muted-foreground">
+                          Basisprijs: {supplier.quote_price_currency === 'IDR' ? 'IDR → EUR' : 'EUR'}
+                        </div>
+                      </div>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground max-w-md">
@@ -635,6 +648,24 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                 <p className="text-xs text-muted-foreground">
                   Supplier-specific transport and retail calculation settings. New quotes use these values.
                 </p>
+              </div>
+
+              <div className="flex items-start gap-2 rounded-md border p-3">
+                <Checkbox
+                  id="supplier-idr-pricing"
+                  checked={formData.quote_price_currency === 'IDR'}
+                  onCheckedChange={(checked) =>
+                    updateFormData('quote_price_currency', checked === true ? 'IDR' : 'EUR')
+                  }
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="supplier-idr-pricing">
+                    Supplier geeft basisprijs in Indonesische rupiah (IDR)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Op de supplier quote pagina wordt het ingevulde bedrag automatisch omgerekend naar EUR.
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-1.5">

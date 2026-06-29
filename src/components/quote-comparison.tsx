@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import type { RfqInvite, RfqQuote, Supplier } from '@/types';
+import { formatIdrAmount } from '@/lib/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -61,6 +62,18 @@ function formatPricingMethod(quote: RfqQuote | undefined) {
   if (quote.pricing_method === 'container') return 'Container';
   if (quote.pricing_method === 'truck') return 'Camion';
   return 'Legacy container';
+}
+
+function formatSupplierBasePrice(quote: RfqQuote | undefined) {
+  if (!quote) {
+    return '-';
+  }
+
+  if (quote.supplier_input_currency === 'IDR' && quote.supplier_input_price) {
+    return `${formatIdrAmount(quote.supplier_input_price)} → ${formatCurrency(quote.base_price)}`;
+  }
+
+  return formatCurrency(quote.base_price);
 }
 
 export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
@@ -128,7 +141,7 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                     </TableCell>
                     <TableCell>{formatPricingMethod(quote)}</TableCell>
                     <TableCell className="text-right">
-                      {quote ? formatCurrency(quote.base_price) : '-'}
+                      {quote ? formatSupplierBasePrice(quote) : '-'}
                     </TableCell>
                     <TableCell className="text-right">{formatQuoteVolume(quote)}</TableCell>
                     <TableCell className="text-right">

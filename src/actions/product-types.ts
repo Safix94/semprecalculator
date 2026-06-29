@@ -7,6 +7,7 @@ import {
   normalizeDetailFieldSettings,
   type ProductTypeDetailFieldSetting,
 } from '@/lib/product-type-detail-fields';
+import { buildSortOrderUpdates } from '@/lib/sort-order';
 import { logAuditEvent } from './audit';
 import type { ProductType } from '@/types';
 
@@ -15,8 +16,16 @@ interface CreateProductTypeInput {
   sort_order?: number;
 }
 
+interface UpdateProductTypeInput {
+  name?: string;
+}
+
 interface UpdateProductTypeDetailFieldsInput {
   detail_fields: ProductTypeDetailFieldSetting[];
+}
+
+interface ReorderProductTypesInput {
+  orderedIds: string[];
 }
 
 interface StoredProductTypeDetailFieldsFile {
@@ -28,6 +37,26 @@ const PRODUCT_TYPE_DETAIL_FIELDS_PATH = 'product-type-detail-fields.json';
 
 function normalizeSortOrder(value: number | undefined): number {
   return Number.isFinite(value) ? Math.trunc(value as number) : 0;
+}
+
+function normalizeProductTypeName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ');
+}
+
+function sortProductTypes(productTypes: ProductType[]): ProductType[] {
+  return [...productTypes].sort((a, b) => {
+    if (a.sort_order !== b.sort_order) {
+      return a.sort_order - b.sort_order;
+    }
+
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+}
+
+function revalidateProductTypeConsumers() {
+  revalidatePath('/admin/management');
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/history');
 }
 
 function isProductTypeDetailFieldsColumnMissing(error: { code?: string; message?: string } | null | undefined): boolean {
@@ -178,12 +207,26 @@ export async function createProductType(input: CreateProductTypeInput) {
   const user = await requireRole('sales');
   const supabase = await createClient();
 
-  const name = input.name.trim();
+  const name = normalizeProductTypeName(input.name);
   if (!name) {
     return { error: { _form: ['Name is required.'] } };
   }
 
-  const sortOrder = normalizeSortOrder(input.sort_order);
+  let sortOrder = normalizeSortOrder(input.sort_order);
+  if (input.sort_order === undefined) {
+    const { data: lastProductType, error: sortOrderError } = await supabase
+      .from('product_types')
+      .select('sort_order')
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (sortOrderError) {
+      return { error: { _form: [sortOrderError.message] } };
+    }
+
+    sortOrder = normalizeSortOrder(lastProductType?.sort_order) + 10;
+  }
 
   const { data, error } = await supabase
     .from('product_types')
@@ -214,9 +257,147 @@ export async function createProductType(input: CreateProductTypeInput) {
     metadata: { name: data.name, sortOrder: data.sort_order },
   });
 
-  revalidatePath('/admin/management');
-  revalidatePath('/dashboard');
+  revalidateProductTypeConsumers();
   return { data: normalizedProductType };
+}
+
+export async function updateProductType(productTypeId: string, input: UpdateProductTypeInput) {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  const { data: currentProductType, error: currentProductTypeError } = await supabase
+    .from('product_types')
+    .select('*')
+    .eq('id', productTypeId)
+    .single();
+
+  if (currentProductTypeError || !currentProductType) {
+    return { error: { _form: ['Product type not found.'] } };
+  }
+
+  const updates: UpdateProductTypeInput = {};
+  if (input.name !== undefined) {
+    const name = normalizeProductTypeName(input.name);
+    if (!name) {
+      return { error: { _form: ['Name is required.'] } };
+    }
+
+    const { data: duplicateProductType, error: duplicateError } = await supabase
+      .from('product_types')
+      .select('id, name')
+      .ilike('name', name)
+      .neq('id', productTypeId)
+      .maybeSingle();
+
+    if (duplicateError) {
+      return { error: { _form: [duplicateError.message] } };
+    }
+
+    if (duplicateProductType) {
+      return { error: { _form: ['A product type with this name already exists.'] } };
+    }
+
+    updates.name = name;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    const [normalizedProductType] = await mergeProductTypeDetailFields([currentProductType as ProductType]);
+    return { data: normalizedProductType };
+  }
+
+  const { data, error } = await supabase
+    .from('product_types')
+    .update(updates)
+    .eq('id', productTypeId)
+    .select()
+    .single();
+
+  if (error) {
+    return { error: { _form: [error.message] } };
+  }
+
+  const [normalizedProductType] = await mergeProductTypeDetailFields([data as ProductType]);
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'PRODUCT_TYPE_UPDATED',
+    entityType: 'product_type',
+    entityId: productTypeId,
+    metadata: {
+      previousName: currentProductType.name,
+      name: normalizedProductType.name,
+    },
+  });
+
+  revalidateProductTypeConsumers();
+  return { data: normalizedProductType };
+}
+
+export async function reorderProductTypes(input: ReorderProductTypesInput) {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  let updates;
+  try {
+    updates = buildSortOrderUpdates(input.orderedIds);
+  } catch (error) {
+    return { error: { _form: [error instanceof Error ? error.message : 'Invalid product type order.'] } };
+  }
+
+  if (updates.length === 0) {
+    return { error: { _form: ['No product types provided.'] } };
+  }
+
+  const { data: existingProductTypes, error: existingError } = await supabase
+    .from('product_types')
+    .select('id')
+    .in('id', updates.map((update) => update.id));
+
+  if (existingError) {
+    return { error: { _form: [existingError.message] } };
+  }
+
+  if ((existingProductTypes ?? []).length !== updates.length) {
+    return { error: { _form: ['One or more product types could not be found.'] } };
+  }
+
+  for (const update of updates) {
+    const { error } = await supabase
+      .from('product_types')
+      .update({ sort_order: update.sort_order })
+      .eq('id', update.id);
+
+    if (error) {
+      return { error: { _form: [error.message] } };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('product_types')
+    .select('*')
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) {
+    return { error: { _form: [error.message] } };
+  }
+
+  const normalizedProductTypes = sortProductTypes(
+    await mergeProductTypeDetailFields((data ?? []) as ProductType[])
+  );
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'PRODUCT_TYPES_REORDERED',
+    entityType: 'product_type',
+    entityId: 'bulk',
+    metadata: { orderedIds: updates.map((update) => update.id) },
+  });
+
+  revalidateProductTypeConsumers();
+  return { data: normalizedProductTypes };
 }
 
 export async function updateProductTypeDetailFields(
@@ -264,8 +445,7 @@ export async function updateProductTypeDetailFields(
       metadata: { name: productType.name, storageFallback: true, detailFields: normalizedSettings },
     });
 
-    revalidatePath('/admin/management');
-    revalidatePath('/dashboard');
+    revalidateProductTypeConsumers();
     return { data: storedProductType };
   }
 
@@ -287,8 +467,7 @@ export async function updateProductTypeDetailFields(
     metadata: { name: data.name, detailFields: normalizedProductType.detail_fields },
   });
 
-  revalidatePath('/admin/management');
-  revalidatePath('/dashboard');
+  revalidateProductTypeConsumers();
   return { data: normalizedProductType };
 }
 
@@ -343,7 +522,6 @@ export async function deleteProductType(productTypeId: string) {
     metadata: { name: productType.name },
   });
 
-  revalidatePath('/admin/management');
-  revalidatePath('/dashboard');
+  revalidateProductTypeConsumers();
   return { data: { id: productTypeId } };
 }

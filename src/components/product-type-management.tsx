@@ -1,10 +1,15 @@
 'use client';
 
 import { useMemo, useState, type FormEvent } from 'react';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { move } from '@dnd-kit/helpers';
+import { DragDropProvider, type DragEndEvent } from '@dnd-kit/react';
+import { useSortable } from '@dnd-kit/react/sortable';
+import { GripVertical, Plus, Save, Trash2 } from 'lucide-react';
 import {
   createProductType,
   deleteProductType,
+  reorderProductTypes,
+  updateProductType,
   updateProductTypeDetailFields,
 } from '@/actions/product-types';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -37,7 +42,15 @@ interface ProductTypeManagementProps {
 
 interface ProductTypeFormState {
   name: string;
-  sort_order: string;
+}
+
+interface SortableProductTypeItemProps {
+  productType: ProductType;
+  index: number;
+  isSelected: boolean;
+  counts: ReturnType<typeof getDetailFieldCounts>;
+  disabled: boolean;
+  onSelect: (productTypeId: string) => void;
 }
 
 type ProductTypeSettingField = 'enabled' | 'required';
@@ -45,10 +58,7 @@ type DetailSettingsByProductTypeId = Record<string, ProductTypeDetailFieldSettin
 
 const initialFormState: ProductTypeFormState = {
   name: '',
-  sort_order: '',
 };
-
-const PRODUCT_TYPES_PER_PAGE = 20;
 
 function buildSettingsByProductTypeId(productTypes: ProductType[]): DetailSettingsByProductTypeId {
   return Object.fromEntries(
@@ -66,6 +76,74 @@ function getDetailFieldCounts(settings: ProductTypeDetailFieldSetting[]) {
   };
 }
 
+function sortProductTypes(productTypes: ProductType[]): ProductType[] {
+  return [...productTypes].sort((a, b) => {
+    if (a.sort_order !== b.sort_order) {
+      return a.sort_order - b.sort_order;
+    }
+
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  });
+}
+
+function haveSameOrder(first: ProductType[], second: ProductType[]) {
+  return first.length === second.length && first.every((item, index) => item.id === second[index]?.id);
+}
+
+function SortableProductTypeItem({
+  productType,
+  index,
+  isSelected,
+  counts,
+  disabled,
+  onSelect,
+}: SortableProductTypeItemProps) {
+  const { handleRef, isDragging, isDropTarget, ref } = useSortable({
+    id: productType.id,
+    index,
+    group: 'product-types',
+    disabled,
+  });
+
+  return (
+    <div
+      ref={ref}
+      className={`flex items-stretch gap-2 rounded-lg border bg-background transition ${
+        isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border'
+      } ${isDragging ? 'opacity-60' : ''} ${isDropTarget ? 'ring-2 ring-primary/30' : ''}`}
+    >
+      <button
+        ref={handleRef}
+        type="button"
+        className="flex cursor-grab items-center px-2 text-muted-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
+        aria-label={`Sleep ${productType.name} om te herschikken`}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onSelect(productType.id)}
+        className="min-w-0 flex-1 rounded-r-lg px-2 py-2 text-left transition hover:bg-muted/50"
+        aria-pressed={isSelected}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate font-medium">{productType.name}</div>
+            <div className="text-xs text-muted-foreground">Sleep om te herschikken</div>
+          </div>
+          <div className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+            {counts.enabled}/{PRODUCT_TYPE_DETAIL_FIELD_KEYS.length}
+          </div>
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">
+          {counts.required} required fields
+        </div>
+      </button>
+    </div>
+  );
+}
+
 export function ProductTypeManagement({ productTypes: initialProductTypes }: ProductTypeManagementProps) {
   const [productTypes, setProductTypes] = useState<ProductType[]>(initialProductTypes);
   const [detailSettingsById, setDetailSettingsById] = useState<DetailSettingsByProductTypeId>(() =>
@@ -75,30 +153,15 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
   const [selectedProductTypeId, setSelectedProductTypeId] = useState<string | null>(
     initialProductTypes[0]?.id ?? null
   );
-  const [currentPage, setCurrentPage] = useState(1);
+  const [editName, setEditName] = useState(initialProductTypes[0]?.name ?? '');
   const [loading, setLoading] = useState(false);
+  const [reordering, setReordering] = useState(false);
   const [savingSettingsId, setSavingSettingsId] = useState<string | null>(null);
+  const [savingProductTypeId, setSavingProductTypeId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const sortedProductTypes = useMemo(
-    () =>
-      [...productTypes].sort((a, b) => {
-        if (a.sort_order !== b.sort_order) {
-          return a.sort_order - b.sort_order;
-        }
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      }),
-    [productTypes]
-  );
-
-  const totalPages = Math.max(1, Math.ceil(sortedProductTypes.length / PRODUCT_TYPES_PER_PAGE));
-  const safeCurrentPage = Math.min(currentPage, totalPages);
-  const pageStartIndex = (safeCurrentPage - 1) * PRODUCT_TYPES_PER_PAGE;
-  const visibleProductTypes = sortedProductTypes.slice(
-    pageStartIndex,
-    pageStartIndex + PRODUCT_TYPES_PER_PAGE
-  );
+  const sortedProductTypes = useMemo(() => sortProductTypes(productTypes), [productTypes]);
 
   const selectedProductType = useMemo(
     () =>
@@ -120,14 +183,11 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
   };
 
   const selectProductType = (productTypeId: string) => {
+    const productType = productTypes.find((item) => item.id === productTypeId);
     setSelectedProductTypeId(productTypeId);
+    setEditName(productType?.name ?? '');
     setError(null);
     setSuccess(null);
-  };
-
-  const goToPage = (page: number) => {
-    const nextPage = Math.min(Math.max(page, 1), totalPages);
-    setCurrentPage(nextPage);
   };
 
   const handleCreate = async (event: FormEvent) => {
@@ -136,11 +196,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
     setError(null);
     setSuccess(null);
 
-    const sortOrder = formState.sort_order.trim() === '' ? 0 : Number.parseInt(formState.sort_order, 10);
-    const result = await createProductType({
-      name: formState.name,
-      sort_order: Number.isFinite(sortOrder) ? sortOrder : 0,
-    });
+    const result = await createProductType({ name: formState.name });
 
     if (result.error) {
       setError(result.error._form?.[0] ?? 'Something went wrong.');
@@ -154,6 +210,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
       [result.data.id]: normalizeDetailFieldSettings(result.data.detail_fields, result.data.name),
     }));
     setSelectedProductTypeId(result.data.id);
+    setEditName(result.data.name);
     setFormState(initialFormState);
     setSuccess('Product type added.');
     setLoading(false);
@@ -178,13 +235,9 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
     const remainingProductTypes = productTypes.filter((productType) => productType.id !== productTypeId);
     setProductTypes(remainingProductTypes);
     if (selectedProductTypeId === productTypeId) {
-      const nextSorted = [...remainingProductTypes].sort((a, b) => {
-        if (a.sort_order !== b.sort_order) {
-          return a.sort_order - b.sort_order;
-        }
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
-      setSelectedProductTypeId(nextSorted[0]?.id ?? null);
+      const nextSelectedProductType = sortProductTypes(remainingProductTypes)[0] ?? null;
+      setSelectedProductTypeId(nextSelectedProductType?.id ?? null);
+      setEditName(nextSelectedProductType?.name ?? '');
     }
     setDetailSettingsById((prev) => {
       const next = { ...prev };
@@ -193,6 +246,57 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
     });
     setSuccess('Product type deleted.');
     setLoading(false);
+  };
+
+  const handleSaveProductType = async (productType: ProductType) => {
+    setSavingProductTypeId(productType.id);
+    setError(null);
+    setSuccess(null);
+
+    const result = await updateProductType(productType.id, { name: editName });
+    if (result.error) {
+      setError(result.error._form?.[0] ?? 'Product type could not be saved.');
+      setSavingProductTypeId(null);
+      return;
+    }
+
+    setProductTypes((prev) => prev.map((item) => (item.id === result.data.id ? result.data : item)));
+    setEditName(result.data.name);
+    setDetailSettingsById((prev) => ({
+      ...prev,
+      [result.data.id]: normalizeDetailFieldSettings(result.data.detail_fields, result.data.name),
+    }));
+    setSuccess(`Product type saved: ${result.data.name}.`);
+    setSavingProductTypeId(null);
+  };
+
+  const handleReorder = async (event: DragEndEvent) => {
+    if (event.canceled || !event.operation.target || reordering) {
+      return;
+    }
+
+    const previousProductTypes = sortedProductTypes;
+    const nextProductTypes = move(previousProductTypes, event) as ProductType[];
+    if (haveSameOrder(previousProductTypes, nextProductTypes)) {
+      return;
+    }
+
+    setProductTypes(nextProductTypes);
+    setReordering(true);
+    setError(null);
+    setSuccess(null);
+
+    const result = await reorderProductTypes({ orderedIds: nextProductTypes.map((productType) => productType.id) });
+    if (result.error) {
+      setProductTypes(previousProductTypes);
+      setError(result.error._form?.[0] ?? 'Reorder failed.');
+      setReordering(false);
+      return;
+    }
+
+    setProductTypes(result.data);
+    setSuccess('Product type order saved.');
+    setReordering(false);
   };
 
   const handleDetailFieldToggle = (
@@ -271,13 +375,13 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">Product types</h2>
         <p className="text-sm text-muted-foreground">
-          Select a product type on the left and configure its Details & dimensions fields on the right.
+          Add product types, rename them, drag them into the right order, and configure Details & dimensions fields.
         </p>
       </div>
 
       <Card>
         <CardContent className="p-4">
-          <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-[2fr_1fr_auto] md:items-end">
+          <form onSubmit={handleCreate} className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
             <div className="space-y-1.5">
               <Label htmlFor="product-type-name">Name *</Label>
               <Input
@@ -289,19 +393,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
               />
             </div>
 
-            <div className="space-y-1.5">
-              <Label htmlFor="product-type-sort-order">Sort order</Label>
-              <Input
-                id="product-type-sort-order"
-                type="number"
-                step="1"
-                value={formState.sort_order}
-                onChange={(event) => updateFormState('sort_order', event.target.value)}
-                placeholder="0"
-              />
-            </div>
-
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || reordering}>
               <Plus className="mr-2 h-4 w-4" />
               {loading ? 'Saving...' : 'Add'}
             </Button>
@@ -316,110 +408,81 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(260px,360px)_1fr]">
+        <div className="grid gap-4 lg:grid-cols-[minmax(260px,380px)_1fr]">
           <Card className="lg:sticky lg:top-4 lg:self-start">
             <CardContent className="space-y-4 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">All product types</h3>
                   <p className="text-sm text-muted-foreground">
-                    {sortedProductTypes.length} total · max {PRODUCT_TYPES_PER_PAGE} per page
+                    {sortedProductTypes.length} total · sleep aan het handvat om te herschikken
                   </p>
                 </div>
-                <div className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-                  {safeCurrentPage}/{totalPages}
-                </div>
+                {reordering && (
+                  <div className="rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
+                    Saving...
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                {visibleProductTypes.map((productType) => {
-                  const settings = detailSettingsById[productType.id] ?? normalizeDetailFieldSettings(
-                    productType.detail_fields,
-                    productType.name
-                  );
-                  const counts = getDetailFieldCounts(settings);
-                  const isSelected = selectedProductType?.id === productType.id;
+              <DragDropProvider onDragEnd={handleReorder}>
+                <div className="max-h-[32rem] space-y-2 overflow-y-auto pr-1">
+                  {sortedProductTypes.map((productType, index) => {
+                    const settings = detailSettingsById[productType.id] ?? normalizeDetailFieldSettings(
+                      productType.detail_fields,
+                      productType.name
+                    );
+                    const counts = getDetailFieldCounts(settings);
+                    const isSelected = selectedProductType?.id === productType.id;
 
-                  return (
-                    <button
-                      key={productType.id}
-                      type="button"
-                      onClick={() => selectProductType(productType.id)}
-                      className={`w-full rounded-lg border px-3 py-2 text-left transition hover:border-primary/60 hover:bg-muted/50 ${
-                        isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-background'
-                      }`}
-                      aria-pressed={isSelected}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate font-medium">{productType.name}</div>
-                          <div className="text-xs text-muted-foreground">Sort order: {productType.sort_order}</div>
-                        </div>
-                        <div className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
-                          {counts.enabled}/{PRODUCT_TYPE_DETAIL_FIELD_KEYS.length}
-                        </div>
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {counts.required} required fields
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between gap-2 border-t pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(safeCurrentPage - 1)}
-                    disabled={safeCurrentPage === 1}
-                  >
-                    Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">
-                    {pageStartIndex + 1}-{Math.min(pageStartIndex + PRODUCT_TYPES_PER_PAGE, sortedProductTypes.length)} of {sortedProductTypes.length}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToPage(safeCurrentPage + 1)}
-                    disabled={safeCurrentPage === totalPages}
-                  >
-                    Next
-                  </Button>
+                    return (
+                      <SortableProductTypeItem
+                        key={productType.id}
+                        productType={productType}
+                        index={index}
+                        isSelected={isSelected}
+                        counts={counts}
+                        disabled={loading || reordering || savingSettingsId !== null || savingProductTypeId !== null}
+                        onSelect={selectProductType}
+                      />
+                    );
+                  })}
                 </div>
-              )}
+              </DragDropProvider>
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="space-y-4 p-4">
+            <CardContent className="space-y-5 p-4">
               {selectedProductType ? (
                 <>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold">{selectedProductType.name}</h3>
+                  <div className="flex flex-col gap-4 border-b pb-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="flex-1 space-y-1.5">
+                      <Label htmlFor="selected-product-type-name">Product type name</Label>
+                      <Input
+                        id="selected-product-type-name"
+                        value={editName}
+                        onChange={(event) => setEditName(event.target.value)}
+                        disabled={savingProductTypeId === selectedProductType.id || loading || reordering}
+                      />
                       <p className="text-sm text-muted-foreground">
-                        {selectedFieldCounts.enabled} shown · {selectedFieldCounts.required} required · Sort order {selectedProductType.sort_order}
+                        {selectedFieldCounts.enabled} shown · {selectedFieldCounts.required} required
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <Button
                         type="button"
-                        onClick={() => handleSaveDetailFields(selectedProductType)}
-                        disabled={savingSettingsId === selectedProductType.id || loading}
+                        onClick={() => handleSaveProductType(selectedProductType)}
+                        disabled={savingProductTypeId === selectedProductType.id || loading || reordering}
                       >
                         <Save className="mr-2 h-4 w-4" />
-                        {savingSettingsId === selectedProductType.id ? 'Saving...' : 'Save'}
+                        {savingProductTypeId === selectedProductType.id ? 'Saving...' : 'Save name'}
                       </Button>
                       <Button
                         variant="outline"
                         size="icon"
                         onClick={() => handleDelete(selectedProductType.id)}
-                        disabled={loading || savingSettingsId === selectedProductType.id}
+                        disabled={loading || reordering || savingSettingsId === selectedProductType.id || savingProductTypeId === selectedProductType.id}
                         aria-label={`Delete ${selectedProductType.name}`}
                       >
                         <Trash2 className="h-4 w-4" />
@@ -480,7 +543,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
                     <Button
                       type="button"
                       onClick={() => handleSaveDetailFields(selectedProductType)}
-                      disabled={savingSettingsId === selectedProductType.id || loading}
+                      disabled={savingSettingsId === selectedProductType.id || loading || reordering}
                     >
                       <Save className="mr-2 h-4 w-4" />
                       {savingSettingsId === selectedProductType.id ? 'Saving...' : 'Save detail fields'}
@@ -489,7 +552,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
                 </>
               ) : (
                 <div className="py-8 text-center text-muted-foreground">
-                  Select a product type to edit its fields.
+                  Select a product type to edit it.
                 </div>
               )}
             </CardContent>

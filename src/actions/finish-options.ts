@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { requireRole } from '@/lib/auth';
+import { buildSortOrderUpdates } from '@/lib/sort-order';
 import { logAuditEvent } from './audit';
 import type { FinishOption } from '@/types';
 
@@ -21,12 +22,17 @@ interface UpdateFinishOptionInput {
   is_active?: boolean;
 }
 
+interface ReorderFinishOptionsInput {
+  orderedIds: string[];
+}
+
 interface StoredFinishOptionsFile {
   options: FinishOption[];
 }
 
 const STORAGE_BUCKET = 'app-config';
 const FINISH_OPTIONS_PATH = 'finish-options.json';
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 function normalizeName(name: string): string {
   return name.trim().replace(/\s+/g, ' ');
@@ -185,6 +191,26 @@ async function getStoredActiveFinishOptions(): Promise<FinishOption[]> {
   return sortFinishOptions(options.filter((option) => option.is_active));
 }
 
+async function getNextFinishOptionSortOrder(supabase: SupabaseServerClient): Promise<number> {
+  const { data, error } = await supabase
+    .from('finish_options')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (isFinishOptionsTableMissing(error)) {
+    const { options } = await readStoredFinishOptions(true);
+    return Math.max(0, ...options.map((option) => option.sort_order ?? 0)) + 10;
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return normalizeSortOrder(data?.sort_order) + 10;
+}
+
 async function createStoredFinishOption(input: CreateFinishOptionInput): Promise<FinishOptionResult> {
   const name = normalizeName(input.name);
   if (!name) {
@@ -198,7 +224,9 @@ async function createStoredFinishOption(input: CreateFinishOptionInput): Promise
 
   const timestamp = nowIso();
   const existingIndex = options.findIndex((option) => option.name.toLowerCase() === name.toLowerCase());
-  const sortOrder = normalizeSortOrder(input.sort_order);
+  const sortOrder = input.sort_order === undefined
+    ? Math.max(0, ...options.map((option) => option.sort_order ?? 0)) + 10
+    : normalizeSortOrder(input.sort_order);
 
   let finishOption: FinishOption;
   if (existingIndex >= 0) {
@@ -279,6 +307,42 @@ async function deleteStoredFinishOption(finishOptionId: string): Promise<DeleteF
   return { data: { id: finishOptionId } };
 }
 
+async function reorderStoredFinishOptions(orderedIds: string[]): Promise<{ data: FinishOption[] } | { error: { _form: string[] } }> {
+  const { options, error } = await readStoredFinishOptions(true);
+  if (error) {
+    return { error: { _form: [error] } };
+  }
+
+  let updates;
+  try {
+    updates = buildSortOrderUpdates(orderedIds);
+  } catch (reorderError) {
+    return { error: { _form: [reorderError instanceof Error ? reorderError.message : 'Invalid finish order.'] } };
+  }
+
+  const activeOptions = options.filter((option) => option.is_active);
+  const activeOptionIds = new Set(activeOptions.map((option) => option.id));
+  if (updates.length !== activeOptions.length || updates.some((update) => !activeOptionIds.has(update.id))) {
+    return { error: { _form: ['One or more finishes could not be found.'] } };
+  }
+
+  const sortOrderById = new Map(updates.map((update) => [update.id, update.sort_order]));
+  const timestamp = nowIso();
+  const reorderedOptions = options.map((option) => {
+    const sortOrder = sortOrderById.get(option.id);
+    return sortOrder === undefined
+      ? option
+      : { ...option, sort_order: sortOrder, updated_at: timestamp };
+  });
+
+  const writeError = await writeStoredFinishOptions(reorderedOptions);
+  if (writeError) {
+    return { error: { _form: [writeError] } };
+  }
+
+  return { data: sortFinishOptions(reorderedOptions.filter((option) => option.is_active)) };
+}
+
 export async function getFinishOptions(): Promise<FinishOption[]> {
   await requireRole('sales');
 
@@ -316,7 +380,14 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
     return { error: { _form: ['Name is required.'] } };
   }
 
-  const sortOrder = normalizeSortOrder(input.sort_order);
+  let sortOrder: number;
+  try {
+    sortOrder = input.sort_order === undefined
+      ? await getNextFinishOptionSortOrder(supabase)
+      : normalizeSortOrder(input.sort_order);
+  } catch (error) {
+    return { error: { _form: [error instanceof Error ? error.message : 'Sort order could not be calculated.'] } };
+  }
 
   const { data: existing, error: existingError } = await supabase
     .from('finish_options')
@@ -479,6 +550,90 @@ export async function updateFinishOption(
   revalidatePath('/admin/management');
   revalidatePath('/dashboard');
   return { data: data as FinishOption };
+}
+
+export async function reorderFinishOptions(input: ReorderFinishOptionsInput): Promise<{ data: FinishOption[] } | { error: { _form: string[] } }> {
+  const user = await requireRole('sales');
+  const supabase = await createClient();
+
+  let updates;
+  try {
+    updates = buildSortOrderUpdates(input.orderedIds);
+  } catch (error) {
+    return { error: { _form: [error instanceof Error ? error.message : 'Invalid finish order.'] } };
+  }
+
+  if (updates.length === 0) {
+    return { error: { _form: ['No finishes provided.'] } };
+  }
+
+  const { data: existingFinishOptions, error: existingError } = await supabase
+    .from('finish_options')
+    .select('id')
+    .eq('is_active', true)
+    .in('id', updates.map((update) => update.id));
+
+  if (isFinishOptionsTableMissing(existingError)) {
+    const result = await reorderStoredFinishOptions(input.orderedIds);
+    if ('data' in result) {
+      await logAuditEvent({
+        actorType: user.role,
+        actorId: user.id,
+        action: 'FINISH_OPTIONS_REORDERED',
+        entityType: 'finish_option',
+        entityId: 'bulk',
+        metadata: { orderedIds: updates.map((update) => update.id), storageFallback: true },
+      });
+      revalidatePath('/admin/management');
+      revalidatePath('/dashboard');
+    }
+    return result;
+  }
+
+  if (existingError) {
+    return { error: { _form: [existingError.message] } };
+  }
+
+  if ((existingFinishOptions ?? []).length !== updates.length) {
+    return { error: { _form: ['One or more finishes could not be found.'] } };
+  }
+
+  for (const update of updates) {
+    const { error } = await supabase
+      .from('finish_options')
+      .update({ sort_order: update.sort_order })
+      .eq('id', update.id);
+
+    if (error) {
+      return { error: { _form: [error.message] } };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('finish_options')
+    .select('*')
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) {
+    return { error: { _form: [error.message] } };
+  }
+
+  const reorderedFinishOptions = sortFinishOptions((data ?? []) as FinishOption[]);
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'FINISH_OPTIONS_REORDERED',
+    entityType: 'finish_option',
+    entityId: 'bulk',
+    metadata: { orderedIds: updates.map((update) => update.id) },
+  });
+
+  revalidatePath('/admin/management');
+  revalidatePath('/dashboard');
+  return { data: reorderedFinishOptions };
 }
 
 export async function deleteFinishOption(finishOptionId: string): Promise<DeleteFinishOptionResult> {

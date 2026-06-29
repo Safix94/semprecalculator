@@ -328,21 +328,45 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
 
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <div className="overflow-x-auto">
+            <Table className="min-w-[980px]">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Language</TableHead>
                 <TableHead>Pricing</TableHead>
-                <TableHead>Materials</TableHead>
-                <TableHead>Actions</TableHead>
+                <TableHead className="w-[34%]">Materials</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {suppliers.map((supplier) => (
                 <TableRow key={supplier.id}>
-                  <TableCell className="font-medium">{supplier.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="min-w-0 truncate">{supplier.name}</span>
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(supplier)}
+                          disabled={loading}
+                          aria-label={`Edit ${supplier.name}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(supplier.id)}
+                          disabled={loading}
+                          aria-label={`Delete ${supplier.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">
                     <div className="space-y-0.5">
                       <div>{supplier.email}</div>
@@ -391,48 +415,31 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                       'Default container'
                     )}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {supplier.available_materials && supplier.available_materials.length > 0
-                      ? supplier.available_materials.map((material) => material.name).join(', ')
-                      : 'No materials'}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(supplier)}
-                        disabled={loading}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(supplier.id)}
-                        disabled={loading}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  <TableCell className="text-muted-foreground max-w-md">
+                    <span className="line-clamp-2">
+                      {supplier.available_materials && supplier.available_materials.length > 0
+                        ? supplier.available_materials.map((material) => material.name).join(', ')
+                        : 'No materials'}
+                    </span>
                   </TableCell>
                 </TableRow>
               ))}
               {suppliers.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
                     No suppliers created yet.
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
       {/* Create/Edit Supplier Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <DialogContent className="max-h-[calc(100vh-2rem)] w-[calc(100vw-2rem)] max-w-6xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
               {editingSupplier ? 'Edit supplier' : 'New supplier'}
@@ -442,7 +449,9 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+              <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="supplier-name">Name *</Label>
               <Input
@@ -548,6 +557,8 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               </p>
             </div>
 
+              </div>
+              <div className="space-y-4">
             <div className="space-y-4 rounded-lg border p-4">
               <div>
                 <h3 className="text-sm font-medium">Pricing profile</h3>
@@ -664,6 +675,8 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                     <p>Retail price = supplier base price × product margin × retail multiplier</p>
                   </>
                 )}
+              </div>
+            </div>
               </div>
             </div>
 

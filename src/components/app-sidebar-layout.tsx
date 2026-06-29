@@ -119,7 +119,7 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
 
       <SidebarInset>
         <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30 border-b backdrop-blur">
-          <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <div className="mx-auto flex h-14 w-full max-w-screen-2xl items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground sm:hidden">Sempre</span>
             </div>
@@ -135,7 +135,7 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
           {children}
         </main>
       </SidebarInset>

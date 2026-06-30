@@ -264,7 +264,6 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
                 id="finish-option-name"
                 value={formState.name}
                 onChange={(event) => updateFormState('name', event.target.value)}
-                placeholder="e.g. Antique fumé"
                 required
               />
             </div>
@@ -274,7 +273,6 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
                 id="finish-option-abbreviation"
                 value={formState.abbreviation}
                 onChange={(event) => updateFormState('abbreviation', event.target.value.toUpperCase())}
-                placeholder="AF"
                 className="font-mono uppercase"
               />
             </div>

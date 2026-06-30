@@ -24,6 +24,7 @@ interface FinishOptionManagementProps {
 
 interface FinishOptionFormState {
   name: string;
+  abbreviation: string;
 }
 
 interface SortableFinishOptionItemProps {
@@ -37,6 +38,7 @@ interface SortableFinishOptionItemProps {
 
 const initialFormState: FinishOptionFormState = {
   name: '',
+  abbreviation: '',
 };
 
 function sortFinishOptions(finishOptions: FinishOption[]): FinishOption[] {
@@ -85,7 +87,14 @@ function SortableFinishOptionItem({
         <GripVertical className="h-4 w-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{finishOption.name}</div>
+        <div className="flex min-w-0 items-center gap-2">
+          {finishOption.abbreviation && (
+            <span className="shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-xs font-semibold text-secondary-foreground">
+              {finishOption.abbreviation}
+            </span>
+          )}
+          <div className="truncate font-medium">{finishOption.name}</div>
+        </div>
         <div className="text-xs text-muted-foreground">Sleep om de volgorde van suggesties te bepalen</div>
       </div>
       <div className="flex items-center gap-2">
@@ -131,7 +140,7 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
   };
 
   const startEdit = (finishOption: FinishOption) => {
-    setFormState({ name: finishOption.name });
+    setFormState({ name: finishOption.name, abbreviation: finishOption.abbreviation ?? '' });
     setEditingId(finishOption.id);
     setError(null);
     setSuccess(null);
@@ -143,7 +152,10 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
     setError(null);
     setSuccess(null);
 
-    const payload = { name: formState.name };
+    const payload = {
+      name: formState.name,
+      abbreviation: formState.abbreviation,
+    };
 
     const result = editingId
       ? await updateFinishOption(editingId, payload)
@@ -252,15 +264,25 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
       <div className="grid gap-6 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
       <Card>
         <CardContent className="p-4">
-          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[minmax(0,1fr)_140px_auto_auto] md:items-end">
             <div className="space-y-1.5">
               <Label htmlFor="finish-option-name">Name *</Label>
               <Input
                 id="finish-option-name"
                 value={formState.name}
                 onChange={(event) => updateFormState('name', event.target.value)}
-                placeholder="e.g. Polished, Brushed, Black"
+                placeholder="e.g. Antique fumé"
                 required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="finish-option-abbreviation">Code</Label>
+              <Input
+                id="finish-option-abbreviation"
+                value={formState.abbreviation}
+                onChange={(event) => updateFormState('abbreviation', event.target.value.toUpperCase())}
+                placeholder="AF"
+                className="font-mono uppercase"
               />
             </div>
 

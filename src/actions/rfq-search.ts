@@ -24,6 +24,7 @@ export interface SearchRfqsInput {
   productType?: string | null;
   material?: string | null;
   finish?: string | null;
+  model?: string | null;
   shape?: string | null;
   status?: string | null;
   createdFrom?: string | null;
@@ -187,6 +188,7 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
   const productTypeFilter = getString(input.productType);
   const materialFilter = normalizeText(input.material);
   const finishFilter = normalizeText(input.finish);
+  const modelFilter = normalizeText(input.model);
   const shapeFilter = normalizeText(input.shape);
   const statusFilter = getString(input.status);
   const createdFrom = getString(input.createdFrom);
@@ -257,6 +259,7 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
       if (q && !buildSearchBlob(row, supplierNames).includes(q)) return false;
       if (!materialMatches(row, materialFilter)) return false;
       if (!finishMatches(row, finishFilter)) return false;
+      if (!textIncludes(row.model, modelFilter)) return false;
       if (!numbersMatch(row.length, lengthFilter)) return false;
       if (!numbersMatch(row.width, widthFilter)) return false;
       if (!numbersMatch(row.height, heightFilter)) return false;

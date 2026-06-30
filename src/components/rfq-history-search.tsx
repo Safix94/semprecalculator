@@ -32,6 +32,7 @@ export interface RfqHistoryFilters {
   productType: string;
   material: string;
   finish: string;
+  model: string;
   shape: string;
   status: string;
   createdFrom: string;
@@ -148,6 +149,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
       productType: '',
       material: '',
       finish: '',
+      model: '',
       shape: '',
       status: '',
       createdFrom: '',
@@ -227,6 +229,11 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
               <div className="space-y-1.5">
                 <Label htmlFor="history-finish">Finish</Label>
                 <Input id="history-finish" value={form.finish} onChange={(event) => updateField('finish', event.target.value)} placeholder="Finish" />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="history-model">Model</Label>
+                <Input id="history-model" value={form.model} onChange={(event) => updateField('model', event.target.value)} placeholder="Model name / reference" />
               </div>
 
               <div className="space-y-1.5">
@@ -351,8 +358,9 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         <FormattedDate value={rfq.created_at} dateStyle="short" />
                       </TableCell>
-                      <TableCell className="max-w-[140px] truncate font-medium" title={rfq.product_type || '-'}>
-                        {rfq.product_type || '-'}
+                      <TableCell className="max-w-[160px] font-medium" title={[rfq.product_type, rfq.model].filter(Boolean).join(' | ') || '-'}>
+                        <span className="block truncate">{rfq.product_type || '-'}</span>
+                        {rfq.model && <span className="block truncate text-xs font-normal text-muted-foreground">Model: {rfq.model}</span>}
                       </TableCell>
                       <TableCell className="max-w-[180px] truncate text-muted-foreground" title={suppliersLabel}>
                         {suppliersLabel}

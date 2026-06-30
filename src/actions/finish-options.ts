@@ -13,11 +13,13 @@ type DeleteFinishOptionResult = { data: { id: string } } | { error: { _form: str
 
 interface CreateFinishOptionInput {
   name: string;
+  abbreviation?: string | null;
   sort_order?: number;
 }
 
 interface UpdateFinishOptionInput {
   name?: string;
+  abbreviation?: string | null;
   sort_order?: number;
   is_active?: boolean;
 }
@@ -36,6 +38,11 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 function normalizeName(name: string): string {
   return name.trim().replace(/\s+/g, ' ');
+}
+
+function normalizeAbbreviation(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/\s+/g, '').toUpperCase() ?? '';
+  return normalized || null;
 }
 
 function normalizeSortOrder(value: number | undefined): number {
@@ -124,6 +131,7 @@ async function seedFinishOptionsFromMaterials(): Promise<FinishOption[]> {
     Array.from(seen.values()).map((name) => ({
       id: randomUUID(),
       name,
+      abbreviation: null,
       sort_order: 0,
       is_active: true,
       created_at: timestamp,
@@ -217,6 +225,7 @@ async function createStoredFinishOption(input: CreateFinishOptionInput): Promise
     return { error: { _form: ['Name is required.'] } };
   }
 
+  const abbreviation = normalizeAbbreviation(input.abbreviation);
   const { options, error } = await readStoredFinishOptions(true);
   if (error) {
     return { error: { _form: [error] } };
@@ -233,6 +242,7 @@ async function createStoredFinishOption(input: CreateFinishOptionInput): Promise
     finishOption = {
       ...options[existingIndex],
       name,
+      abbreviation,
       sort_order: sortOrder,
       is_active: true,
       updated_at: timestamp,
@@ -242,6 +252,7 @@ async function createStoredFinishOption(input: CreateFinishOptionInput): Promise
     finishOption = {
       id: randomUUID(),
       name,
+      abbreviation,
       sort_order: sortOrder,
       is_active: true,
       created_at: timestamp,
@@ -279,6 +290,9 @@ async function updateStoredFinishOption(
       return { error: { _form: ['Name is required.'] } };
     }
     updates.name = name;
+  }
+  if (input.abbreviation !== undefined) {
+    updates.abbreviation = normalizeAbbreviation(input.abbreviation);
   }
   if (input.sort_order !== undefined) {
     updates.sort_order = normalizeSortOrder(input.sort_order);
@@ -375,6 +389,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
   const user = await requireRole('sales');
   const supabase = await createClient();
   const name = normalizeName(input.name);
+  const abbreviation = normalizeAbbreviation(input.abbreviation);
 
   if (!name) {
     return { error: { _form: ['Name is required.'] } };
@@ -396,7 +411,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
     .maybeSingle();
 
   if (isFinishOptionsTableMissing(existingError)) {
-    const result = await createStoredFinishOption({ name, sort_order: sortOrder });
+    const result = await createStoredFinishOption({ name, abbreviation, sort_order: sortOrder });
     if ('data' in result) {
       await logAuditEvent({
         actorType: user.role,
@@ -404,7 +419,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
         action: 'FINISH_OPTION_CREATED',
         entityType: 'finish_option',
         entityId: result.data.id,
-        metadata: { name: result.data.name, sortOrder: result.data.sort_order, storageFallback: true },
+        metadata: { name: result.data.name, abbreviation: result.data.abbreviation, sortOrder: result.data.sort_order, storageFallback: true },
       });
       revalidatePath('/admin/management');
       revalidatePath('/dashboard');
@@ -419,7 +434,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
   if (existing) {
     const { data: reactivated, error: updateError } = await supabase
       .from('finish_options')
-      .update({ name, sort_order: sortOrder, is_active: true })
+      .update({ name, abbreviation, sort_order: sortOrder, is_active: true })
       .eq('id', existing.id)
       .select()
       .single();
@@ -434,7 +449,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
       action: 'FINISH_OPTION_REACTIVATED',
       entityType: 'finish_option',
       entityId: reactivated.id,
-      metadata: { name: reactivated.name, sortOrder: reactivated.sort_order },
+      metadata: { name: reactivated.name, abbreviation: reactivated.abbreviation, sortOrder: reactivated.sort_order },
     });
 
     revalidatePath('/admin/management');
@@ -444,12 +459,12 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
 
   const { data, error } = await supabase
     .from('finish_options')
-    .insert({ name, sort_order: sortOrder })
+    .insert({ name, abbreviation, sort_order: sortOrder })
     .select()
     .single();
 
   if (isFinishOptionsTableMissing(error)) {
-    const result = await createStoredFinishOption({ name, sort_order: sortOrder });
+    const result = await createStoredFinishOption({ name, abbreviation, sort_order: sortOrder });
     if ('data' in result) {
       await logAuditEvent({
         actorType: user.role,
@@ -457,7 +472,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
         action: 'FINISH_OPTION_CREATED',
         entityType: 'finish_option',
         entityId: result.data.id,
-        metadata: { name: result.data.name, sortOrder: result.data.sort_order, storageFallback: true },
+        metadata: { name: result.data.name, abbreviation: result.data.abbreviation, sortOrder: result.data.sort_order, storageFallback: true },
       });
       revalidatePath('/admin/management');
       revalidatePath('/dashboard');
@@ -475,7 +490,7 @@ export async function createFinishOption(input: CreateFinishOptionInput): Promis
     action: 'FINISH_OPTION_CREATED',
     entityType: 'finish_option',
     entityId: data.id,
-    metadata: { name: data.name, sortOrder: data.sort_order },
+    metadata: { name: data.name, abbreviation: data.abbreviation, sortOrder: data.sort_order },
   });
 
   revalidatePath('/admin/management');
@@ -497,6 +512,9 @@ export async function updateFinishOption(
       return { error: { _form: ['Name is required.'] } };
     }
     updates.name = name;
+  }
+  if (input.abbreviation !== undefined) {
+    updates.abbreviation = normalizeAbbreviation(input.abbreviation);
   }
   if (input.sort_order !== undefined) {
     updates.sort_order = normalizeSortOrder(input.sort_order);
@@ -523,6 +541,7 @@ export async function updateFinishOption(
         entityId: result.data.id,
         metadata: {
           name: result.data.name,
+          abbreviation: result.data.abbreviation,
           sortOrder: result.data.sort_order,
           isActive: result.data.is_active,
           storageFallback: true,
@@ -544,7 +563,7 @@ export async function updateFinishOption(
     action: 'FINISH_OPTION_UPDATED',
     entityType: 'finish_option',
     entityId: data.id,
-    metadata: { name: data.name, sortOrder: data.sort_order, isActive: data.is_active },
+    metadata: { name: data.name, abbreviation: data.abbreviation, sortOrder: data.sort_order, isActive: data.is_active },
   });
 
   revalidatePath('/admin/management');

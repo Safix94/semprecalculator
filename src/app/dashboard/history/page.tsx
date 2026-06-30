@@ -22,6 +22,7 @@ function getFilters(params: Record<string, string | string[] | undefined>): RfqH
     productType: getStringParam(params.productType).trim(),
     material: getStringParam(params.material).trim(),
     finish: getStringParam(params.finish).trim(),
+    model: getStringParam(params.model).trim(),
     shape: getStringParam(params.shape).trim(),
     status: getStringParam(params.status).trim(),
     createdFrom: getStringParam(params.createdFrom).trim(),

@@ -1,5 +1,5 @@
 import { requireRole } from '@/lib/auth';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { AuditLogTable } from '@/components/audit-log-table';
 import type { AuditLog } from '@/types';
 
@@ -15,6 +15,44 @@ interface PageProps {
 }
 
 const PAGE_SIZE = 50;
+
+function getEmailPrefix(email: string | null | undefined): string | null {
+  const prefix = email?.split('@')[0]?.trim();
+  return prefix || null;
+}
+
+async function buildActorDisplayNameMap(logs: AuditLog[]): Promise<Map<string, string>> {
+  const userActorIds = [...new Set(
+    logs
+      .filter((log) => log.actor_type === 'admin' || log.actor_type === 'sales')
+      .map((log) => log.actor_id)
+      .filter(Boolean)
+  )];
+
+  if (userActorIds.length === 0) {
+    return new Map();
+  }
+
+  const serviceClient = createServiceRoleClient();
+  const { data, error } = await serviceClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
+  if (error) {
+    console.error('Failed to resolve audit actor names:', error.message);
+    return new Map();
+  }
+
+  return new Map(
+    (data.users ?? [])
+      .filter((user) => userActorIds.includes(user.id))
+      .map((user) => [user.id, getEmailPrefix(user.email) ?? user.id])
+  );
+}
+
+function decorateLogsWithActorNames(logs: AuditLog[], actorDisplayNames: Map<string, string>): AuditLog[] {
+  return logs.map((log) => ({
+    ...log,
+    actor_display_name: actorDisplayNames.get(log.actor_id) ?? null,
+  }));
+}
 
 export default async function AdminLogsPage({ searchParams }: PageProps) {
   await requireRole('admin');
@@ -47,13 +85,16 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
   }
 
   const { data: logs, count } = await query;
+  const auditLogs = (logs as AuditLog[]) ?? [];
+  const actorDisplayNames = await buildActorDisplayNameMap(auditLogs);
+  const decoratedLogs = decorateLogsWithActorNames(auditLogs, actorDisplayNames);
   const totalPages = Math.ceil((count ?? 0) / PAGE_SIZE);
 
   return (
     <>
       <h1 className="text-2xl font-bold mb-6">Audit Logs</h1>
       <AuditLogTable
-        logs={(logs as AuditLog[]) ?? []}
+        logs={decoratedLogs}
         currentPage={page}
         totalPages={totalPages}
         filters={params}

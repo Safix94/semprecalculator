@@ -55,6 +55,22 @@ const ACTIONS = [
   'EMAIL_SENT',
 ];
 
+function formatActor(log: AuditLog): string {
+  if (log.actor_display_name) {
+    return `${log.actor_display_name} · ${log.actor_type}`;
+  }
+
+  if (log.actor_type === 'system') {
+    return `System · ${log.actor_id}`;
+  }
+
+  if (log.actor_type === 'supplier_link') {
+    return `Supplier link · ${log.actor_id.substring(0, 8)}…`;
+  }
+
+  return `${log.actor_type}: ${log.actor_id.substring(0, 8)}…`;
+}
+
 export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditLogTableProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -152,8 +168,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
                       </span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
-                      <span className="text-muted-foreground/70">{log.actor_type}:</span>{' '}
-                      {log.actor_id.substring(0, 8)}...
+                      <span title={`${log.actor_type}: ${log.actor_id}`}>{formatActor(log)}</span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {log.entity_type}: {log.entity_id.substring(0, 8)}...

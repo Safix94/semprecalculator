@@ -94,6 +94,7 @@ export interface ProductType {
 export interface FinishOption {
   id: string;
   name: string;
+  abbreviation: string | null;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -197,6 +198,7 @@ export interface AuditLog {
   id: string;
   actor_type: ActorType;
   actor_id: string;
+  actor_display_name?: string | null;
   action: string;
   entity_type: string;
   entity_id: string;

@@ -95,6 +95,7 @@ export interface FinishOption {
   id: string;
   name: string;
   abbreviation: string | null;
+  formula_percentage: number | null;
   sort_order: number;
   is_active: boolean;
   created_at: string;

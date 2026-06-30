@@ -9,13 +9,11 @@ import { RfqNotesEditor } from '@/components/rfq-notes-editor';
 import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FormattedDate } from '@/components/formatted-date';
 import { QuoteComparison } from '@/components/quote-comparison';
+import { RfqDetailsOverview } from '@/components/rfq-details-overview';
 import { RfqActions } from '@/components/rfq-actions';
 import {
-  formatRfqDimensionsWithOptions,
   isRoundShape,
-  isTableTopsProductType,
   isTablesProductType,
 } from '@/lib/rfq-format';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -164,7 +162,6 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     canManageRfq && (detail?.rfq.status === 'draft' || detail?.rfq.status === 'sent_to_pricing');
   const isRound = detail ? isRoundShape(detail.rfq.shape) : false;
   const isTablesType = isTablesProductType(detail?.rfq.product_type);
-  const isTableTopsType = isTableTopsProductType(detail?.rfq.product_type);
 
   useEffect(() => {
     if (!detail || detailsEditing) {
@@ -346,7 +343,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
         }
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+      <DialogContent className="max-h-[92vh] w-[96vw] overflow-y-auto sm:max-w-none xl:max-w-[1400px]">
         <DialogHeader>
           <DialogTitle>
             {detail ? `${detail.rfq.material} - ${detail.rfq.shape}` : 'RFQ details'}
@@ -366,38 +363,11 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
 
         {!loading && !error && detail && (
           <div className="space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">
-                  Created on{' '}
-                  <FormattedDate
-                    value={detail.rfq.created_at}
-                    locale="nl-NL"
-                    dateStyle="short"
-                    timeStyle="short"
-                  />
-                  {detail.rfq.sent_at && (
-                    <>
-                      {' '}
-                      | Sent on{' '}
-                      <FormattedDate
-                        value={detail.rfq.sent_at}
-                        locale="nl-NL"
-                        dateStyle="short"
-                        timeStyle="short"
-                      />
-                    </>
-                  )}
-                </p>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 flex-1">
+                <RfqDetailsOverview rfq={detail.rfq} invites={detail.invites} status={status ?? undefined} />
               </div>
-              <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
-                {status && (
-                  <span
-                    className={`inline-flex shrink-0 items-center rounded-full px-3 py-1 text-sm font-medium ${status.color}`}
-                  >
-                    {status.label}
-                  </span>
-                )}
+              <div className="flex shrink-0 flex-wrap items-center gap-2 xl:max-w-[220px] xl:justify-end">
                 {detail.rfq.status === 'draft' && (
                   <Button
                     type="button"
@@ -409,17 +379,15 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                     {pricingTeamLoading ? 'Loading...' : 'Send to pricing team'}
                   </Button>
                 )}
-                <div className="flex w-full flex-shrink-0 flex-wrap items-center gap-2 sm:w-auto">
-                  <RfqActions
-                    rfqId={detail.rfq.id}
-                    status={detail.rfq.status}
-                    productType={detail.rfq.product_type}
-                    materialId={detail.rfq.material_id}
-                    materialIdTableTop={detail.rfq.material_id_table_top}
-                    materialIdTableFoot={detail.rfq.material_id_table_foot}
-                    hidePricingTeamButton
-                  />
-                </div>
+                <RfqActions
+                  rfqId={detail.rfq.id}
+                  status={detail.rfq.status}
+                  productType={detail.rfq.product_type}
+                  materialId={detail.rfq.material_id}
+                  materialIdTableTop={detail.rfq.material_id_table_top}
+                  materialIdTableFoot={detail.rfq.material_id_table_foot}
+                  hidePricingTeamButton
+                />
                 {pricingTeamResult && (
                   <span className="min-w-0 shrink text-sm text-muted-foreground">{pricingTeamResult}</span>
                 )}
@@ -429,7 +397,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
             <Card>
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle>Details</CardTitle>
+                  <CardTitle>Edit details</CardTitle>
                   {canEditRfqDetails && !detailsEditing && (
                     <Button type="button" variant="outline" size="sm" onClick={startDetailsEdit}>
                       Edit
@@ -438,96 +406,11 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                 </div>
               </CardHeader>
               <CardContent>
-                <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                  {detail.rfq.product_type && (
-                    <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Type</dt>
-                      <dd className="mt-1 text-sm font-medium">{detail.rfq.product_type}</dd>
-                    </div>
-                  )}
-                  {!isTablesType && (
-                    <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Material</dt>
-                      <dd className="mt-1 text-sm font-medium">{detail.rfq.material}</dd>
-                    </div>
-                  )}
-                  {isTableTopsType && (
-                    <>
-                      <div>
-                        <dt className="text-xs uppercase text-muted-foreground">Top finish</dt>
-                        <dd className="mt-1 text-sm font-medium">{detail.rfq.finish_top || '-'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs uppercase text-muted-foreground">Edge finish</dt>
-                        <dd className="mt-1 text-sm font-medium">{detail.rfq.finish_edge || '-'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs uppercase text-muted-foreground">Color finish</dt>
-                        <dd className="mt-1 text-sm font-medium">{detail.rfq.finish_color || '-'}</dd>
-                      </div>
-                    </>
-                  )}
-                  {isTablesType && detail.rfq.material_table_top && (
-                    <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Tafelblad</dt>
-                      <dd className="mt-1 text-sm font-medium">
-                        {detail.rfq.material_table_top}
-                        {detail.rfq.finish_table_top ? ` (${detail.rfq.finish_table_top})` : ''}
-                      </dd>
-                    </div>
-                  )}
-                  {isTablesType && detail.rfq.material_table_foot && (
-                    <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Tafelpoot</dt>
-                      <dd className="mt-1 text-sm font-medium">
-                        {detail.rfq.material_table_foot}
-                        {detail.rfq.finish_table_foot ? ` (${detail.rfq.finish_table_foot})` : ''}
-                      </dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
-                    <dd className="mt-1 text-sm font-medium">{detail.rfq.shape}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Use</dt>
-                    <dd className="mt-1 text-sm font-medium">{detail.rfq.usage_environment || '-'}</dd>
-                  </div>
-                  {detail.rfq.model && (
-                    <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Model</dt>
-                      <dd className="mt-1 text-sm font-medium">{detail.rfq.model}</dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
-                    <dd className="mt-1 text-sm font-medium">{detail.rfq.customer_name || '-'}</dd>
-                  </div>
-                  {!detailsEditing && (
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">
-                      {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
-                    </dt>
-                    <dd className="mt-1 text-sm font-medium">
-                      {formatRfqDimensionsWithOptions(detail.rfq, { includeThickness: false })}
-                    </dd>
-                  </div>
-                  )}
-                  <div>
-                    <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
-                    <dd className="mt-1 text-sm font-medium">{detail.rfq.quantity}</dd>
-                  </div>
-                  {!detailsEditing && (!isRound || detail.rfq.thickness > 0 || canManageRfq) && (
-                    <div>
-                      <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
-                      <dd className="mt-1 text-sm font-medium">{detail.rfq.thickness} cm</dd>
-                    </div>
-                  )}
-                  {detailsEditing && canEditRfqDetails && (
-                    <div className="col-span-2 rounded-md border p-3 md:col-span-4">
-                      <p className="mb-3 text-xs uppercase text-muted-foreground">Edit details</p>
+                {detailsEditing && canEditRfqDetails ? (
+                  <div className="rounded-md border p-3">
+                    <div className={`grid gap-3 ${isRound ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
                       {isTablesType && (
-                        <label className="mb-3 block space-y-1 text-xs uppercase text-muted-foreground">
+                        <label className="space-y-1 text-xs uppercase text-muted-foreground sm:col-span-full">
                           <span>Model</span>
                           <Input
                             type="text"
@@ -539,98 +422,101 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                           />
                         </label>
                       )}
-                      <div className={`grid gap-3 ${isRound ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
-                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                          <span>{isRound ? 'Diameter (cm)' : 'Length (cm)'}</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={detailsForm.length}
-                            onChange={(event) =>
-                              setDetailsForm((current) => ({ ...current, length: event.target.value }))
-                            }
-                            disabled={detailsSaving}
-                          />
-                        </label>
-                        {!isRound && (
-                          <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                            <span>Width (cm)</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="any"
-                              value={detailsForm.width}
-                              onChange={(event) =>
-                                setDetailsForm((current) => ({ ...current, width: event.target.value }))
-                              }
-                              disabled={detailsSaving}
-                            />
-                          </label>
-                        )}
-                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                          <span>Height (cm)</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={detailsForm.height}
-                            onChange={(event) =>
-                              setDetailsForm((current) => ({ ...current, height: event.target.value }))
-                            }
-                            disabled={detailsSaving}
-                          />
-                        </label>
-                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                          <span>Thickness top (cm)</span>
-                          <Input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={detailsForm.thickness}
-                            onChange={(event) =>
-                              setDetailsForm((current) => ({ ...current, thickness: event.target.value }))
-                            }
-                            disabled={detailsSaving}
-                          />
-                        </label>
-                      </div>
-                      {detailsError && <p className="mt-3 text-sm text-destructive">{detailsError}</p>}
-                      {detailsResult && <p className="mt-3 text-sm text-muted-foreground">{detailsResult}</p>}
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <Button type="button" size="sm" onClick={handleDetailsSave} disabled={detailsSaving}>
-                          {detailsSaving ? 'Saving...' : 'Save details'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={cancelDetailsEdit}
+                      <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                        <span>{isRound ? 'Diameter (cm)' : 'Length (cm)'}</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={detailsForm.length}
+                          onChange={(event) =>
+                            setDetailsForm((current) => ({ ...current, length: event.target.value }))
+                          }
                           disabled={detailsSaving}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                        />
+                      </label>
+                      {!isRound && (
+                        <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                          <span>Width (cm)</span>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            value={detailsForm.width}
+                            onChange={(event) =>
+                              setDetailsForm((current) => ({ ...current, width: event.target.value }))
+                            }
+                            disabled={detailsSaving}
+                          />
+                        </label>
+                      )}
+                      <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                        <span>Height (cm)</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={detailsForm.height}
+                          onChange={(event) =>
+                            setDetailsForm((current) => ({ ...current, height: event.target.value }))
+                          }
+                          disabled={detailsSaving}
+                        />
+                      </label>
+                      <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                        <span>Thickness top (cm)</span>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="any"
+                          value={detailsForm.thickness}
+                          onChange={(event) =>
+                            setDetailsForm((current) => ({ ...current, thickness: event.target.value }))
+                          }
+                          disabled={detailsSaving}
+                        />
+                      </label>
                     </div>
-                  )}
-                </dl>
-
+                    {detailsError && <p className="mt-3 text-sm text-destructive">{detailsError}</p>}
+                    {detailsResult && <p className="mt-3 text-sm text-muted-foreground">{detailsResult}</p>}
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button type="button" size="sm" onClick={handleDetailsSave} disabled={detailsSaving}>
+                        {detailsSaving ? 'Saving...' : 'Save details'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelDetailsEdit}
+                        disabled={detailsSaving}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Open edit mode to adjust dimensions or model before sending to suppliers.</p>
+                )}
                 {!detailsEditing && detailsResult && (
                   <p className="mt-3 text-sm text-muted-foreground">{detailsResult}</p>
                 )}
                 {!detailsEditing && detailsError && (
                   <p className="mt-3 text-sm text-destructive">{detailsError}</p>
                 )}
+              </CardContent>
+            </Card>
 
-                <div className="mt-4 border-t pt-4">
-                  <h3 className="mb-2 text-xs uppercase text-muted-foreground">Notes</h3>
-                  <RfqNotesEditor
-                    key={`rfq-notes-${detail.rfq.id}`}
-                    rfqId={detail.rfq.id}
-                    initialNotes={detail.rfq.notes}
-                    disabled={detail.rfq.status === 'closed'}
-                  />
-                </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Notes</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <RfqNotesEditor
+                  key={`rfq-notes-${detail.rfq.id}`}
+                  rfqId={detail.rfq.id}
+                  initialNotes={detail.rfq.notes}
+                  disabled={detail.rfq.status === 'closed'}
+                />
               </CardContent>
             </Card>
 

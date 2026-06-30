@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation';
 import { updateRfqDetails } from '@/actions/rfq';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RfqDetailsOverview } from '@/components/rfq-details-overview';
 import { Input } from '@/components/ui/input';
 import {
-  formatRfqDimensionsWithOptions,
   isRoundShape,
-  isTableTopsProductType,
   isTablesProductType,
 } from '@/lib/rfq-format';
-import type { Rfq, UserRole } from '@/types';
+import type { Rfq, RfqInvite, Supplier, UserRole } from '@/types';
 
 interface RfqDirectDetailsCardProps {
   rfq: Rfq;
   userRole: UserRole;
+  invites?: (RfqInvite & { supplier: Supplier | null })[];
 }
 
 function parseActionError(actionError: unknown): string {
@@ -37,7 +37,7 @@ function parseActionError(actionError: unknown): string {
   return 'Could not update RFQ details';
 }
 
-export function RfqDirectDetailsCard({ rfq, userRole }: RfqDirectDetailsCardProps) {
+export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectDetailsCardProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -53,7 +53,6 @@ export function RfqDirectDetailsCard({ rfq, userRole }: RfqDirectDetailsCardProp
 
   const isRound = isRoundShape(rfq.shape);
   const isTablesType = isTablesProductType(rfq.product_type);
-  const isTableTopsType = isTableTopsProductType(rfq.product_type);
   const canManageRfq = userRole === 'admin' || userRole === 'sales';
   const canEditRfqDetails = canManageRfq && (rfq.status === 'draft' || rfq.status === 'sent_to_pricing');
 
@@ -146,158 +145,90 @@ export function RfqDirectDetailsCard({ rfq, userRole }: RfqDirectDetailsCardProp
   }, [form.height, form.length, form.model, form.thickness, form.width, isRound, isTablesType, rfq.height, rfq.id, rfq.length, rfq.model, rfq.thickness, rfq.width, router]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <CardTitle>Details</CardTitle>
-          {canEditRfqDetails && !editing && (
-            <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-              Edit
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <dl className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">Product type</dt>
-            <dd className="mt-1 text-sm font-medium">{rfq.product_type || '-'}</dd>
-          </div>
-          {!isTablesType && (
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Material</dt>
-              <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
-            </div>
-          )}
-          {isTableTopsType && (
-            <>
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Top finish</dt>
-                <dd className="mt-1 text-sm font-medium">{rfq.finish_top || '-'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Edge finish</dt>
-                <dd className="mt-1 text-sm font-medium">{rfq.finish_edge || '-'}</dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase text-muted-foreground">Color finish</dt>
-                <dd className="mt-1 text-sm font-medium">{rfq.finish_color || '-'}</dd>
-              </div>
-            </>
-          )}
-          {isTablesType && rfq.material_table_top && (
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Tafelblad</dt>
-              <dd className="mt-1 text-sm font-medium">
-                {rfq.material_table_top}
-                {rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}
-              </dd>
-            </div>
-          )}
-          {isTablesType && rfq.material_table_foot && (
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Tafelpoot</dt>
-              <dd className="mt-1 text-sm font-medium">
-                {rfq.material_table_foot}
-                {rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}
-              </dd>
-            </div>
-          )}
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">Shape</dt>
-            <dd className="mt-1 text-sm font-medium">{rfq.shape}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">Customer</dt>
-            <dd className="mt-1 text-sm font-medium">{rfq.customer_name || '-'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">
-              {isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
-            </dt>
-            <dd className="mt-1 text-sm font-medium">
-              {formatRfqDimensionsWithOptions(rfq, { includeThickness: false })}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">Quantity</dt>
-            <dd className="mt-1 text-sm font-medium">{rfq.quantity}</dd>
-          </div>
-          {(!isRound || rfq.thickness > 0 || canEditRfqDetails) && (
-            <div>
-              <dt className="text-xs uppercase text-muted-foreground">Thickness top</dt>
-              <dd className="mt-1 text-sm font-medium">{rfq.thickness} cm</dd>
-            </div>
-          )}
-        </dl>
+    <div className="space-y-4">
+      <RfqDetailsOverview rfq={rfq} invites={invites} />
 
-        {editing && canEditRfqDetails && (
-          <div className="mt-4 rounded-md border p-3">
-            <p className="mb-3 text-xs uppercase text-muted-foreground">Edit details</p>
-            <div className="grid gap-3 md:grid-cols-4">
-              {isTablesType && (
-                <label className="space-y-1 text-xs uppercase text-muted-foreground md:col-span-4">
-                  Model
-                  <Input value={form.model} onChange={(event) => updateField('model', event.target.value)} />
-                </label>
-              )}
-              <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                {isRound ? 'Diameter (cm)' : 'Length (cm)'}
-                <Input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={form.length}
-                  onChange={(event) => updateField('length', event.target.value)}
-                />
-              </label>
-              {!isRound && (
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>Edit details</CardTitle>
+            {canEditRfqDetails && !editing && (
+              <Button type="button" variant="outline" size="sm" onClick={startEdit}>
+                Edit
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {editing && canEditRfqDetails ? (
+            <div className="rounded-md border p-3">
+              <div className={`grid gap-3 ${isRound ? 'md:grid-cols-3' : 'md:grid-cols-4'}`}>
+                {isTablesType && (
+                  <label className="space-y-1 text-xs uppercase text-muted-foreground md:col-span-full">
+                    Model
+                    <Input value={form.model} onChange={(event) => updateField('model', event.target.value)} />
+                  </label>
+                )}
                 <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                  Width (cm)
+                  {isRound ? 'Diameter (cm)' : 'Length (cm)'}
                   <Input
                     type="number"
                     step="any"
                     min="0"
-                    value={form.width}
-                    onChange={(event) => updateField('width', event.target.value)}
+                    value={form.length}
+                    onChange={(event) => updateField('length', event.target.value)}
                   />
                 </label>
-              )}
-              <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                Height (cm)
-                <Input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={form.height}
-                  onChange={(event) => updateField('height', event.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                Thickness top (cm)
-                <Input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={form.thickness}
-                  onChange={(event) => updateField('thickness', event.target.value)}
-                />
-              </label>
+                {!isRound && (
+                  <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                    Width (cm)
+                    <Input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={form.width}
+                      onChange={(event) => updateField('width', event.target.value)}
+                    />
+                  </label>
+                )}
+                <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                  Height (cm)
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={form.height}
+                    onChange={(event) => updateField('height', event.target.value)}
+                  />
+                </label>
+                <label className="space-y-1 text-xs uppercase text-muted-foreground">
+                  Thickness top (cm)
+                  <Input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={form.thickness}
+                    onChange={(event) => updateField('thickness', event.target.value)}
+                  />
+                </label>
+              </div>
+              {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
+              <div className="mt-4 flex gap-2">
+                <Button type="button" size="sm" onClick={saveDetails} disabled={saving}>
+                  {saving ? 'Saving...' : 'Save changes'}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
+                  Cancel
+                </Button>
+              </div>
             </div>
-            {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
-            <div className="mt-4 flex gap-2">
-              <Button type="button" size="sm" onClick={saveDetails} disabled={saving}>
-                {saving ? 'Saving...' : 'Save changes'}
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-muted-foreground">Open edit mode to adjust dimensions or model before sending to suppliers.</p>
+          )}
 
-        {result && <p className="mt-3 text-sm text-chart-2">{result}</p>}
-      </CardContent>
-    </Card>
+          {result && <p className="mt-3 text-sm text-chart-2">{result}</p>}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

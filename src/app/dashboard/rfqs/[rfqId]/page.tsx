@@ -102,7 +102,11 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <RfqDirectDetailsCard rfq={typedRfq} userRole={user.role} />
+      <RfqDirectDetailsCard
+        rfq={typedRfq}
+        userRole={user.role}
+        invites={(invites as (RfqInvite & { supplier: Supplier | null })[]) ?? []}
+      />
 
       <Card>
         <CardHeader>

@@ -87,14 +87,7 @@ function SortableFinishOptionItem({
         <GripVertical className="h-4 w-4" />
       </button>
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          {finishOption.abbreviation && (
-            <span className="shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-xs font-semibold text-secondary-foreground">
-              {finishOption.abbreviation}
-            </span>
-          )}
-          <div className="truncate font-medium">{finishOption.name}</div>
-        </div>
+        <div className="truncate font-medium">{finishOption.name}</div>
         <div className="text-xs text-muted-foreground">Sleep om de volgorde van suggesties te bepalen</div>
       </div>
       <div className="flex items-center gap-2">
@@ -261,10 +254,10 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(320px,420px)_minmax(0,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(360px,520px)_minmax(0,1fr)]">
       <Card>
         <CardContent className="p-4">
-          <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-[minmax(0,1fr)_140px_auto_auto] md:items-end">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="finish-option-name">Name *</Label>
               <Input
@@ -286,17 +279,19 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
               />
             </div>
 
-            <Button type="submit" disabled={loading || reordering}>
-              {editingId ? <Edit className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
-              {loading ? 'Saving...' : editingId ? 'Update' : 'Add'}
-            </Button>
-
-            {editingId && (
-              <Button type="button" variant="secondary" onClick={resetForm} disabled={loading || reordering}>
-                <X className="mr-2 h-4 w-4" />
-                Cancel
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={loading || reordering}>
+                {editingId ? <Edit className="mr-2 h-4 w-4" /> : <Plus className="mr-2 h-4 w-4" />}
+                {loading ? 'Saving...' : editingId ? 'Update' : 'Add'}
               </Button>
-            )}
+
+              {editingId && (
+                <Button type="button" variant="secondary" onClick={resetForm} disabled={loading || reordering}>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+              )}
+            </div>
           </form>
         </CardContent>
       </Card>

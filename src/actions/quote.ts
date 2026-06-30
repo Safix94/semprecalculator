@@ -8,7 +8,8 @@ import {
   convertSupplierBasePriceToEur,
   normalizeQuotePriceCurrency,
 } from '@/lib/currency';
-import { sendSalesQuoteReceivedEmail } from '@/lib/mailer';
+import { sendSalesQuoteReceivedEmail, sendSupplierQuoteConfirmationEmail } from '@/lib/mailer';
+import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
 import {
   checkSupplierLinkRateLimits,
@@ -283,7 +284,7 @@ export async function submitQuote(
 
   const { data: invite, error: inviteError } = await supabase
     .from('rfq_invites')
-    .select('*, supplier:suppliers(quote_price_currency)')
+    .select('*, supplier:suppliers(name, email, additional_emails, preferred_language, quote_price_currency)')
     .eq('rfq_id', rfqId)
     .eq('token_hash', tokenHash)
     .is('revoked_at', null)
@@ -322,7 +323,30 @@ export async function submitQuote(
   // Supplier provides volume directly in m3. Do not derive pricing volume from RFQ thickness.
   const { data: rfqForPricing, error: rfqForPricingError } = await supabase
     .from('rfqs')
-    .select('created_by, status')
+    .select(`
+      created_by,
+      status,
+      product_type,
+      material,
+      material_table_top,
+      material_table_foot,
+      finish,
+      finish_top,
+      finish_edge,
+      finish_color,
+      finish_table_top,
+      finish_table_foot,
+      length,
+      width,
+      height,
+      thickness,
+      quantity,
+      shape,
+      model,
+      usage_environment,
+      notes,
+      attachments:rfq_attachments(file_name)
+    `)
     .eq('id', rfqId)
     .single();
 
@@ -548,6 +572,97 @@ export async function submitQuote(
           success: emailResult.success,
           error: emailResult.error,
           recipient: salesUser.user.email,
+        },
+      });
+    }
+  }
+
+  // Send confirmation email to supplier recipients. Do not expose internal calculated retail price or margins.
+  if (inviteSupplier?.email && inviteSupplier?.name) {
+    const supplierRecipients = getSupplierRecipientEmails({
+      email: inviteSupplier.email,
+      additional_emails: inviteSupplier.additional_emails ?? [],
+    });
+
+    try {
+      const attachments = Array.isArray(rfqForPricing.attachments) ? rfqForPricing.attachments : [];
+      const emailResult = await sendSupplierQuoteConfirmationEmail({
+        supplierEmails: supplierRecipients,
+        supplierName: inviteSupplier.name,
+        rfqId,
+        token: normalizedToken,
+        rfq: {
+          productType: rfqForPricing.product_type,
+          material: rfqForPricing.material,
+          materialTableTop: rfqForPricing.material_table_top,
+          materialTableFoot: rfqForPricing.material_table_foot,
+          shape: rfqForPricing.shape,
+          finish: rfqForPricing.finish,
+          finishTop: rfqForPricing.finish_top,
+          finishEdge: rfqForPricing.finish_edge,
+          finishColor: rfqForPricing.finish_color,
+          finishTableTop: rfqForPricing.finish_table_top,
+          finishTableFoot: rfqForPricing.finish_table_foot,
+          length: rfqForPricing.length,
+          width: rfqForPricing.width,
+          height: rfqForPricing.height,
+          thickness: rfqForPricing.thickness,
+          quantity: rfqForPricing.quantity,
+          model: rfqForPricing.model,
+          usageEnvironment: rfqForPricing.usage_environment,
+          notes: rfqForPricing.notes,
+          attachmentNames: attachments
+            .map((attachment) => attachment?.file_name)
+            .filter((fileName): fileName is string => Boolean(fileName)),
+        },
+        quote: {
+          supplierInputPrice: convertedBasePrice.supplierInputPrice,
+          supplierInputCurrency: convertedBasePrice.supplierInputCurrency,
+          volumeM3,
+          leadTimeDays,
+          comment: comment ?? null,
+          submittedAt: quote.submitted_at,
+          isUpdate: isQuoteUpdate,
+        },
+        language: inviteSupplier.preferred_language,
+      });
+
+      await logAuditEvent({
+        actorType: 'system',
+        actorId: 'mailer',
+        action: 'EMAIL_SENT',
+        entityType: 'rfq_quote',
+        entityId: quote.id,
+        metadata: {
+          emailType: 'supplier_quote_confirmation',
+          success: emailResult.success,
+          sent: emailResult.sent,
+          total: emailResult.total,
+          error: emailResult.error,
+          recipients: supplierRecipients,
+          isQuoteUpdate,
+        },
+      });
+    } catch (emailError) {
+      const message = emailError instanceof Error ? emailError.message : 'Unknown email error';
+      console.warn('Failed to send supplier quote confirmation email.', {
+        rfqId,
+        quoteId: quote.id,
+        supplierId: invite.supplier_id,
+        error: message,
+      });
+      await logAuditEvent({
+        actorType: 'system',
+        actorId: 'mailer',
+        action: 'EMAIL_SENT',
+        entityType: 'rfq_quote',
+        entityId: quote.id,
+        metadata: {
+          emailType: 'supplier_quote_confirmation',
+          success: false,
+          error: message,
+          recipients: supplierRecipients,
+          isQuoteUpdate,
         },
       });
     }

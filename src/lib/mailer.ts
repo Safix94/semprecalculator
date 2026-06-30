@@ -1,5 +1,7 @@
-import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
+import { formatSupplierInputAmount, type QuotePriceCurrency } from '@/lib/currency';
+import { getSupplierTranslations, normalizeSupplierLanguage, SUPPLIER_LANGUAGE_LOCALES, translateUsageEnvironment } from '@/lib/supplier-language';
 import { dedupeEmails, isValidEmail } from '@/lib/email-recipients';
+import { formatRfqDimensionsWithOptions } from '@/lib/rfq-format';
 import type { SupplierLanguage } from '@/lib/supplier-language';
 
 /**
@@ -272,6 +274,230 @@ export async function sendSupplierInviteEmail(params: {
     results,
     error: failedEmails.length > 0
       ? `Failed to send to ${failedEmails.length}/${supplierEmails.length} supplier email(s): ${failedEmails.join(', ')}`
+      : undefined,
+  };
+}
+
+type SupplierQuoteConfirmationCopy = {
+  quoteReceivedSubject: string;
+  quoteUpdatedSubject: string;
+  receivedTitle: string;
+  updatedTitle: string;
+  intro: string;
+  requestOverview: string;
+  submittedDetails: string;
+  viewRequest: string;
+  automaticConfirmation: string;
+};
+
+const supplierQuoteConfirmationCopy: Record<SupplierLanguage, SupplierQuoteConfirmationCopy> = {
+  en: {
+    quoteReceivedSubject: 'Quote received',
+    quoteUpdatedSubject: 'Quote updated',
+    receivedTitle: 'We have received your quote',
+    updatedTitle: 'We have received your updated quote',
+    intro: 'Thank you. We have received your price for the request below.',
+    requestOverview: 'Request overview',
+    submittedDetails: 'Your submitted details',
+    viewRequest: 'View request',
+    automaticConfirmation: 'This confirmation was sent automatically.',
+  },
+  nl: {
+    quoteReceivedSubject: 'Offerte ontvangen',
+    quoteUpdatedSubject: 'Offerte bijgewerkt',
+    receivedTitle: 'We hebben uw offerte ontvangen',
+    updatedTitle: 'We hebben uw bijgewerkte offerte ontvangen',
+    intro: 'Bedankt. We hebben uw prijs ontvangen voor onderstaande aanvraag.',
+    requestOverview: 'Overzicht aanvraag',
+    submittedDetails: 'Uw ingediende gegevens',
+    viewRequest: 'Aanvraag bekijken',
+    automaticConfirmation: 'Deze bevestiging werd automatisch verzonden.',
+  },
+  fr: {
+    quoteReceivedSubject: 'Offre reçue',
+    quoteUpdatedSubject: 'Offre mise à jour',
+    receivedTitle: 'Nous avons reçu votre offre',
+    updatedTitle: 'Nous avons reçu votre offre mise à jour',
+    intro: 'Merci. Nous avons reçu votre prix pour la demande ci-dessous.',
+    requestOverview: 'Aperçu de la demande',
+    submittedDetails: 'Vos informations soumises',
+    viewRequest: 'Voir la demande',
+    automaticConfirmation: 'Cette confirmation a été envoyée automatiquement.',
+  },
+  es: {
+    quoteReceivedSubject: 'Cotización recibida',
+    quoteUpdatedSubject: 'Cotización actualizada',
+    receivedTitle: 'Hemos recibido su cotización',
+    updatedTitle: 'Hemos recibido su cotización actualizada',
+    intro: 'Gracias. Hemos recibido su precio para la solicitud indicada abajo.',
+    requestOverview: 'Resumen de la solicitud',
+    submittedDetails: 'Sus datos enviados',
+    viewRequest: 'Ver solicitud',
+    automaticConfirmation: 'Esta confirmación se envió automáticamente.',
+  },
+  pt: {
+    quoteReceivedSubject: 'Cotação recebida',
+    quoteUpdatedSubject: 'Cotação atualizada',
+    receivedTitle: 'Recebemos a sua cotação',
+    updatedTitle: 'Recebemos a sua cotação atualizada',
+    intro: 'Obrigado. Recebemos o seu preço para o pedido abaixo.',
+    requestOverview: 'Resumo do pedido',
+    submittedDetails: 'Dados submetidos',
+    viewRequest: 'Ver pedido',
+    automaticConfirmation: 'Esta confirmação foi enviada automaticamente.',
+  },
+};
+
+function addEscapedDetailLine(lines: string[], label: string, value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === '') {
+    return;
+  }
+
+  lines.push(`<li><strong>${escapeHtml(label)}:</strong> ${escapeHtml(String(value))}</li>`);
+}
+
+function buildSupplierQuoteConfirmationTitle(params: {
+  productType?: string | null;
+  material?: string | null;
+  shape?: string | null;
+}) {
+  const detail = [cleanTitlePart(params.material), cleanTitlePart(params.shape)].filter(Boolean).join(' - ');
+  return prefixProductType(detail || 'RFQ', params.productType);
+}
+
+/**
+ * Send supplier confirmation after a quote was submitted or updated.
+ * This deliberately includes only request details and supplier-entered values.
+ * Internal retail price, margins and transport calculations are not exposed.
+ */
+export async function sendSupplierQuoteConfirmationEmail(params: {
+  supplierEmails: string[];
+  supplierName: string;
+  rfqId: string;
+  token: string;
+  rfq: {
+    productType?: string | null;
+    material: string;
+    shape: string;
+    finish?: string | null;
+    finishTop?: string | null;
+    finishEdge?: string | null;
+    finishColor?: string | null;
+    materialTableTop?: string | null;
+    materialTableFoot?: string | null;
+    finishTableTop?: string | null;
+    finishTableFoot?: string | null;
+    length: number;
+    width: number;
+    height: number;
+    thickness: number;
+    quantity: number;
+    model?: string | null;
+    usageEnvironment?: 'Indoor' | 'Outdoor' | null;
+    notes?: string | null;
+    attachmentNames?: string[];
+  };
+  quote: {
+    supplierInputPrice: number;
+    supplierInputCurrency: QuotePriceCurrency;
+    volumeM3: number;
+    leadTimeDays?: number | null;
+    comment?: string | null;
+    submittedAt: string;
+    isUpdate: boolean;
+  };
+  language?: SupplierLanguage;
+}) {
+  const language = normalizeSupplierLanguage(params.language);
+  const t = getSupplierTranslations(language);
+  const copy = supplierQuoteConfirmationCopy[language];
+  const requestLink = buildSupplierRfqLink(params.rfqId, params.token);
+  const requestTitle = buildSupplierQuoteConfirmationTitle({
+    productType: params.rfq.productType,
+    material: params.rfq.material,
+    shape: params.rfq.shape,
+  });
+  const subjectPrefix = params.quote.isUpdate ? copy.quoteUpdatedSubject : copy.quoteReceivedSubject;
+  const title = params.quote.isUpdate ? copy.updatedTitle : copy.receivedTitle;
+  const subject = `${subjectPrefix}: ${requestTitle}`;
+
+  const requestLines: string[] = [];
+  addEscapedDetailLine(requestLines, t.productType, params.rfq.productType);
+  addEscapedDetailLine(requestLines, t.material, params.rfq.material);
+  addEscapedDetailLine(requestLines, t.shape, params.rfq.shape);
+  addEscapedDetailLine(requestLines, t.finish, params.rfq.finish);
+  addEscapedDetailLine(requestLines, t.topFinish, params.rfq.finishTop);
+  addEscapedDetailLine(requestLines, t.edgeFinish, params.rfq.finishEdge);
+  addEscapedDetailLine(requestLines, t.colorFinish, params.rfq.finishColor);
+  addEscapedDetailLine(requestLines, t.tableTop, [params.rfq.materialTableTop, params.rfq.finishTableTop].filter(Boolean).join(' - '));
+  addEscapedDetailLine(requestLines, t.tableFoot, [params.rfq.materialTableFoot, params.rfq.finishTableFoot].filter(Boolean).join(' - '));
+  addEscapedDetailLine(
+    requestLines,
+    t.dimensions,
+    formatRfqDimensionsWithOptions(params.rfq, { includeThickness: true })
+  );
+  addEscapedDetailLine(requestLines, t.quantity, params.rfq.quantity);
+  addEscapedDetailLine(requestLines, t.model, params.rfq.model);
+  addEscapedDetailLine(
+    requestLines,
+    t.use,
+    translateUsageEnvironment(params.rfq.usageEnvironment, language) ?? params.rfq.usageEnvironment
+  );
+  addEscapedDetailLine(requestLines, t.notes, params.rfq.notes);
+  if (params.rfq.attachmentNames && params.rfq.attachmentNames.length > 0) {
+    addEscapedDetailLine(requestLines, t.attachments, params.rfq.attachmentNames.join(', '));
+  }
+
+  const submittedAt = new Intl.DateTimeFormat(SUPPLIER_LANGUAGE_LOCALES[language], {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(params.quote.submittedAt));
+  const quoteLines: string[] = [];
+  addEscapedDetailLine(
+    quoteLines,
+    t.basePrice,
+    formatSupplierInputAmount(params.quote.supplierInputPrice, params.quote.supplierInputCurrency)
+  );
+  addEscapedDetailLine(quoteLines, t.volumeM3, `${params.quote.volumeM3} m³`);
+  if (params.quote.leadTimeDays !== null && params.quote.leadTimeDays !== undefined) {
+    addEscapedDetailLine(quoteLines, t.leadTime, `${params.quote.leadTimeDays} ${t.days}`);
+  }
+  addEscapedDetailLine(quoteLines, t.comment, params.quote.comment);
+  addEscapedDetailLine(quoteLines, t.submittedOn, submittedAt);
+
+  const supplierEmails = dedupeEmails(params.supplierEmails).filter(isValidEmail);
+  const htmlContent = `
+      <h2>${escapeHtml(title)}</h2>
+      <p>${t.dear} ${escapeHtml(params.supplierName)},</p>
+      <p>${escapeHtml(copy.intro)}</p>
+      <h3>${escapeHtml(copy.requestOverview)}</h3>
+      <ul>${requestLines.join('')}</ul>
+      <h3>${escapeHtml(copy.submittedDetails)}</h3>
+      <ul>${quoteLines.join('')}</ul>
+      <p><a href="${requestLink}" style="${EMAIL_BUTTON_STYLE}">${escapeHtml(copy.viewRequest)}</a></p>
+      <p style="color:#666;font-size:12px;">${escapeHtml(t.linkValid)} ${escapeHtml(copy.automaticConfirmation)}</p>
+    `;
+
+  const results = await Promise.all(
+    supplierEmails.map(async (email) => ({
+      email,
+      ...(await sendEmail({
+        to: { email, name: params.supplierName },
+        subject,
+        htmlContent,
+      })),
+    }))
+  );
+
+  const sent = results.filter((result) => result.success).length;
+  const failedEmails = results.filter((result) => !result.success).map((result) => result.email);
+  return {
+    success: sent > 0,
+    sent,
+    total: supplierEmails.length,
+    results,
+    error: failedEmails.length > 0
+      ? `Failed to send supplier confirmation to ${failedEmails.length}/${supplierEmails.length} email(s): ${failedEmails.join(', ')}`
       : undefined,
   };
 }

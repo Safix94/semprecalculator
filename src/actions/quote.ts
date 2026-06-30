@@ -1,7 +1,7 @@
 'use server';
 
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { submitQuoteSchema } from '@/lib/validation';
+import { submitAutomaticQuoteSchema, submitQuoteSchema } from '@/lib/validation';
 import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
 import { calculateSupplierPricing } from '@/lib/pricing';
 import {
@@ -12,6 +12,15 @@ import { sendSalesQuoteReceivedEmail, sendSupplierQuoteConfirmationEmail } from 
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
 import {
+  SANNE_VOS_BLUESTONE_FORMULA_VERSION,
+  calculateSanneVosBluestonePricing,
+  isSanneVosBluestoneAutoPricingCandidate,
+  resolveSanneVosShapeKind,
+  resolveSanneVosSurfaceType,
+  type SanneVosBluestoneRate,
+  type SanneVosFinishFormula,
+} from '@/lib/sanne-vos-pricing';
+import {
   checkSupplierLinkRateLimits,
   getSupplierLinkRequestContext,
 } from '@/lib/rate-limit';
@@ -20,7 +29,7 @@ import type {
   SupplierLinkRequestContext,
 } from '@/lib/rate-limit';
 import { logAuditEvent } from './audit';
-import type { SubmitQuoteInput } from '@/lib/validation';
+import type { SubmitAutomaticQuoteInput, SubmitQuoteInput } from '@/lib/validation';
 import type { RfqQuote } from '@/types';
 
 const SUPPLIER_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
@@ -663,6 +672,354 @@ export async function submitQuote(
           error: message,
           recipients: supplierRecipients,
           isQuoteUpdate,
+        },
+      });
+    }
+  }
+
+  return { data: quote };
+}
+
+export async function submitAutomaticSanneVosQuote(
+  rfqId: string,
+  token: string,
+  input: SubmitAutomaticQuoteInput
+) {
+  const supabase = createServiceRoleClient();
+  const normalizedToken = token.trim();
+  const requestContext = await getSupplierLinkRequestContext();
+
+  try {
+    assertTokenHashingConfigured();
+  } catch (error) {
+    console.error('Automatic quote submission failed due to token setup:', error);
+    return { error: 'Supplier links are not configured. Please contact support.' };
+  }
+
+  if (!isValidSupplierToken(normalizedToken)) {
+    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
+      'supplier_quote_submit',
+      rfqId,
+      requestContext
+    );
+    if (rateLimitError) {
+      return { error: rateLimitError };
+    }
+
+    console.warn('Automatic quote submission blocked: malformed token.', {
+      rfqId,
+      token: maskSupplierToken(normalizedToken),
+    });
+    return { error: 'Invalid link' };
+  }
+
+  const tokenHash = hashToken(normalizedToken);
+  const rateLimitError = await enforceSupplierLinkRateLimit(
+    'supplier_quote_submit',
+    rfqId,
+    tokenHash,
+    requestContext
+  );
+  if (rateLimitError) {
+    return { error: rateLimitError };
+  }
+
+  const { data: invite, error: inviteError } = await supabase
+    .from('rfq_invites')
+    .select('*, supplier:suppliers(name, email, additional_emails, preferred_language, quote_price_currency)')
+    .eq('rfq_id', rfqId)
+    .eq('token_hash', tokenHash)
+    .is('revoked_at', null)
+    .single();
+
+  if (inviteError || !invite) {
+    const diagnostics = await getInviteLookupDiagnostics(supabase, rfqId, tokenHash);
+    console.warn('Automatic quote submission blocked: invite not found.', {
+      rfqId,
+      tokenHashPrefix: tokenHash.slice(0, 8),
+      supabaseError: inviteError?.message ?? null,
+      ...diagnostics,
+    });
+    return { error: 'Invalid or expired link' };
+  }
+
+  if (new Date(invite.expires_at) < new Date()) {
+    return { error: 'This link has expired' };
+  }
+
+  const parsed = submitAutomaticQuoteSchema.safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
+  }
+
+  const { leadTimeDays, comment } = parsed.data;
+  const { data: rfqForPricing, error: rfqForPricingError } = await supabase
+    .from('rfqs')
+    .select(`
+      created_by,
+      status,
+      product_type,
+      material,
+      material_table_top,
+      material_table_foot,
+      finish,
+      finish_top,
+      finish_edge,
+      finish_color,
+      finish_table_top,
+      finish_table_foot,
+      length,
+      width,
+      height,
+      thickness,
+      quantity,
+      shape,
+      model,
+      usage_environment,
+      notes,
+      attachments:rfq_attachments(file_name)
+    `)
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqForPricingError || !rfqForPricing) {
+    return { error: 'Request not found' };
+  }
+
+  const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
+  if (!isSanneVosBluestoneAutoPricingCandidate(inviteSupplier?.name, rfqForPricing)) {
+    return { error: 'Automatic pricing is only configured for Sanne Vos + Bluestone requests.' };
+  }
+
+  if (!rfqForPricing.finish) {
+    return { error: 'No finish selected for this Bluestone request.' };
+  }
+
+  const { data: existingQuote, error: existingQuoteError } = await supabase
+    .from('rfq_quotes')
+    .select('*')
+    .eq('rfq_id', rfqId)
+    .eq('supplier_id', invite.supplier_id)
+    .maybeSingle();
+
+  if (existingQuoteError) {
+    return { error: `Failed to check existing quote: ${existingQuoteError.message}` };
+  }
+
+  if (invite.used_at && !existingQuote) {
+    return { error: 'This quote link was already used and no editable quote was found' };
+  }
+
+  const { data: material, error: materialError } = await supabase
+    .from('materials')
+    .select('id, name')
+    .ilike('name', 'Bluestone')
+    .maybeSingle();
+
+  if (materialError || !material) {
+    return { error: 'Bluestone material configuration was not found.' };
+  }
+
+  const { data: finishOption, error: finishError } = await supabase
+    .from('finish_options')
+    .select('name, abbreviation, formula_percentage')
+    .ilike('name', rfqForPricing.finish)
+    .maybeSingle();
+
+  if (finishError || !finishOption) {
+    return { error: `Finish "${rfqForPricing.finish}" is not configured in the finish master list.` };
+  }
+
+  const shapeKind = resolveSanneVosShapeKind(rfqForPricing.shape);
+  const surfaceType = resolveSanneVosSurfaceType(finishOption.abbreviation);
+  const thicknessCm = Number(rfqForPricing.thickness);
+  const baseRateQuery = () => supabase
+    .from('supplier_special_pricing_bluestone_rates')
+    .select('shape_kind, thickness_cm, surface_type, base_price_per_m2_eur, discount_percentage, net_price_per_m2_eur, is_supported, unsupported_reason')
+    .eq('supplier_id', invite.supplier_id)
+    .eq('material_id', material.id)
+    .eq('shape_kind', shapeKind)
+    .eq('thickness_cm', thicknessCm);
+
+  let { data: rate, error: rateError } = await baseRateQuery()
+    .eq('surface_type', surfaceType)
+    .maybeSingle();
+
+  if (!rate && surfaceType === 'saw_cut') {
+    const fallback = await baseRateQuery()
+      .eq('surface_type', 'sanded')
+      .maybeSingle();
+    rate = fallback.data;
+    rateError = fallback.error;
+  }
+
+  if (rateError || !rate) {
+    return { error: `No Sanne Vos Bluestone rate found for ${shapeKind} ${thicknessCm} cm.` };
+  }
+
+  let automaticPricing;
+  try {
+    automaticPricing = calculateSanneVosBluestonePricing({
+      rfq: rfqForPricing,
+      rate: rate as SanneVosBluestoneRate,
+      finish: finishOption as SanneVosFinishFormula,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Automatic pricing could not be calculated.';
+    console.error('Automatic quote submission blocked: Sanne Vos pricing calculation failed.', {
+      rfqId,
+      supplierId: invite.supplier_id,
+      message,
+    });
+    return { error: message };
+  }
+
+  const quotePricingPayload = {
+    shipping_cost_calculated: 0,
+    transport_cost_calculated: 0,
+    product_price_after_margin: automaticPricing.productPriceAfterMargin,
+    cost_including_transport: automaticPricing.lossAdjustedBasePrice,
+    transport_adjusted_base_price: null,
+    truck_multiplier_factor: null,
+    final_price_calculated: automaticPricing.finalPriceCalculated,
+    pricing_method: 'none',
+    pricing_formula_version: SANNE_VOS_BLUESTONE_FORMULA_VERSION,
+    retail_multiplier_factor: 2.95,
+    pricing_settings_snapshot: automaticPricing.pricingSettingsSnapshot,
+    currency: 'EUR',
+    supplier_input_price: null,
+    supplier_input_currency: 'EUR',
+    supplier_input_exchange_rate_per_eur: null,
+    supplier_input_exchange_rate_idr_per_eur: null,
+    supplier_input_converted_at: null,
+  };
+
+  let quote: RfqQuote | null = null;
+  let isQuoteUpdate = false;
+
+  if (existingQuote) {
+    const { data: updatedQuote, error: updateQuoteError } = await supabase
+      .from('rfq_quotes')
+      .update({
+        base_price: automaticPricing.basePriceBeforeLoss,
+        area_m2: automaticPricing.totalAreaM2,
+        volume_m3: 0,
+        ...quotePricingPayload,
+        lead_time_days: leadTimeDays ?? null,
+        comment: comment ?? null,
+        submitted_at: new Date().toISOString(),
+      })
+      .eq('id', existingQuote.id)
+      .select()
+      .single();
+
+    if (updateQuoteError || !updatedQuote) {
+      return { error: `Failed to update quote: ${updateQuoteError?.message ?? 'Unknown error'}` };
+    }
+
+    quote = updatedQuote as RfqQuote;
+    isQuoteUpdate = true;
+  } else {
+    const { data: insertedQuote, error: quoteError } = await supabase
+      .from('rfq_quotes')
+      .insert({
+        rfq_id: rfqId,
+        supplier_id: invite.supplier_id,
+        base_price: automaticPricing.basePriceBeforeLoss,
+        area_m2: automaticPricing.totalAreaM2,
+        volume_m3: 0,
+        ...quotePricingPayload,
+        lead_time_days: leadTimeDays ?? null,
+        comment: comment ?? null,
+      })
+      .select()
+      .single();
+
+    if (quoteError || !insertedQuote) {
+      if (quoteError?.code === '23505') {
+        return { error: 'A quote has already been submitted for this request' };
+      }
+      return { error: `Failed to save quote: ${quoteError?.message ?? 'Unknown error'}` };
+    }
+
+    quote = insertedQuote as RfqQuote;
+  }
+
+  const { error: markInviteUsedError } = await supabase
+    .from('rfq_invites')
+    .update({ used_at: new Date().toISOString() })
+    .eq('id', invite.id);
+
+  if (markInviteUsedError) {
+    console.warn('Failed to mark invite as used after automatic quote submission.', {
+      rfqId,
+      inviteId: invite.id,
+      quoteId: quote.id,
+      error: markInviteUsedError.message,
+    });
+  }
+
+  if (rfqForPricing.status === 'sent_to_supplier' || rfqForPricing.status === 'supplier_replied') {
+    const { error: rfqStatusError } = await supabase
+      .from('rfqs')
+      .update({ status: 'quotes_received' })
+      .eq('id', rfqId)
+      .in('status', ['sent_to_supplier', 'supplier_replied']);
+
+    if (rfqStatusError) {
+      console.warn('Failed to update RFQ status to quotes_received after automatic quote submission.', {
+        rfqId,
+        quoteId: quote.id,
+        error: rfqStatusError.message,
+      });
+    }
+  }
+
+  await logAuditEvent({
+    actorType: 'supplier_link',
+    actorId: invite.supplier_id,
+    action: isQuoteUpdate ? 'QUOTE_UPDATED' : 'QUOTE_SUBMITTED',
+    entityType: 'rfq_quote',
+    entityId: quote.id,
+    metadata: {
+      rfqId,
+      automaticPricing: true,
+      pricingFormulaVersion: SANNE_VOS_BLUESTONE_FORMULA_VERSION,
+      areaM2: automaticPricing.totalAreaM2,
+      basePriceEur: automaticPricing.basePriceBeforeLoss,
+      lossAdjustedBasePrice: automaticPricing.lossAdjustedBasePrice,
+      productPriceAfterMargin: automaticPricing.productPriceAfterMargin,
+      finalPriceCalculated: automaticPricing.finalPriceCalculated,
+      finishMargin: automaticPricing.finishMargin,
+      finishPercentageMultiplier: automaticPricing.finishPercentageMultiplier,
+      retailMultiplierFactor: 2.95,
+    },
+    ip: requestContext.ip,
+    userAgent: requestContext.userAgent,
+  });
+
+  if (rfqForPricing.created_by) {
+    const { data: salesUser } = await supabase.auth.admin.getUserById(rfqForPricing.created_by);
+
+    if (salesUser?.user?.email && inviteSupplier?.name) {
+      const emailResult = await sendSalesQuoteReceivedEmail({
+        salesEmail: salesUser.user.email,
+        rfqId,
+        supplierName: inviteSupplier.name,
+        finalPrice: automaticPricing.finalPriceCalculated,
+      });
+
+      await logAuditEvent({
+        actorType: 'system',
+        actorId: 'mailer',
+        action: 'EMAIL_SENT',
+        entityType: 'rfq_quote',
+        entityId: quote.id,
+        metadata: {
+          success: emailResult.success,
+          error: emailResult.error,
+          recipient: salesUser.user.email,
+          automaticPricing: true,
         },
       });
     }

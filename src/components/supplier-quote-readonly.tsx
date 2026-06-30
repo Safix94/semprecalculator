@@ -12,6 +12,7 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
   const normalizedLanguage = normalizeSupplierLanguage(language);
   const t = getSupplierTranslations(normalizedLanguage);
   const volumeValue = Number(quote.volume_m3).toFixed(3);
+  const isAutomaticQuote = quote.pricing_formula_version === 'sanne_vos_bluestone_v1';
   const isConvertedQuote = Boolean(
     quote.supplier_input_currency &&
       quote.supplier_input_currency !== 'EUR' &&
@@ -38,19 +39,27 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-2 gap-4">
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">{t.basePrice}</dt>
-            <dd className="mt-1 text-sm font-medium">{submittedBasePrice}</dd>
-            {isConvertedQuote && (
-              <dd className="mt-1 text-xs text-muted-foreground">
-                Converted: €{Number(quote.base_price).toFixed(2)}
-              </dd>
-            )}
-          </div>
-          <div>
-            <dt className="text-xs uppercase text-muted-foreground">{t.volumeM3}</dt>
-            <dd className="mt-1 text-sm font-medium">{volumeValue}</dd>
-          </div>
+          {isAutomaticQuote ? (
+            <div className="col-span-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+              This quote was calculated automatically by Sempre.
+            </div>
+          ) : (
+            <>
+              <div>
+                <dt className="text-xs uppercase text-muted-foreground">{t.basePrice}</dt>
+                <dd className="mt-1 text-sm font-medium">{submittedBasePrice}</dd>
+                {isConvertedQuote && (
+                  <dd className="mt-1 text-xs text-muted-foreground">
+                    Converted: €{Number(quote.base_price).toFixed(2)}
+                  </dd>
+                )}
+              </div>
+              <div>
+                <dt className="text-xs uppercase text-muted-foreground">{t.volumeM3}</dt>
+                <dd className="mt-1 text-sm font-medium">{volumeValue}</dd>
+              </div>
+            </>
+          )}
           {quote.lead_time_days && (
             <div>
               <dt className="text-xs uppercase text-muted-foreground">{t.leadTime}</dt>

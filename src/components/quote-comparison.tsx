@@ -29,8 +29,12 @@ function getInviteStatus(invite: RfqInvite, hasQuote: boolean): { label: string;
   return { label: 'Pending', color: 'text-primary' };
 }
 
+function isAutomaticSanneVosQuote(quote: RfqQuote | undefined) {
+  return quote?.pricing_formula_version === 'sanne_vos_bluestone_v1';
+}
+
 function formatQuoteVolume(quote: RfqQuote | undefined) {
-  if (!quote) {
+  if (!quote || isAutomaticSanneVosQuote(quote)) {
     return '-';
   }
 
@@ -54,6 +58,7 @@ function formatNumber(value: number | string | null | undefined, decimals = 3) {
 }
 
 function formatPricingMethod(quote: RfqQuote | undefined) {
+  if (isAutomaticSanneVosQuote(quote)) return 'Automatic';
   if (!quote?.pricing_method) {
     return '-';
   }
@@ -67,6 +72,10 @@ function formatPricingMethod(quote: RfqQuote | undefined) {
 function formatSupplierBasePrice(quote: RfqQuote | undefined) {
   if (!quote) {
     return '-';
+  }
+
+  if (isAutomaticSanneVosQuote(quote)) {
+    return 'Automatic';
   }
 
   if (quote.supplier_input_currency && quote.supplier_input_currency !== 'EUR' && quote.supplier_input_price) {
@@ -124,11 +133,13 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                   ? quote.transport_adjusted_base_price
                   : quote?.cost_including_transport ??
                     (quote ? Number(quote.base_price) + Number(quote.shipping_cost_calculated) : null);
-                const transportDetail = quote?.pricing_method === 'truck'
-                  ? `×${formatNumber(quote.truck_multiplier_factor, 3)}`
-                  : quote
-                    ? formatCurrency(quote.transport_cost_calculated ?? quote.shipping_cost_calculated, 3)
-                    : '-';
+                const transportDetail = isAutomaticSanneVosQuote(quote)
+                  ? '-'
+                  : quote?.pricing_method === 'truck'
+                    ? `×${formatNumber(quote.truck_multiplier_factor, 3)}`
+                    : quote
+                      ? formatCurrency(quote.transport_cost_calculated ?? quote.shipping_cost_calculated, 3)
+                      : '-';
 
                 return (
                   <TableRow

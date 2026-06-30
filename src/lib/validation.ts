@@ -265,6 +265,11 @@ export const submitQuoteSchema = z.object({
   comment: z.string().max(2000).optional().nullable(),
 });
 
+export const submitAutomaticQuoteSchema = z.object({
+  leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
+  comment: z.string().max(2000).optional().nullable(),
+});
+
 export const rfqCommentBodySchema = z.string().trim().min(1, 'Message is required').max(2000, 'Message may be at most 2000 characters');
 
 export const updateRfqNotesSchema = z.object({
@@ -299,6 +304,7 @@ export type UpdateRfqInput = z.infer<typeof updateRfqSchema>;
 type UpdateRfqDetailsSchemaInput = z.infer<typeof updateRfqDetailsSchema>;
 export type UpdateRfqDetailsInput = Omit<UpdateRfqDetailsSchemaInput, 'shape'>;
 export type SubmitQuoteInput = z.infer<typeof submitQuoteSchema>;
+export type SubmitAutomaticQuoteInput = z.infer<typeof submitAutomaticQuoteSchema>;
 export type UpdateRfqNotesInput = z.infer<typeof updateRfqNotesSchema>;
 export type CreateMaterialInput = z.infer<typeof createMaterialSchema>;
 export type UpdateMaterialInput = z.infer<typeof updateMaterialSchema>;

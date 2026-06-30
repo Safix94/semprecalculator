@@ -1,6 +1,7 @@
 import { validateSupplierToken } from '@/actions/quote';
 import { listSupplierComments } from '@/actions/rfq-comments';
 import { SupplierAttachmentList } from '@/components/supplier-attachment-list';
+import { SupplierAutomaticQuoteForm } from '@/components/supplier-automatic-quote-form';
 import { SupplierCommentThread } from '@/components/supplier-comment-thread';
 import { SupplierQuoteForm } from '@/components/supplier-quote-form';
 import { SupplierQuoteReadOnly } from '@/components/supplier-quote-readonly';
@@ -11,6 +12,7 @@ import {
 } from '@/lib/rfq-format';
 import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
 import { IDR_PER_EUR_RATE, USD_PER_EUR_RATE, normalizeQuotePriceCurrency } from '@/lib/currency';
+import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -92,6 +94,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
   const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
   const canSubmitOrUpdateQuote = !invite.used_at || Boolean(existingQuote);
+  const isAutomaticSanneVosBluestoneQuote = isSanneVosBluestoneAutoPricingCandidate(supplier?.name, rfq);
   const initialBasePrice = existingQuote
     ? supplierQuoteCurrency === 'IDR'
       ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
@@ -216,6 +219,14 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
 
         {existingQuote && !canSubmitOrUpdateQuote ? (
           <SupplierQuoteReadOnly quote={existingQuote} language={language} />
+        ) : isAutomaticSanneVosBluestoneQuote ? (
+          <SupplierAutomaticQuoteForm
+            rfqId={rfqId}
+            token={supplierToken}
+            initialValues={quoteInitialValues}
+            isUpdate={Boolean(existingQuote)}
+            language={language}
+          />
         ) : (
           <SupplierQuoteForm
             rfqId={rfqId}

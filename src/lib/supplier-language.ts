@@ -108,6 +108,9 @@ export const supplierTranslations = {
     sending: 'Sending...',
     sendMessage: 'Send message',
     na: 'N/A',
+    requestClosedTitle: 'Request closed',
+    requestClosedMessage: 'This request for quotation has been closed. A summary was sent to you by email.',
+    requestClosedSubmitError: 'This request has been closed and no longer accepts quotes or messages.',
   },
   nl: {
     requestForQuotation: 'Prijsaanvraag',
@@ -178,6 +181,9 @@ export const supplierTranslations = {
     sending: 'Verzenden...',
     sendMessage: 'Bericht verzenden',
     na: 'N.v.t.',
+    requestClosedTitle: 'Aanvraag gesloten',
+    requestClosedMessage: 'Deze prijsaanvraag is afgesloten. U heeft per e-mail een overzicht ontvangen.',
+    requestClosedSubmitError: 'Deze aanvraag is afgesloten en accepteert geen offertes of berichten meer.',
   },
   fr: {
     requestForQuotation: 'Demande de prix',
@@ -248,6 +254,9 @@ export const supplierTranslations = {
     sending: 'Envoi...',
     sendMessage: 'Envoyer le message',
     na: 'N/A',
+    requestClosedTitle: 'Demande clôturée',
+    requestClosedMessage: 'Cette demande de prix a été clôturée. Un récapitulatif vous a été envoyé par e-mail.',
+    requestClosedSubmitError: 'Cette demande a été clôturée et n’accepte plus d’offres ni de messages.',
   },
   es: {
     requestForQuotation: 'Solicitud de cotización',
@@ -318,6 +327,9 @@ export const supplierTranslations = {
     sending: 'Enviando...',
     sendMessage: 'Enviar mensaje',
     na: 'N/D',
+    requestClosedTitle: 'Solicitud cerrada',
+    requestClosedMessage: 'Esta solicitud de cotización ha sido cerrada. Le hemos enviado un resumen por correo electrónico.',
+    requestClosedSubmitError: 'Esta solicitud ha sido cerrada y ya no acepta cotizaciones ni mensajes.',
   },
   pt: {
     requestForQuotation: 'Pedido de cotação',
@@ -388,6 +400,9 @@ export const supplierTranslations = {
     sending: 'A enviar...',
     sendMessage: 'Enviar mensagem',
     na: 'N/A',
+    requestClosedTitle: 'Pedido encerrado',
+    requestClosedMessage: 'Este pedido de cotação foi encerrado. Enviámos-lhe um resumo por e-mail.',
+    requestClosedSubmitError: 'Este pedido foi encerrado e já não aceita cotações nem mensagens.',
   },
 } as const;
 

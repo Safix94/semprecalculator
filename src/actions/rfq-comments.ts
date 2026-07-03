@@ -1,7 +1,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
+import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { assertTokenHashingConfigured, hashToken, isTokenHashingConfigError } from '@/lib/tokens';
 import { getPricingTeamEmailsFromEnv, sendInternalSupplierCommentEmail } from '@/lib/mailer';
 import { rfqCommentBodySchema } from '@/lib/validation';
@@ -146,6 +148,25 @@ export async function addSupplierComment(
   const invite = inviteResult.data;
   const supabase = createServiceRoleClient();
 
+  const [{ data: supplier }, { data: rfq }] = await Promise.all([
+    supabase
+      .from('suppliers')
+      .select('name, preferred_language')
+      .eq('id', invite.supplier_id)
+      .single(),
+    supabase
+      .from('rfqs')
+      .select('created_by, status')
+      .eq('id', rfqId)
+      .single(),
+  ]);
+
+  // Closed requests no longer accept messages, even while the link is valid.
+  if (rfq?.status === 'closed') {
+    const labels = getSupplierTranslations(normalizeSupplierLanguage(supplier?.preferred_language));
+    return { error: labels.requestClosedSubmitError };
+  }
+
   const { data: comment, error: commentError } = await supabase
     .from('rfq_comments')
     .insert({
@@ -161,19 +182,6 @@ export async function addSupplierComment(
   if (commentError || !comment) {
     return { error: `Could not send message: ${commentError?.message ?? 'Unknown error'}` };
   }
-
-  const [{ data: supplier }, { data: rfq }] = await Promise.all([
-    supabase
-      .from('suppliers')
-      .select('name')
-      .eq('id', invite.supplier_id)
-      .single(),
-    supabase
-      .from('rfqs')
-      .select('created_by, status')
-      .eq('id', rfqId)
-      .single(),
-  ]);
 
   if (rfq?.status === 'sent_to_supplier') {
     const { error: rfqStatusError } = await supabase
@@ -195,23 +203,27 @@ export async function addSupplierComment(
     }
   }
 
-  const recipients = new Set(getPricingTeamEmailsFromEnv());
-  if (rfq?.created_by) {
-    const { data: rfqCreator, error: creatorError } = await supabase.auth.admin.getUserById(rfq.created_by);
-    if (!creatorError && rfqCreator?.user?.email) {
-      recipients.add(rfqCreator.user.email);
+  // Internal notification doesn't affect the supplier's result — send it
+  // after the response so the message form resolves without waiting on Brevo.
+  after(async () => {
+    const recipients = new Set(getPricingTeamEmailsFromEnv());
+    if (rfq?.created_by) {
+      const { data: rfqCreator, error: creatorError } = await supabase.auth.admin.getUserById(rfq.created_by);
+      if (!creatorError && rfqCreator?.user?.email) {
+        recipients.add(rfqCreator.user.email);
+      }
     }
-  }
 
-  const recipientList = [...recipients];
-  if (recipientList.length > 0) {
-    await sendInternalSupplierCommentEmail({
-      recipients: recipientList,
-      rfqId,
-      supplierName: supplier?.name ?? 'Supplier',
-      bodyExcerpt: parsedBody.data,
-    });
-  }
+    const recipientList = [...recipients];
+    if (recipientList.length > 0) {
+      await sendInternalSupplierCommentEmail({
+        recipients: recipientList,
+        rfqId,
+        supplierName: supplier?.name ?? 'Supplier',
+        bodyExcerpt: parsedBody.data,
+      });
+    }
+  });
 
   await logAuditEvent({
     actorType: 'supplier_link',

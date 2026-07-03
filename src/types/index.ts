@@ -250,6 +250,53 @@ export interface InviteWithSupplier extends RfqInvite {
   quote?: RfqQuote | null;
 }
 
+// Supplier-facing projections: exactly what the public supplier page needs.
+// Never include internal pricing, margins, customer data or token hashes here.
+export type SupplierRfqView = Pick<
+  Rfq,
+  | 'id'
+  | 'product_type'
+  | 'material'
+  | 'material_table_top'
+  | 'material_table_foot'
+  | 'finish'
+  | 'finish_top'
+  | 'finish_edge'
+  | 'finish_color'
+  | 'finish_table_top'
+  | 'finish_table_foot'
+  | 'length'
+  | 'width'
+  | 'height'
+  | 'thickness'
+  | 'quantity'
+  | 'shape'
+  | 'model'
+  | 'usage_environment'
+  | 'notes'
+  | 'status'
+> & { attachments: RfqAttachment[] };
+
+export type SupplierQuoteView = Pick<
+  RfqQuote,
+  | 'id'
+  | 'base_price'
+  | 'volume_m3'
+  | 'lead_time_days'
+  | 'comment'
+  | 'submitted_at'
+  | 'pricing_formula_version'
+  | 'supplier_input_price'
+  | 'supplier_input_currency'
+>;
+
+export type SupplierInviteView = Pick<RfqInvite, 'id' | 'invite_part' | 'used_at'>;
+
+export type SupplierContactView = Pick<
+  Supplier,
+  'id' | 'name' | 'preferred_language' | 'quote_price_currency'
+>;
+
 export interface AuthUser {
   id: string;
   email: string;

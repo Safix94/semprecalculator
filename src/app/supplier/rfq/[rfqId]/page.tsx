@@ -78,7 +78,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const result = await validateSupplierToken(rfqId, supplierToken);
 
   if (result.error) {
-    return <SupplierMessageCard title="Access denied" message={result.error} />;
+    const errorTitle = 'errorTitle' in result && result.errorTitle ? result.errorTitle : 'Access denied';
+    return <SupplierMessageCard title={errorTitle} message={result.error} />;
   }
 
   const { rfq, supplier, invite, existingQuote } = result.data!;
@@ -93,7 +94,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const invitePart = invite.invite_part ?? 'default';
   const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
   const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
-  const canSubmitOrUpdateQuote = !invite.used_at || Boolean(existingQuote);
+  const isClosed = rfq.status === 'closed';
+  const canSubmitOrUpdateQuote = !isClosed && (!invite.used_at || Boolean(existingQuote));
   const isAutomaticSanneVosBluestoneQuote = isSanneVosBluestoneAutoPricingCandidate(supplier?.name, rfq);
   const initialBasePrice = existingQuote
     ? supplierQuoteCurrency === 'IDR'
@@ -118,6 +120,14 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   return (
     <SupplierPageShell>
       <div>
+        {isClosed && (
+          <Card className="mb-6 border-amber-500/50 bg-amber-500/10">
+            <CardContent className="pt-6">
+              <p className="font-medium">{labels.requestClosedTitle}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{labels.requestClosedSubmitError}</p>
+            </CardContent>
+          </Card>
+        )}
         <Card className="mb-6">
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
@@ -219,7 +229,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
 
         {existingQuote && !canSubmitOrUpdateQuote ? (
           <SupplierQuoteReadOnly quote={existingQuote} language={language} />
-        ) : isAutomaticSanneVosBluestoneQuote ? (
+        ) : isClosed ? null : isAutomaticSanneVosBluestoneQuote ? (
           <SupplierAutomaticQuoteForm
             rfqId={rfqId}
             token={supplierToken}
@@ -244,6 +254,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             token={supplierToken}
             initialComments={initialComments}
             language={language}
+            disabled={isClosed}
           />
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, unstable_cache, updateTag } from 'next/cache';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { getCurrentUser, requireRole } from '@/lib/auth';
 import {
@@ -91,37 +91,39 @@ async function ensureStorageBucket() {
   return { supabase, error: null as string | null };
 }
 
-async function readStoredProductTypeDetailFields(): Promise<{
-  settingsByProductTypeId: Record<string, ProductTypeDetailFieldSetting[]>;
-  error: string | null;
-}> {
-  const { supabase, error: bucketError } = await ensureStorageBucket();
-  if (bucketError) {
-    return { settingsByProductTypeId: {}, error: bucketError };
-  }
+// Read path deliberately skips ensureStorageBucket (a mutation) and is cached
+// across requests; writes bust the cache via revalidateTag below.
+const readStoredProductTypeDetailFields = unstable_cache(
+  async (): Promise<{
+    settingsByProductTypeId: Record<string, ProductTypeDetailFieldSetting[]>;
+    error: string | null;
+  }> => {
+    const supabase = createServiceRoleClient();
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .download(PRODUCT_TYPE_DETAIL_FIELDS_PATH);
 
-  const { data, error } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .download(PRODUCT_TYPE_DETAIL_FIELDS_PATH);
+    if (error) {
+      const isMissing = error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist');
+      return { settingsByProductTypeId: {}, error: isMissing ? null : error.message };
+    }
 
-  if (error) {
-    const isMissing = error.message.toLowerCase().includes('not found') || error.message.toLowerCase().includes('does not exist');
-    return { settingsByProductTypeId: {}, error: isMissing ? null : error.message };
-  }
-
-  try {
-    const parsed = JSON.parse(await data.text()) as StoredProductTypeDetailFieldsFile;
-    return {
-      settingsByProductTypeId: parsed.productTypes && typeof parsed.productTypes === 'object'
-        ? parsed.productTypes
-        : {},
-      error: null,
-    };
-  } catch (parseError) {
-    console.error('Failed to parse stored product type detail fields:', parseError);
-    return { settingsByProductTypeId: {}, error: 'Stored product type detail fields could not be parsed.' };
-  }
-}
+    try {
+      const parsed = JSON.parse(await data.text()) as StoredProductTypeDetailFieldsFile;
+      return {
+        settingsByProductTypeId: parsed.productTypes && typeof parsed.productTypes === 'object'
+          ? parsed.productTypes
+          : {},
+        error: null,
+      };
+    } catch (parseError) {
+      console.error('Failed to parse stored product type detail fields:', parseError);
+      return { settingsByProductTypeId: {}, error: 'Stored product type detail fields could not be parsed.' };
+    }
+  },
+  ['product-type-detail-fields'],
+  { revalidate: 300, tags: ['product-type-detail-fields'] }
+);
 
 async function writeStoredProductTypeDetailFields(
   settingsByProductTypeId: Record<string, ProductTypeDetailFieldSetting[]>
@@ -138,6 +140,10 @@ async function writeStoredProductTypeDetailFields(
       contentType: 'application/json',
       upsert: true,
     });
+
+  if (!error) {
+    updateTag('product-type-detail-fields');
+  }
 
   return error?.message ?? null;
 }
@@ -157,9 +163,20 @@ async function upsertStoredProductTypeDetailFields(
 }
 
 async function mergeProductTypeDetailFields(productTypes: ProductType[]): Promise<ProductType[]> {
-  const { settingsByProductTypeId, error } = await readStoredProductTypeDetailFields();
-  if (error) {
-    console.error('Failed to load stored product type detail fields:', error);
+  // Storage is only a legacy fallback for rows without database settings;
+  // skip the round-trip entirely when every row has them.
+  const needsStorageFallback = productTypes.some(
+    (productType) =>
+      !(Object.prototype.hasOwnProperty.call(productType, 'detail_fields') && productType.detail_fields)
+  );
+
+  let settingsByProductTypeId: Record<string, ProductTypeDetailFieldSetting[]> = {};
+  if (needsStorageFallback) {
+    const stored = await readStoredProductTypeDetailFields();
+    if (stored.error) {
+      console.error('Failed to load stored product type detail fields:', stored.error);
+    }
+    settingsByProductTypeId = stored.settingsByProductTypeId;
   }
 
   return productTypes.map((productType) => {

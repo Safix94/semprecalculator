@@ -15,6 +15,29 @@ import type { Rfq, RfqQuote, RfqSearchResponse, RfqSearchResult, Supplier } from
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_FETCH_ROWS = 1000;
+const SIMILAR_RFQS_CANDIDATE_LIMIT = 300;
+const NUMERIC_MATCH_TOLERANCE = 0.0001;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const RFQ_SEARCH_SELECT = `
+  *,
+  rfq_invites (
+    supplier_id,
+    invite_part,
+    supplier:suppliers (
+      id,
+      name,
+      email,
+      materials,
+      is_active,
+      created_at
+    )
+  ),
+  rfq_quotes (
+    id,
+    final_price_calculated
+  )
+`;
 
 export interface SearchRfqsInput {
   page?: number;
@@ -121,6 +144,14 @@ function buildSearchBlob(row: RfqSearchRow, supplierNames: string[]): string {
     .join(' | ');
 }
 
+// Builds a PostgREST or() expression matching `value` as a case-insensitive
+// substring in any of the given columns. Values are double-quoted so commas
+// and parentheses in user input don't break the or() syntax.
+function ilikeAnyFilter(columns: string[], value: string): string {
+  const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return columns.map((column) => `${column}.ilike."%${escaped}%"`).join(',');
+}
+
 function materialMatches(row: RfqSearchRow, materialFilter: string): boolean {
   if (!materialFilter) return true;
   return [row.material, row.material_table_top, row.material_table_foot].some((value) => textIncludes(value, materialFilter));
@@ -200,83 +231,217 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
 
   try {
     const supabase = await createClient();
-    let query = supabase
-      .from('rfqs')
-      .select(`
-        *,
-        rfq_invites (
-          supplier_id,
-          invite_part,
-          supplier:suppliers (
-            id,
-            name,
-            email,
-            materials,
-            is_active,
-            created_at
+
+    // Free-text search matches supplier names, notes and every other field via
+    // the search blob, which PostgREST can't express — keep the legacy
+    // wide-fetch path for that case only.
+    if (q) {
+      let query = supabase
+        .from('rfqs')
+        .select(RFQ_SEARCH_SELECT)
+        .order('created_at', { ascending: false })
+        .limit(MAX_FETCH_ROWS);
+
+      if (productTypeFilter) {
+        query = query.eq('product_type', productTypeFilter);
+      }
+      if (statusFilter) {
+        query = query.eq('status', statusFilter);
+      }
+      if (shapeFilter) {
+        query = query.ilike('shape', `%${shapeFilter}%`);
+      }
+      if (createdFrom) {
+        query = query.gte('created_at', `${createdFrom}T00:00:00`);
+      }
+      if (createdTo) {
+        query = query.lte('created_at', `${createdTo}T23:59:59.999`);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Failed to search RFQs:', error.message);
+        return { error: 'RFQ history could not be loaded.' };
+      }
+
+      const filteredRows = ((data ?? []) as RfqSearchRow[]).filter((row) => {
+        const result = rowToResult(row);
+        const supplierNames = result.supplierNames;
+        const supplierIds = result.supplierIds.map(normalizeLoose);
+        const supplierMatches =
+          !supplierFilter ||
+          supplierNames.some((name) => normalizeLoose(name).includes(supplierFilter)) ||
+          supplierIds.includes(supplierFilter);
+
+        if (!supplierMatches) return false;
+        if (!buildSearchBlob(row, supplierNames).includes(q)) return false;
+        if (!materialMatches(row, materialFilter)) return false;
+        if (!finishMatches(row, finishFilter)) return false;
+        if (!textIncludes(row.model, modelFilter)) return false;
+        if (!numbersMatch(row.length, lengthFilter)) return false;
+        if (!numbersMatch(row.width, widthFilter)) return false;
+        if (!numbersMatch(row.height, heightFilter)) return false;
+        if (!numbersMatch(row.thickness, thicknessFilter)) return false;
+
+        return true;
+      });
+
+      const totalCount = filteredRows.length;
+      const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+      const currentPage = Math.min(requestedPage, totalPages);
+      const start = (currentPage - 1) * pageSize;
+      const results = filteredRows.slice(start, start + pageSize).map(rowToResult);
+
+      return {
+        data: {
+          results,
+          totalCount,
+          totalPages,
+          currentPage,
+          pageSize,
+        },
+      };
+    }
+
+    // Supplier filter: resolve matching supplier ids, then restrict RFQs to
+    // those with an invite for one of them (mirrors the dashboard pattern).
+    let rfqIdFilter: string[] | null = null;
+    if (supplierFilter) {
+      const supplierLookup = supabase.from('suppliers').select('id');
+      const { data: supplierRows, error: supplierError } = UUID_PATTERN.test(supplierFilter)
+        ? await supplierLookup.eq('id', supplierFilter)
+        : await supplierLookup.ilike('name', `%${supplierFilter}%`);
+
+      if (supplierError) {
+        console.error('Failed to resolve supplier filter:', supplierError.message);
+        return { error: 'RFQ history could not be loaded.' };
+      }
+
+      const supplierIds = (supplierRows ?? []).map((row) => row.id);
+      let rfqIds: string[] = [];
+      if (supplierIds.length > 0) {
+        const { data: inviteRows, error: inviteError } = await supabase
+          .from('rfq_invites')
+          .select('rfq_id')
+          .in('supplier_id', supplierIds);
+
+        if (inviteError) {
+          console.error('Failed to resolve supplier filter invites:', inviteError.message);
+          return { error: 'RFQ history could not be loaded.' };
+        }
+
+        rfqIds = [...new Set((inviteRows ?? []).map((row) => row.rfq_id).filter(Boolean))];
+      }
+
+      if (rfqIds.length === 0) {
+        return {
+          data: { results: [], totalCount: 0, totalPages: 1, currentPage: 1, pageSize },
+        };
+      }
+
+      rfqIdFilter = rfqIds;
+    }
+
+    const buildQuery = (options?: { headCount?: boolean }) => {
+      const headCount = options?.headCount ?? false;
+      let query = supabase
+        .from('rfqs')
+        .select(headCount ? 'id' : RFQ_SEARCH_SELECT, { count: 'exact', head: headCount });
+
+      if (!headCount) {
+        query = query.order('created_at', { ascending: false });
+      }
+      if (productTypeFilter) {
+        query = query.eq('product_type', productTypeFilter);
+      }
+      if (statusFilter) {
+        query = query.eq('status', statusFilter);
+      }
+      if (shapeFilter) {
+        query = query.ilike('shape', `%${shapeFilter}%`);
+      }
+      if (modelFilter) {
+        query = query.ilike('model', `%${modelFilter}%`);
+      }
+      if (materialFilter) {
+        query = query.or(
+          ilikeAnyFilter(['material', 'material_table_top', 'material_table_foot'], materialFilter)
+        );
+      }
+      if (finishFilter) {
+        query = query.or(
+          ilikeAnyFilter(
+            ['finish', 'finish_top', 'finish_edge', 'finish_color', 'finish_table_top', 'finish_table_foot'],
+            finishFilter
           )
-        ),
-        rfq_quotes (
-          id,
-          final_price_calculated
-        )
-      `)
-      .order('created_at', { ascending: false })
-      .limit(MAX_FETCH_ROWS);
+        );
+      }
+      if (createdFrom) {
+        query = query.gte('created_at', `${createdFrom}T00:00:00`);
+      }
+      if (createdTo) {
+        query = query.lte('created_at', `${createdTo}T23:59:59.999`);
+      }
+      const numericFilters: Array<[string, number | null]> = [
+        ['length', lengthFilter],
+        ['width', widthFilter],
+        ['height', heightFilter],
+        ['thickness', thicknessFilter],
+      ];
+      for (const [column, filterValue] of numericFilters) {
+        if (filterValue !== null) {
+          query = query
+            .gt(column, filterValue - NUMERIC_MATCH_TOLERANCE)
+            .lt(column, filterValue + NUMERIC_MATCH_TOLERANCE);
+        }
+      }
+      if (rfqIdFilter) {
+        query = query.in('id', rfqIdFilter);
+      }
 
-    if (productTypeFilter) {
-      query = query.eq('product_type', productTypeFilter);
-    }
-    if (statusFilter) {
-      query = query.eq('status', statusFilter);
-    }
-    if (shapeFilter) {
-      query = query.ilike('shape', `%${shapeFilter}%`);
-    }
-    if (createdFrom) {
-      query = query.gte('created_at', `${createdFrom}T00:00:00`);
-    }
-    if (createdTo) {
-      query = query.lte('created_at', `${createdTo}T23:59:59.999`);
-    }
+      return query;
+    };
 
-    const { data, error } = await query;
-    if (error) {
-      console.error('Failed to search RFQs:', error.message);
+    const from = (requestedPage - 1) * pageSize;
+    let rows: RfqSearchRow[] = [];
+    let totalCount = 0;
+
+    const firstAttempt = await buildQuery().range(from, from + pageSize - 1);
+
+    if (firstAttempt.error && firstAttempt.error.code !== 'PGRST103') {
+      console.error('Failed to search RFQs:', firstAttempt.error.message);
       return { error: 'RFQ history could not be loaded.' };
     }
 
-    const filteredRows = ((data ?? []) as RfqSearchRow[]).filter((row) => {
-      const result = rowToResult(row);
-      const supplierNames = result.supplierNames;
-      const supplierIds = result.supplierIds.map(normalizeLoose);
-      const supplierMatches =
-        !supplierFilter ||
-        supplierNames.some((name) => normalizeLoose(name).includes(supplierFilter)) ||
-        supplierIds.includes(supplierFilter);
+    if (firstAttempt.error) {
+      // Requested page is beyond the last row — count separately, clamp below.
+      const headResult = await buildQuery({ headCount: true });
+      if (headResult.error) {
+        console.error('Failed to count RFQs:', headResult.error.message);
+        return { error: 'RFQ history could not be loaded.' };
+      }
+      totalCount = headResult.count ?? 0;
+    } else {
+      totalCount = firstAttempt.count ?? 0;
+      rows = (firstAttempt.data ?? []) as unknown as RfqSearchRow[];
+    }
 
-      if (!supplierMatches) return false;
-      if (q && !buildSearchBlob(row, supplierNames).includes(q)) return false;
-      if (!materialMatches(row, materialFilter)) return false;
-      if (!finishMatches(row, finishFilter)) return false;
-      if (!textIncludes(row.model, modelFilter)) return false;
-      if (!numbersMatch(row.length, lengthFilter)) return false;
-      if (!numbersMatch(row.width, widthFilter)) return false;
-      if (!numbersMatch(row.height, heightFilter)) return false;
-      if (!numbersMatch(row.thickness, thicknessFilter)) return false;
-
-      return true;
-    });
-
-    const totalCount = filteredRows.length;
     const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
     const currentPage = Math.min(requestedPage, totalPages);
-    const start = (currentPage - 1) * pageSize;
-    const results = filteredRows.slice(start, start + pageSize).map(rowToResult);
+
+    if (firstAttempt.error || currentPage !== requestedPage) {
+      const clampedFrom = (currentPage - 1) * pageSize;
+      const retry = await buildQuery().range(clampedFrom, clampedFrom + pageSize - 1);
+      if (retry.error) {
+        console.error('Failed to search RFQs:', retry.error.message);
+        return { error: 'RFQ history could not be loaded.' };
+      }
+      rows = (retry.data ?? []) as unknown as RfqSearchRow[];
+    }
 
     return {
       data: {
-        results,
+        results: rows.map(rowToResult),
         totalCount,
         totalPages,
         currentPage,
@@ -323,31 +488,33 @@ export async function findSimilarRfqs(
   }
 
   try {
-    const firstPage = await searchRfqs({
-      productType: input.product_type,
-      material: matchInput.materials[0] ?? null,
-      pageSize: 100,
-    });
+    // One bounded query for candidates; the scoring below narrows further.
+    const supabase = await createClient();
+    const productTypeFilter = getString(input.product_type);
+    const materialFilter = normalizeText(matchInput.materials[0] ?? null);
 
-    if ('error' in firstPage) {
-      return firstPage;
+    let query = supabase
+      .from('rfqs')
+      .select(RFQ_SEARCH_SELECT)
+      .order('created_at', { ascending: false })
+      .limit(SIMILAR_RFQS_CANDIDATE_LIMIT);
+
+    if (productTypeFilter) {
+      query = query.eq('product_type', productTypeFilter);
+    }
+    if (materialFilter) {
+      query = query.or(
+        ilikeAnyFilter(['material', 'material_table_top', 'material_table_foot'], materialFilter)
+      );
     }
 
-    const allResults = [...firstPage.data.results];
-    for (let page = 2; page <= firstPage.data.totalPages; page += 1) {
-      const nextPage = await searchRfqs({
-        productType: input.product_type,
-        material: matchInput.materials[0] ?? null,
-        page,
-        pageSize: 100,
-      });
-
-      if ('error' in nextPage) {
-        return nextPage;
-      }
-
-      allResults.push(...nextPage.data.results);
+    const { data, error } = await query;
+    if (error) {
+      console.error('Failed to find similar RFQs:', error.message);
+      return { error: 'Duplicate check could not be completed.' };
     }
+
+    const allResults = ((data ?? []) as unknown as RfqSearchRow[]).map(rowToResult);
 
     const exact: RfqDuplicateMatch[] = [];
     const similar: RfqDuplicateMatch[] = [];

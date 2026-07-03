@@ -1,5 +1,6 @@
 import { requireAuth } from '@/lib/auth';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getUserEmailMap } from '@/lib/user-directory';
 import { DashboardRfqTable, type DashboardRfqInvite } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -206,18 +207,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }
 
       try {
-        const serviceClient = createServiceRoleClient();
-        await Promise.all(
-          creatorIds.map(async (creatorId) => {
-            const { data, error } = await serviceClient.auth.admin.getUserById(creatorId);
-            if (error) {
-              return;
-            }
-            if (data.user?.email) {
-              creatorEmailById[creatorId] = data.user.email;
-            }
-          })
-        );
+        const emailMap = await getUserEmailMap();
+        creatorIds.forEach((creatorId) => {
+          const email = emailMap.get(creatorId);
+          if (email) {
+            creatorEmailById[creatorId] = email;
+          }
+        });
       } catch (error) {
         console.error('Failed to resolve RFQ creator emails:', error);
       }

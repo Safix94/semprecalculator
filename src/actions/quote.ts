@@ -3,13 +3,14 @@
 import { after } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
+import { resolveSupplierInviteByToken } from '@/lib/supplier-invite';
 import { submitAutomaticQuoteSchema, submitQuoteSchema } from '@/lib/validation';
-import { assertTokenHashingConfigured, hashToken } from '@/lib/tokens';
 import { calculateSupplierPricing } from '@/lib/pricing';
 import {
   convertSupplierBasePriceToEur,
   normalizeQuotePriceCurrency,
 } from '@/lib/currency';
+import { getFxRates } from '@/lib/fx-rates';
 import { sendSalesQuoteReceivedEmail, sendSupplierQuoteConfirmationEmail } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
@@ -22,14 +23,6 @@ import {
   type SanneVosBluestoneRate,
   type SanneVosFinishFormula,
 } from '@/lib/sanne-vos-pricing';
-import {
-  checkSupplierLinkRateLimits,
-  getSupplierLinkRequestContext,
-} from '@/lib/rate-limit';
-import type {
-  SupplierLinkRateLimitAction,
-  SupplierLinkRequestContext,
-} from '@/lib/rate-limit';
 import { logAuditEvent } from './audit';
 import type { SubmitAutomaticQuoteInput, SubmitQuoteInput } from '@/lib/validation';
 import type {
@@ -40,8 +33,6 @@ import type {
   SupplierRfqView,
 } from '@/types';
 
-const SUPPLIER_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
-
 // Supplier-safe projections: never select internal pricing, margins,
 // customer data or token hashes into supplier-facing responses.
 const SUPPLIER_RFQ_COLUMNS =
@@ -50,172 +41,40 @@ const SUPPLIER_ATTACHMENT_COLUMNS = 'id, rfq_id, storage_path, file_name, mime_t
 const SUPPLIER_QUOTE_COLUMNS =
   'id, base_price, volume_m3, lead_time_days, comment, submitted_at, pricing_formula_version, supplier_input_price, supplier_input_currency';
 
-function maskSupplierToken(token: string): string {
-  if (token.length < 12) {
-    return `len=${token.length}`;
-  }
-  return `${token.slice(0, 6)}...${token.slice(-4)} (len=${token.length})`;
-}
-
-function isValidSupplierToken(token: string): boolean {
-  return SUPPLIER_TOKEN_REGEX.test(token);
-}
-
-async function enforceSupplierLinkRateLimit(
-  action: SupplierLinkRateLimitAction,
-  rfqId: string,
-  tokenHash: string,
-  requestContext: SupplierLinkRequestContext
-): Promise<string | null> {
-  const result = await checkSupplierLinkRateLimits({
-    action,
-    requestContext,
-    scopes: [
-      { name: 'ip', parts: [rfqId, requestContext.ipHash] },
-      { name: 'token', parts: [rfqId, tokenHash] },
-    ],
-  });
-
-  return result.allowed ? null : result.error;
-}
-
-async function enforceMalformedSupplierLinkRateLimit(
-  action: SupplierLinkRateLimitAction,
-  rfqId: string,
-  requestContext: SupplierLinkRequestContext
-): Promise<string | null> {
-  const result = await checkSupplierLinkRateLimits({
-    action,
-    requestContext,
-    scopes: [{ name: 'ip-malformed', parts: [rfqId, requestContext.ipHash] }],
-  });
-
-  return result.allowed ? null : result.error;
-}
-
-async function getInviteLookupDiagnostics(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  rfqId: string,
-  tokenHash: string
-) {
-  const [{ count: activeInviteCount }, { count: revokedInviteCount }, { count: tokenHashMatchCount }] =
-    await Promise.all([
-      supabase
-        .from('rfq_invites')
-        .select('id', { count: 'exact', head: true })
-        .eq('rfq_id', rfqId)
-        .is('revoked_at', null),
-      supabase
-        .from('rfq_invites')
-        .select('id', { count: 'exact', head: true })
-        .eq('rfq_id', rfqId)
-        .not('revoked_at', 'is', null),
-      supabase
-        .from('rfq_invites')
-        .select('id', { count: 'exact', head: true })
-        .eq('token_hash', tokenHash)
-        .is('revoked_at', null),
-    ]);
-
-  return {
-    activeInviteCount: activeInviteCount ?? 0,
-    revokedInviteCount: revokedInviteCount ?? 0,
-    tokenHashMatchCount: tokenHashMatchCount ?? 0,
-  };
-}
-
 /**
  * Validate a supplier token and return the invite + RFQ data.
  * Uses service role because suppliers have no Supabase Auth session.
  */
 export async function validateSupplierToken(rfqId: string, token: string) {
   const supabase = createServiceRoleClient();
-  const normalizedToken = token.trim();
-  const requestContext = await getSupplierLinkRequestContext();
 
-  try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    console.error('Supplier token validation failed due to token setup:', error);
-    return { error: 'Supplier links are not configured. Please contact support.' };
-  }
+  const resolved = await resolveSupplierInviteByToken({
+    rfqId,
+    token,
+    action: 'supplier_token_validate',
+    supplierColumns: 'id, name, preferred_language, quote_price_currency',
+    distinguishRevoked: true,
+    logPrefix: 'Supplier token validation failed',
+  });
 
-  if (!isValidSupplierToken(normalizedToken)) {
-    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
-      'supplier_token_validate',
-      rfqId,
-      requestContext
-    );
-    if (rateLimitError) {
-      return { error: rateLimitError };
+  if ('error' in resolved) {
+    if (resolved.reason === 'revoked') {
+      // Revoked means the request was closed — show that instead of a
+      // generic invalid-link error, in the supplier's language.
+      const revokedSupplier = (Array.isArray(resolved.revokedInvite?.supplier)
+        ? resolved.revokedInvite?.supplier[0]
+        : resolved.revokedInvite?.supplier) as SupplierContactView | null;
+      const labels = getSupplierTranslations(normalizeSupplierLanguage(revokedSupplier?.preferred_language));
+      return { error: labels.requestClosedMessage, errorTitle: labels.requestClosedTitle };
     }
 
-    console.warn('Supplier token validation failed: malformed token.', {
-      rfqId,
-      token: maskSupplierToken(normalizedToken),
-    });
-    return { error: 'Invalid link' };
+    return { error: resolved.error };
   }
 
-  const tokenHash = hashToken(normalizedToken);
-  const rateLimitError = await enforceSupplierLinkRateLimit(
-    'supplier_token_validate',
-    rfqId,
-    tokenHash,
-    requestContext
-  );
-  if (rateLimitError) {
-    return { error: rateLimitError };
-  }
-
-  // Find invite by token hash and rfq. Revoked invites are matched too so we
-  // can show a "request closed" message instead of a generic invalid link.
-  const { data: invite, error } = await supabase
-    .from('rfq_invites')
-    .select(
-      'id, supplier_id, invite_part, expires_at, used_at, revoked_at, supplier:suppliers(id, name, preferred_language, quote_price_currency)'
-    )
-    .eq('rfq_id', rfqId)
-    .eq('token_hash', tokenHash)
-    .single();
-
-  if (error || !invite) {
-    const diagnostics = await getInviteLookupDiagnostics(supabase, rfqId, tokenHash);
-    console.warn('Supplier token validation failed: invite not found.', {
-      rfqId,
-      tokenHashPrefix: tokenHash.slice(0, 8),
-      supabaseError: error?.message ?? null,
-      ...diagnostics,
-    });
-    return { error: 'Invalid or expired link' };
-  }
-
+  const { invite, requestContext } = resolved;
   const supplier = (Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier) as
     | SupplierContactView
     | null;
-
-  if (invite.revoked_at) {
-    const labels = getSupplierTranslations(normalizeSupplierLanguage(supplier?.preferred_language));
-    console.info('Supplier token validation: invite revoked (request closed).', {
-      rfqId,
-      inviteId: invite.id,
-      supplierId: invite.supplier_id,
-      revokedAt: invite.revoked_at,
-    });
-    return { error: labels.requestClosedMessage, errorTitle: labels.requestClosedTitle };
-  }
-
-  // Check expiry
-  if (new Date(invite.expires_at) < new Date()) {
-    console.info('Supplier token validation failed: invite expired.', {
-      rfqId,
-      inviteId: invite.id,
-      supplierId: invite.supplier_id,
-      expiresAt: invite.expires_at,
-      now: new Date().toISOString(),
-    });
-    return { error: 'This link has expired' };
-  }
 
   // RFQ and existing quote only depend on the invite — fetch them in parallel.
   const [{ data: rfq, error: rfqError }, { data: existingQuote }] = await Promise.all([
@@ -288,73 +147,20 @@ export async function submitQuote(
 ) {
   const supabase = createServiceRoleClient();
   const normalizedToken = token.trim();
-  const requestContext = await getSupplierLinkRequestContext();
 
-  try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    console.error('Quote submission failed due to token setup:', error);
-    return { error: 'Supplier links are not configured. Please contact support.' };
-  }
-
-  if (!isValidSupplierToken(normalizedToken)) {
-    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
-      'supplier_quote_submit',
-      rfqId,
-      requestContext
-    );
-    if (rateLimitError) {
-      return { error: rateLimitError };
-    }
-
-    console.warn('Quote submission blocked: malformed token.', {
-      rfqId,
-      token: maskSupplierToken(normalizedToken),
-    });
-    return { error: 'Invalid link' };
-  }
-
-  // Validate token first
-  const tokenHash = hashToken(normalizedToken);
-  const rateLimitError = await enforceSupplierLinkRateLimit(
-    'supplier_quote_submit',
+  const resolved = await resolveSupplierInviteByToken({
     rfqId,
-    tokenHash,
-    requestContext
-  );
-  if (rateLimitError) {
-    return { error: rateLimitError };
+    token,
+    action: 'supplier_quote_submit',
+    supplierColumns: 'name, email, additional_emails, preferred_language, quote_price_currency',
+    logPrefix: 'Quote submission blocked',
+  });
+
+  if ('error' in resolved) {
+    return { error: resolved.error };
   }
 
-  const { data: invite, error: inviteError } = await supabase
-    .from('rfq_invites')
-    .select('*, supplier:suppliers(name, email, additional_emails, preferred_language, quote_price_currency)')
-    .eq('rfq_id', rfqId)
-    .eq('token_hash', tokenHash)
-    .is('revoked_at', null)
-    .single();
-
-  if (inviteError || !invite) {
-    const diagnostics = await getInviteLookupDiagnostics(supabase, rfqId, tokenHash);
-    console.warn('Quote submission blocked: invite not found.', {
-      rfqId,
-      tokenHashPrefix: tokenHash.slice(0, 8),
-      supabaseError: inviteError?.message ?? null,
-      ...diagnostics,
-    });
-    return { error: 'Invalid or expired link' };
-  }
-
-  if (new Date(invite.expires_at) < new Date()) {
-    console.info('Quote submission blocked: invite expired.', {
-      rfqId,
-      inviteId: invite.id,
-      supplierId: invite.supplier_id,
-      expiresAt: invite.expires_at,
-      now: new Date().toISOString(),
-    });
-    return { error: 'This link has expired' };
-  }
+  const { invite, requestContext } = resolved;
 
   // Validate input
   const parsed = submitQuoteSchema.safeParse(input);
@@ -410,7 +216,8 @@ export async function submitQuote(
   const quotePriceCurrency = normalizeQuotePriceCurrency(inviteSupplier?.quote_price_currency);
   let convertedBasePrice;
   try {
-    convertedBasePrice = convertSupplierBasePriceToEur(basePrice, quotePriceCurrency);
+    const fxRates = await getFxRates();
+    convertedBasePrice = convertSupplierBasePriceToEur(basePrice, quotePriceCurrency, fxRates);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Supplier base price could not be converted.';
     return { error: message };
@@ -735,66 +542,20 @@ export async function submitAutomaticSanneVosQuote(
   input: SubmitAutomaticQuoteInput
 ) {
   const supabase = createServiceRoleClient();
-  const normalizedToken = token.trim();
-  const requestContext = await getSupplierLinkRequestContext();
 
-  try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    console.error('Automatic quote submission failed due to token setup:', error);
-    return { error: 'Supplier links are not configured. Please contact support.' };
-  }
-
-  if (!isValidSupplierToken(normalizedToken)) {
-    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
-      'supplier_quote_submit',
-      rfqId,
-      requestContext
-    );
-    if (rateLimitError) {
-      return { error: rateLimitError };
-    }
-
-    console.warn('Automatic quote submission blocked: malformed token.', {
-      rfqId,
-      token: maskSupplierToken(normalizedToken),
-    });
-    return { error: 'Invalid link' };
-  }
-
-  const tokenHash = hashToken(normalizedToken);
-  const rateLimitError = await enforceSupplierLinkRateLimit(
-    'supplier_quote_submit',
+  const resolved = await resolveSupplierInviteByToken({
     rfqId,
-    tokenHash,
-    requestContext
-  );
-  if (rateLimitError) {
-    return { error: rateLimitError };
+    token,
+    action: 'supplier_quote_submit',
+    supplierColumns: 'name, email, additional_emails, preferred_language, quote_price_currency',
+    logPrefix: 'Automatic quote submission blocked',
+  });
+
+  if ('error' in resolved) {
+    return { error: resolved.error };
   }
 
-  const { data: invite, error: inviteError } = await supabase
-    .from('rfq_invites')
-    .select('*, supplier:suppliers(name, email, additional_emails, preferred_language, quote_price_currency)')
-    .eq('rfq_id', rfqId)
-    .eq('token_hash', tokenHash)
-    .is('revoked_at', null)
-    .single();
-
-  if (inviteError || !invite) {
-    const diagnostics = await getInviteLookupDiagnostics(supabase, rfqId, tokenHash);
-    console.warn('Automatic quote submission blocked: invite not found.', {
-      rfqId,
-      tokenHashPrefix: tokenHash.slice(0, 8),
-      supabaseError: inviteError?.message ?? null,
-      ...diagnostics,
-    });
-    return { error: 'Invalid or expired link' };
-  }
-
-  if (new Date(invite.expires_at) < new Date()) {
-    return { error: 'This link has expired' };
-  }
+  const { invite, requestContext } = resolved;
 
   const parsed = submitAutomaticQuoteSchema.safeParse(input);
   if (!parsed.success) {
@@ -1098,60 +859,18 @@ export async function submitAutomaticSanneVosQuote(
  */
 export async function getAttachmentUrl(rfqId: string, token: string, storagePath: string) {
   const supabase = createServiceRoleClient();
-  const normalizedToken = token.trim();
-  const requestContext = await getSupplierLinkRequestContext();
 
-  try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    console.error('Attachment access failed due to token setup:', error);
-    return { error: 'Supplier links are not configured. Please contact support.' };
-  }
-
-  if (!isValidSupplierToken(normalizedToken)) {
-    const rateLimitError = await enforceMalformedSupplierLinkRateLimit(
-      'supplier_attachment_url',
-      rfqId,
-      requestContext
-    );
-    if (rateLimitError) {
-      return { error: rateLimitError };
-    }
-
-    console.warn('Attachment access blocked: malformed token.', {
-      rfqId,
-      token: maskSupplierToken(normalizedToken),
-      storagePath,
-    });
-    return { error: 'Access denied' };
-  }
-
-  const tokenHash = hashToken(normalizedToken);
-  const rateLimitError = await enforceSupplierLinkRateLimit(
-    'supplier_attachment_url',
+  const resolved = await resolveSupplierInviteByToken({
     rfqId,
-    tokenHash,
-    requestContext
-  );
-  if (rateLimitError) {
-    return { error: rateLimitError };
-  }
+    token,
+    action: 'supplier_attachment_url',
+    invalidMessage: 'Access denied',
+    notFoundMessage: 'Access denied',
+    logPrefix: 'Attachment access blocked',
+  });
 
-  // Validate token
-  const { data: invite } = await supabase
-    .from('rfq_invites')
-    .select('id, supplier_id, expires_at')
-    .eq('rfq_id', rfqId)
-    .eq('token_hash', tokenHash)
-    .is('revoked_at', null)
-    .single();
-
-  if (!invite) {
-    return { error: 'Access denied' };
-  }
-
-  if (new Date(invite.expires_at) < new Date()) {
-    return { error: 'This link has expired' };
+  if ('error' in resolved) {
+    return { error: resolved.error };
   }
 
   // Verify attachment belongs to this RFQ

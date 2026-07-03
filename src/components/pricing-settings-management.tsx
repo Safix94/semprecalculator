@@ -18,6 +18,8 @@ type FormState = {
   containerVolumeM3: string;
   productMarginFactor: string;
   shippingMarginFactor: string;
+  usdPerEurRate: string;
+  idrPerEurRate: string;
 };
 
 function toFormState(settings: PricingSettingsWithMeta): FormState {
@@ -26,6 +28,8 @@ function toFormState(settings: PricingSettingsWithMeta): FormState {
     containerVolumeM3: String(settings.containerVolumeM3),
     productMarginFactor: String(settings.productMarginFactor),
     shippingMarginFactor: String(settings.shippingMarginFactor),
+    usdPerEurRate: String(settings.usdPerEurRate),
+    idrPerEurRate: String(settings.idrPerEurRate),
   };
 }
 
@@ -90,6 +94,8 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
       containerVolumeM3: parsePositiveNumber(formData.containerVolumeM3),
       productMarginFactor: parsePositiveNumber(formData.productMarginFactor),
       shippingMarginFactor: parsePositiveNumber(formData.shippingMarginFactor),
+      usdPerEurRate: parsePositiveNumber(formData.usdPerEurRate),
+      idrPerEurRate: parsePositiveNumber(formData.idrPerEurRate),
     };
 
     const result = await updatePricingSettings(input);
@@ -172,6 +178,36 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
                   placeholder="2.4"
                   required
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="usd-per-eur">USD per 1 EUR</Label>
+                <Input
+                  id="usd-per-eur"
+                  inputMode="decimal"
+                  value={formData.usdPerEurRate}
+                  onChange={(event) => updateField('usdPerEurRate', event.target.value)}
+                  placeholder="1.1401"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used to convert USD supplier quotes to EUR.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="idr-per-eur">IDR per 1 EUR</Label>
+                <Input
+                  id="idr-per-eur"
+                  inputMode="decimal"
+                  value={formData.idrPerEurRate}
+                  onChange={(event) => updateField('idrPerEurRate', event.target.value)}
+                  placeholder="20361.16"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Used to convert IDR (Rp) supplier quotes to EUR.
+                </p>
               </div>
             </div>
 

@@ -24,6 +24,7 @@ import {
   sendSupplierRfqClosedEmail,
 } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
+import { INVITE_EXPIRATION_MS } from '@/lib/supplier-invite';
 import {
   formatRfqDimensionsWithOptions,
   isTableTopsProductType,
@@ -35,7 +36,6 @@ import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
-const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type InvitePart = 'default' | 'table_top' | 'table_foot' | 'table_both';

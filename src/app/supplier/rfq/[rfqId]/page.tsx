@@ -11,7 +11,8 @@ import {
   isTableTopsProductType,
 } from '@/lib/rfq-format';
 import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
-import { IDR_PER_EUR_RATE, USD_PER_EUR_RATE, normalizeQuotePriceCurrency } from '@/lib/currency';
+import { normalizeQuotePriceCurrency } from '@/lib/currency';
+import { getFxRates } from '@/lib/fx-rates';
 import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
@@ -86,7 +87,10 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const language = normalizeSupplierLanguage(supplier?.preferred_language);
   const supplierQuoteCurrency = normalizeQuotePriceCurrency(supplier?.quote_price_currency);
   const labels = getSupplierTranslations(language);
-  const commentResult = await listSupplierComments(rfqId, supplierToken);
+  const [commentResult, fxRates] = await Promise.all([
+    listSupplierComments(rfqId, supplierToken),
+    getFxRates(),
+  ]);
   const initialComments = 'data' in commentResult ? commentResult.data : [];
   const isRound = isRoundShape(rfq.shape);
   const isTablesType = rfq.product_type?.trim().toLowerCase() === 'tables';
@@ -101,11 +105,11 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
     ? supplierQuoteCurrency === 'IDR'
       ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
         ? Number(existingQuote.supplier_input_price)
-        : Math.round(Number(existingQuote.base_price) * IDR_PER_EUR_RATE)
+        : Math.round(Number(existingQuote.base_price) * fxRates.idrPerEur)
       : supplierQuoteCurrency === 'USD'
         ? existingQuote.supplier_input_currency === 'USD' && existingQuote.supplier_input_price
           ? Number(existingQuote.supplier_input_price)
-          : Math.round(Number(existingQuote.base_price) * USD_PER_EUR_RATE * 100) / 100
+          : Math.round(Number(existingQuote.base_price) * fxRates.usdPerEur * 100) / 100
         : Number(existingQuote.base_price)
     : null;
   const quoteInitialValues = existingQuote
@@ -245,6 +249,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             isUpdate={Boolean(existingQuote)}
             language={language}
             quotePriceCurrency={supplierQuoteCurrency}
+            usdPerEurRate={fxRates.usdPerEur}
+            idrPerEurRate={fxRates.idrPerEur}
           />
         )}
 

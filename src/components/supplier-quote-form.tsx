@@ -24,6 +24,9 @@ interface SupplierQuoteFormProps {
   isUpdate?: boolean;
   language: SupplierLanguage;
   quotePriceCurrency: QuotePriceCurrency;
+  /** Current admin-configured rates; fall back to the pinned defaults. */
+  usdPerEurRate?: number;
+  idrPerEurRate?: number;
 }
 
 export function SupplierQuoteForm({
@@ -33,13 +36,15 @@ export function SupplierQuoteForm({
   isUpdate = false,
   language,
   quotePriceCurrency,
+  usdPerEurRate = USD_PER_EUR_RATE,
+  idrPerEurRate = IDR_PER_EUR_RATE,
 }: SupplierQuoteFormProps) {
   const t = getSupplierTranslations(normalizeSupplierLanguage(language));
-  const idrRateLabel = IDR_PER_EUR_RATE.toLocaleString('nl-BE', {
+  const idrRateLabel = idrPerEurRate.toLocaleString('nl-BE', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  const usdRateLabel = USD_PER_EUR_RATE.toLocaleString('nl-BE', {
+  const usdRateLabel = usdPerEurRate.toLocaleString('nl-BE', {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4,
   });

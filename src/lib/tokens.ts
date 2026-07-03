@@ -29,21 +29,8 @@ export function generateToken(): string {
 /**
  * Hash a token using HMAC SHA-256 with a server secret.
  * Only the hash is stored in the database; the plaintext token is sent to the supplier.
+ * Validation happens via an indexed equality lookup on this hash.
  */
 export function hashToken(token: string): string {
   return createHmac('sha256', getTokenSecret()).update(token).digest('hex');
-}
-
-/**
- * Verify a token by comparing its hash to the stored hash.
- */
-export function verifyToken(token: string, storedHash: string): boolean {
-  const computedHash = hashToken(token);
-  // Constant-time comparison to prevent timing attacks
-  if (computedHash.length !== storedHash.length) return false;
-  let result = 0;
-  for (let i = 0; i < computedHash.length; i++) {
-    result |= computedHash.charCodeAt(i) ^ storedHash.charCodeAt(i);
-  }
-  return result === 0;
 }

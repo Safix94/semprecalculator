@@ -4,28 +4,20 @@ import { revalidatePath } from 'next/cache';
 import { after } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
-import { assertTokenHashingConfigured, hashToken, isTokenHashingConfigError } from '@/lib/tokens';
+import { resolveSupplierInviteByToken } from '@/lib/supplier-invite';
 import { getPricingTeamEmailsFromEnv, sendInternalSupplierCommentEmail } from '@/lib/mailer';
 import { rfqCommentBodySchema } from '@/lib/validation';
 import { logAuditEvent } from '@/actions/audit';
-import {
-  checkSupplierLinkRateLimits,
-  getSupplierLinkRequestContext,
-} from '@/lib/rate-limit';
+import { getSupplierLinkRequestContext } from '@/lib/rate-limit';
 import type { SupplierLinkRequestContext } from '@/lib/rate-limit';
 import type { RfqComment } from '@/types';
 
-const SUPPLIER_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
 type ActionError = { error: string };
 
 interface SupplierInviteAccess {
   id: string;
   supplier_id: string;
   expires_at: string;
-}
-
-function isValidSupplierToken(token: string): boolean {
-  return SUPPLIER_TOKEN_REGEX.test(token);
 }
 
 async function resolveSupplierInvite(
@@ -36,70 +28,26 @@ async function resolveSupplierInvite(
     requestContext?: SupplierLinkRequestContext;
   }
 ): Promise<{ data: SupplierInviteAccess } | ActionError> {
-  const supabase = createServiceRoleClient();
-  const normalizedToken = token.trim();
+  const resolved = await resolveSupplierInviteByToken({
+    rfqId,
+    token,
+    action: 'supplier_comment_add',
+    rateLimit: options?.rateLimitCommentSubmit ?? false,
+    requestContext: options?.requestContext,
+    logPrefix: 'Supplier comment access blocked',
+  });
 
-  try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    if (isTokenHashingConfigError(error)) {
-      return { error: 'Supplier links are not configured. Please contact support.' };
-    }
-    return { error: 'Supplier link configuration is invalid.' };
+  if ('error' in resolved) {
+    return { error: resolved.error };
   }
 
-  if (!isValidSupplierToken(normalizedToken)) {
-    if (options?.rateLimitCommentSubmit) {
-      const requestContext = options.requestContext ?? await getSupplierLinkRequestContext();
-      const rateLimitResult = await checkSupplierLinkRateLimits({
-        action: 'supplier_comment_add',
-        requestContext,
-        scopes: [{ name: 'ip-malformed', parts: [rfqId, requestContext.ipHash] }],
-      });
-
-      if (!rateLimitResult.allowed) {
-        return { error: rateLimitResult.error };
-      }
-    }
-
-    return { error: 'Invalid link' };
-  }
-
-  const tokenHash = hashToken(normalizedToken);
-
-  if (options?.rateLimitCommentSubmit) {
-    const requestContext = options.requestContext ?? await getSupplierLinkRequestContext();
-    const rateLimitResult = await checkSupplierLinkRateLimits({
-      action: 'supplier_comment_add',
-      requestContext,
-      scopes: [
-        { name: 'ip', parts: [rfqId, requestContext.ipHash] },
-        { name: 'token', parts: [rfqId, tokenHash] },
-      ],
-    });
-
-    if (!rateLimitResult.allowed) {
-      return { error: rateLimitResult.error };
-    }
-  }
-
-  const { data: invite, error: inviteError } = await supabase
-    .from('rfq_invites')
-    .select('id, supplier_id, expires_at')
-    .eq('rfq_id', rfqId)
-    .eq('token_hash', tokenHash)
-    .is('revoked_at', null)
-    .single();
-
-  if (inviteError || !invite) {
-    return { error: 'Invalid or expired link' };
-  }
-
-  if (new Date(invite.expires_at) < new Date()) {
-    return { error: 'This link has expired' };
-  }
-
-  return { data: invite as SupplierInviteAccess };
+  return {
+    data: {
+      id: resolved.invite.id,
+      supplier_id: resolved.invite.supplier_id,
+      expires_at: resolved.invite.expires_at,
+    },
+  };
 }
 
 export async function listSupplierComments(

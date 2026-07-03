@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FileText, Search, ScrollText, Settings } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
-import { RfqCreateWizard } from '@/components/rfq-create-wizard';
+import { RfqCreateWizardLazy } from '@/components/rfq-create-wizard-lazy';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import {
@@ -128,9 +128,9 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
               <span className="hidden text-sm text-muted-foreground md:inline">
                 {user.email} ({user.role})
               </span>
-              <RfqCreateWizard>
+              <RfqCreateWizardLazy>
                 <Button size="sm">New request</Button>
-              </RfqCreateWizard>
+              </RfqCreateWizardLazy>
               <LogoutButton />
             </div>
           </div>

@@ -7,7 +7,7 @@ import { Sheet, SheetContent, SheetFooter } from "@/components/ui/sheet";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { MenuToggle } from "@/components/ui/menu-toggle";
 import { LogoutButton } from "@/components/logout-button";
-import { RfqCreateWizard } from "@/components/rfq-create-wizard";
+import { RfqCreateWizardLazy } from "@/components/rfq-create-wizard-lazy";
 import type { AuthUser } from "@/types";
 
 interface DashboardHeaderProps {
@@ -56,9 +56,9 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
           <span className="text-sm text-muted-foreground">
             {user.email} ({user.role})
           </span>
-          <RfqCreateWizard>
+          <RfqCreateWizardLazy>
             <Button size="sm">New request</Button>
-          </RfqCreateWizard>
+          </RfqCreateWizardLazy>
           <LogoutButton />
         </div>
 
@@ -102,11 +102,11 @@ export function DashboardHeader({ user }: DashboardHeaderProps) {
                 {user.email} ({user.role})
               </p>
               <SheetFooter className="flex-row gap-2">
-                <RfqCreateWizard>
+                <RfqCreateWizardLazy>
                   <Button size="sm" className="flex-1">
                     New request
                   </Button>
-                </RfqCreateWizard>
+                </RfqCreateWizardLazy>
                 <LogoutButton />
               </SheetFooter>
             </div>

@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 
 interface AttachmentUploadProps {
   rfqId: string;
+  onUploaded?: () => void;
 }
 
-export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
+export function AttachmentUpload({ rfqId, onUploaded }: AttachmentUploadProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -35,6 +36,7 @@ export function AttachmentUpload({ rfqId }: AttachmentUploadProps) {
       }
 
       router.refresh();
+      onUploaded?.();
     } catch (error) {
       console.error('Attachment upload failed:', error);
       setError('Upload failed');

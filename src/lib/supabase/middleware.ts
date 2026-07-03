@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
+
+  // Supplier routes are token-based and never need a Supabase session;
+  // skip the auth round-trip entirely for them.
+  if (request.nextUrl.pathname.startsWith('/supplier/')) {
+    return supabaseResponse;
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -46,11 +53,6 @@ export async function updateSession(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
-
-  // Supplier routes don't need auth
-  if (pathname.startsWith('/supplier/')) {
-    return supabaseResponse;
-  }
 
   // Public routes
   if (pathname === '/login' || pathname === '/') {

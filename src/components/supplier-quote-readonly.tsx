@@ -1,10 +1,10 @@
 import { getSupplierTranslations, normalizeSupplierLanguage, SUPPLIER_LANGUAGE_LOCALES } from '@/lib/supplier-language';
 import { formatSupplierInputAmount } from '@/lib/currency';
-import type { RfqQuote, SupplierLanguage } from '@/types';
+import type { SupplierLanguage, SupplierQuoteView } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface SupplierQuoteReadOnlyProps {
-  quote: RfqQuote;
+  quote: SupplierQuoteView;
   language: SupplierLanguage;
 }
 

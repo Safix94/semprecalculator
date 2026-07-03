@@ -1,29 +1,23 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
-import { assertTokenHashingConfigured, hashToken, isTokenHashingConfigError } from '@/lib/tokens';
+import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
+import { resolveSupplierInviteByToken } from '@/lib/supplier-invite';
 import { getPricingTeamEmailsFromEnv, sendInternalSupplierCommentEmail } from '@/lib/mailer';
 import { rfqCommentBodySchema } from '@/lib/validation';
 import { logAuditEvent } from '@/actions/audit';
-import {
-  checkSupplierLinkRateLimits,
-  getSupplierLinkRequestContext,
-} from '@/lib/rate-limit';
+import { getSupplierLinkRequestContext } from '@/lib/rate-limit';
 import type { SupplierLinkRequestContext } from '@/lib/rate-limit';
 import type { RfqComment } from '@/types';
 
-const SUPPLIER_TOKEN_REGEX = /^[a-f0-9]{64}$/i;
 type ActionError = { error: string };
 
 interface SupplierInviteAccess {
   id: string;
   supplier_id: string;
   expires_at: string;
-}
-
-function isValidSupplierToken(token: string): boolean {
-  return SUPPLIER_TOKEN_REGEX.test(token);
 }
 
 async function resolveSupplierInvite(
@@ -34,70 +28,26 @@ async function resolveSupplierInvite(
     requestContext?: SupplierLinkRequestContext;
   }
 ): Promise<{ data: SupplierInviteAccess } | ActionError> {
-  const supabase = createServiceRoleClient();
-  const normalizedToken = token.trim();
+  const resolved = await resolveSupplierInviteByToken({
+    rfqId,
+    token,
+    action: 'supplier_comment_add',
+    rateLimit: options?.rateLimitCommentSubmit ?? false,
+    requestContext: options?.requestContext,
+    logPrefix: 'Supplier comment access blocked',
+  });
 
-  try {
-    assertTokenHashingConfigured();
-  } catch (error) {
-    if (isTokenHashingConfigError(error)) {
-      return { error: 'Supplier links are not configured. Please contact support.' };
-    }
-    return { error: 'Supplier link configuration is invalid.' };
+  if ('error' in resolved) {
+    return { error: resolved.error };
   }
 
-  if (!isValidSupplierToken(normalizedToken)) {
-    if (options?.rateLimitCommentSubmit) {
-      const requestContext = options.requestContext ?? await getSupplierLinkRequestContext();
-      const rateLimitResult = await checkSupplierLinkRateLimits({
-        action: 'supplier_comment_add',
-        requestContext,
-        scopes: [{ name: 'ip-malformed', parts: [rfqId, requestContext.ipHash] }],
-      });
-
-      if (!rateLimitResult.allowed) {
-        return { error: rateLimitResult.error };
-      }
-    }
-
-    return { error: 'Invalid link' };
-  }
-
-  const tokenHash = hashToken(normalizedToken);
-
-  if (options?.rateLimitCommentSubmit) {
-    const requestContext = options.requestContext ?? await getSupplierLinkRequestContext();
-    const rateLimitResult = await checkSupplierLinkRateLimits({
-      action: 'supplier_comment_add',
-      requestContext,
-      scopes: [
-        { name: 'ip', parts: [rfqId, requestContext.ipHash] },
-        { name: 'token', parts: [rfqId, tokenHash] },
-      ],
-    });
-
-    if (!rateLimitResult.allowed) {
-      return { error: rateLimitResult.error };
-    }
-  }
-
-  const { data: invite, error: inviteError } = await supabase
-    .from('rfq_invites')
-    .select('id, supplier_id, expires_at')
-    .eq('rfq_id', rfqId)
-    .eq('token_hash', tokenHash)
-    .is('revoked_at', null)
-    .single();
-
-  if (inviteError || !invite) {
-    return { error: 'Invalid or expired link' };
-  }
-
-  if (new Date(invite.expires_at) < new Date()) {
-    return { error: 'This link has expired' };
-  }
-
-  return { data: invite as SupplierInviteAccess };
+  return {
+    data: {
+      id: resolved.invite.id,
+      supplier_id: resolved.invite.supplier_id,
+      expires_at: resolved.invite.expires_at,
+    },
+  };
 }
 
 export async function listSupplierComments(
@@ -146,6 +96,25 @@ export async function addSupplierComment(
   const invite = inviteResult.data;
   const supabase = createServiceRoleClient();
 
+  const [{ data: supplier }, { data: rfq }] = await Promise.all([
+    supabase
+      .from('suppliers')
+      .select('name, preferred_language')
+      .eq('id', invite.supplier_id)
+      .single(),
+    supabase
+      .from('rfqs')
+      .select('created_by, status')
+      .eq('id', rfqId)
+      .single(),
+  ]);
+
+  // Closed requests no longer accept messages, even while the link is valid.
+  if (rfq?.status === 'closed') {
+    const labels = getSupplierTranslations(normalizeSupplierLanguage(supplier?.preferred_language));
+    return { error: labels.requestClosedSubmitError };
+  }
+
   const { data: comment, error: commentError } = await supabase
     .from('rfq_comments')
     .insert({
@@ -161,19 +130,6 @@ export async function addSupplierComment(
   if (commentError || !comment) {
     return { error: `Could not send message: ${commentError?.message ?? 'Unknown error'}` };
   }
-
-  const [{ data: supplier }, { data: rfq }] = await Promise.all([
-    supabase
-      .from('suppliers')
-      .select('name')
-      .eq('id', invite.supplier_id)
-      .single(),
-    supabase
-      .from('rfqs')
-      .select('created_by, status')
-      .eq('id', rfqId)
-      .single(),
-  ]);
 
   if (rfq?.status === 'sent_to_supplier') {
     const { error: rfqStatusError } = await supabase
@@ -195,23 +151,27 @@ export async function addSupplierComment(
     }
   }
 
-  const recipients = new Set(getPricingTeamEmailsFromEnv());
-  if (rfq?.created_by) {
-    const { data: rfqCreator, error: creatorError } = await supabase.auth.admin.getUserById(rfq.created_by);
-    if (!creatorError && rfqCreator?.user?.email) {
-      recipients.add(rfqCreator.user.email);
+  // Internal notification doesn't affect the supplier's result — send it
+  // after the response so the message form resolves without waiting on Brevo.
+  after(async () => {
+    const recipients = new Set(getPricingTeamEmailsFromEnv());
+    if (rfq?.created_by) {
+      const { data: rfqCreator, error: creatorError } = await supabase.auth.admin.getUserById(rfq.created_by);
+      if (!creatorError && rfqCreator?.user?.email) {
+        recipients.add(rfqCreator.user.email);
+      }
     }
-  }
 
-  const recipientList = [...recipients];
-  if (recipientList.length > 0) {
-    await sendInternalSupplierCommentEmail({
-      recipients: recipientList,
-      rfqId,
-      supplierName: supplier?.name ?? 'Supplier',
-      bodyExcerpt: parsedBody.data,
-    });
-  }
+    const recipientList = [...recipients];
+    if (recipientList.length > 0) {
+      await sendInternalSupplierCommentEmail({
+        recipients: recipientList,
+        rfqId,
+        supplierName: supplier?.name ?? 'Supplier',
+        bodyExcerpt: parsedBody.data,
+      });
+    }
+  });
 
   await logAuditEvent({
     actorType: 'supplier_link',

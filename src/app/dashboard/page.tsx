@@ -1,5 +1,6 @@
 import { requireAuth } from '@/lib/auth';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getUserEmailMap } from '@/lib/user-directory';
 import { DashboardRfqTable, type DashboardRfqInvite } from '@/components/dashboard-rfq-table';
 import { RfqDetailModal } from '@/components/rfq-detail-modal';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -53,7 +54,23 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const rawStatusFilter = getStringParam(params.status)?.trim() || null;
   const statusFilter = isRfqStatus(rawStatusFilter) ? rawStatusFilter : null;
   const searchQuery = getStringParam(params.search)?.trim() ?? null;
-  const productTypeResult = await getProductTypes();
+  const parsedPage = Number.parseInt(pageParam, 10);
+  const requestedPage = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1);
+  const supabase = await createClient();
+
+  // Stage A: independent lookups in parallel.
+  const [productTypeResult, supplierOptionsResult, supplierInviteResult] = await Promise.all([
+    getProductTypes(),
+    supabase
+      .from('suppliers')
+      .select('id, name')
+      .eq('is_active', true)
+      .order('name', { ascending: true }),
+    supplierFilter
+      ? supabase.from('rfq_invites').select('rfq_id').eq('supplier_id', supplierFilter)
+      : Promise.resolve(null),
+  ]);
+
   const productTypes = 'data' in productTypeResult
     ? productTypeResult.data.map((productType) => productType.name)
     : [];
@@ -62,26 +79,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     ? (productTypes.length === 0 || productTypeNameSet.has(productTypeParam) ? productTypeParam : null)
     : null;
 
-  const parsedPage = Number.parseInt(pageParam, 10);
-  const requestedPage = Number.isNaN(parsedPage) ? 1 : parsedPage;
-  const supabase = await createClient();
-
-  const { data: supplierOptionsData, error: supplierOptionsError } = await supabase
-    .from('suppliers')
-    .select('id, name')
-    .eq('is_active', true)
-    .order('name', { ascending: true });
+  const { data: supplierOptionsData, error: supplierOptionsError } = supplierOptionsResult;
 
   if (supplierOptionsError) {
     console.error('Failed to fetch supplier filter options:', supplierOptionsError.message);
   }
 
   let supplierRfqIds: string[] | null = null;
-  if (supplierFilter) {
-    const { data: supplierInviteRows, error: supplierInviteError } = await supabase
-      .from('rfq_invites')
-      .select('rfq_id')
-      .eq('supplier_id', supplierFilter);
+  if (supplierFilter && supplierInviteResult) {
+    const { data: supplierInviteRows, error: supplierInviteError } = supplierInviteResult;
 
     if (supplierInviteError) {
       console.error('Failed to fetch RFQs for supplier filter:', supplierInviteError.message);
@@ -98,6 +104,36 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let rfqs: Rfq[] = [];
 
   if (!hasNoSupplierMatches) {
+    const fetchRfqPage = async (page: number): Promise<Rfq[]> => {
+      const from = (page - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let rfqsQuery = supabase
+        .from('rfqs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      if (productTypeFilter) {
+        rfqsQuery = rfqsQuery.eq('product_type', productTypeFilter);
+      }
+      if (statusFilter) {
+        rfqsQuery = rfqsQuery.eq('status', statusFilter);
+      }
+      if (searchQuery) {
+        rfqsQuery = rfqsQuery.ilike('customer_name', `%${searchQuery}%`);
+      }
+      if (supplierRfqIds) {
+        rfqsQuery = rfqsQuery.in('id', supplierRfqIds);
+      }
+      const { data: rfqsData, error: rfqsError } = await rfqsQuery;
+
+      if (rfqsError) {
+        console.error('Failed to fetch paginated RFQs:', rfqsError.message);
+      }
+
+      return (rfqsData ?? []) as Rfq[];
+    };
+
     let countQuery = supabase.from('rfqs').select('id', { count: 'exact', head: true });
     if (productTypeFilter) {
       countQuery = countQuery.eq('product_type', productTypeFilter);
@@ -111,7 +147,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     if (supplierRfqIds) {
       countQuery = countQuery.in('id', supplierRfqIds);
     }
-    const { count, error: countError } = await countQuery;
+
+    // Stage B: count and the requested page in parallel; only refetch when the
+    // requested page turns out to be beyond the last page (rare).
+    const [{ count, error: countError }, requestedRows] = await Promise.all([
+      countQuery,
+      fetchRfqPage(requestedPage),
+    ]);
 
     if (countError) {
       console.error('Failed to count RFQs:', countError.message);
@@ -119,34 +161,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
     totalCount = count ?? 0;
     const totalPagesForFetch = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-    currentPage = Math.min(Math.max(requestedPage, 1), totalPagesForFetch);
-    const from = (currentPage - 1) * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-    let rfqsQuery = supabase
-      .from('rfqs')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    if (productTypeFilter) {
-      rfqsQuery = rfqsQuery.eq('product_type', productTypeFilter);
-    }
-    if (statusFilter) {
-      rfqsQuery = rfqsQuery.eq('status', statusFilter);
-    }
-    if (searchQuery) {
-      rfqsQuery = rfqsQuery.ilike('customer_name', `%${searchQuery}%`);
-    }
-    if (supplierRfqIds) {
-      rfqsQuery = rfqsQuery.in('id', supplierRfqIds);
-    }
-    const { data: rfqsData, error: rfqsError } = await rfqsQuery;
-
-    if (rfqsError) {
-      console.error('Failed to fetch paginated RFQs:', rfqsError.message);
-    }
-
-    rfqs = (rfqsData ?? []) as Rfq[];
+    currentPage = Math.min(requestedPage, totalPagesForFetch);
+    rfqs = currentPage === requestedPage ? requestedRows : await fetchRfqPage(currentPage);
   }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -156,48 +172,53 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const invitesByRfqId: Record<string, DashboardRfqInvite[]> = {};
   const rfqIds = rfqs.map((rfq) => rfq.id);
 
-  if (rfqIds.length > 0) {
-    const { data: inviteRows, error: inviteRowsError } = await supabase
-      .from('rfq_invites')
-      .select('id, rfq_id, supplier_id, invite_part, supplier:suppliers(id, name)')
-      .in('rfq_id', rfqIds)
-      .order('created_at', { ascending: true });
+  // Stage C: both depend only on the fetched RFQ page — run them in parallel.
+  await Promise.all([
+    (async () => {
+      if (rfqIds.length === 0) {
+        return;
+      }
 
-    if (inviteRowsError) {
-      console.error('Failed to fetch RFQ suppliers:', inviteRowsError.message);
-    } else {
-      (inviteRows ?? []).forEach((invite) => {
-        const supplier = Array.isArray(invite.supplier) ? invite.supplier[0] ?? null : invite.supplier ?? null;
-        const typedInvite: DashboardRfqInvite = {
-          id: invite.id,
-          rfq_id: invite.rfq_id,
-          supplier_id: invite.supplier_id,
-          invite_part: invite.invite_part,
-          supplier,
-        };
-        invitesByRfqId[typedInvite.rfq_id] = [...(invitesByRfqId[typedInvite.rfq_id] ?? []), typedInvite];
-      });
-    }
-  }
+      const { data: inviteRows, error: inviteRowsError } = await supabase
+        .from('rfq_invites')
+        .select('id, rfq_id, supplier_id, invite_part, supplier:suppliers(id, name)')
+        .in('rfq_id', rfqIds)
+        .order('created_at', { ascending: true });
 
-  if (creatorIds.length > 0) {
-    try {
-      const serviceClient = createServiceRoleClient();
-      await Promise.all(
-        creatorIds.map(async (creatorId) => {
-          const { data, error } = await serviceClient.auth.admin.getUserById(creatorId);
-          if (error) {
-            return;
+      if (inviteRowsError) {
+        console.error('Failed to fetch RFQ suppliers:', inviteRowsError.message);
+      } else {
+        (inviteRows ?? []).forEach((invite) => {
+          const supplier = Array.isArray(invite.supplier) ? invite.supplier[0] ?? null : invite.supplier ?? null;
+          const typedInvite: DashboardRfqInvite = {
+            id: invite.id,
+            rfq_id: invite.rfq_id,
+            supplier_id: invite.supplier_id,
+            invite_part: invite.invite_part,
+            supplier,
+          };
+          invitesByRfqId[typedInvite.rfq_id] = [...(invitesByRfqId[typedInvite.rfq_id] ?? []), typedInvite];
+        });
+      }
+    })(),
+    (async () => {
+      if (creatorIds.length === 0) {
+        return;
+      }
+
+      try {
+        const emailMap = await getUserEmailMap();
+        creatorIds.forEach((creatorId) => {
+          const email = emailMap.get(creatorId);
+          if (email) {
+            creatorEmailById[creatorId] = email;
           }
-          if (data.user?.email) {
-            creatorEmailById[creatorId] = data.user.email;
-          }
-        })
-      );
-    } catch (error) {
-      console.error('Failed to resolve RFQ creator emails:', error);
-    }
-  }
+        });
+      } catch (error) {
+        console.error('Failed to resolve RFQ creator emails:', error);
+      }
+    })(),
+  ]);
 
   return (
     <div className="min-w-0">
@@ -236,7 +257,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </CardContent>
       </Card>
 
-      <RfqDetailModal rfqId={selectedRfqId} refreshToken={new Date().toISOString()} userRole={user.role} />
+      <RfqDetailModal rfqId={selectedRfqId} userRole={user.role} />
     </div>
   );
 }

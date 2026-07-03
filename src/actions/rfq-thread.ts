@@ -12,10 +12,9 @@ import {
   hashToken,
   isTokenHashingConfigError,
 } from '@/lib/tokens';
+import { INVITE_EXPIRATION_MS } from '@/lib/supplier-invite';
 import { logAuditEvent } from '@/actions/audit';
 import type { RfqComment, RfqInvite, RfqStatus, Supplier } from '@/types';
-
-const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
 
 type ActionError = { error: string };
 

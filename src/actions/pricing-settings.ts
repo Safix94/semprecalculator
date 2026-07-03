@@ -1,8 +1,10 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { requireRole } from '@/lib/auth';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { DEFAULT_FX_RATES } from '@/lib/currency';
+import { FX_RATES_CACHE_TAG } from '@/lib/fx-rates';
 import { DEFAULT_PRICING_SETTINGS, type PricingSettings } from '@/lib/pricing';
 import { logAuditEvent } from './audit';
 
@@ -12,12 +14,16 @@ interface PricingSettingsRow {
   container_volume_m3: number | string;
   product_margin_factor: number | string;
   shipping_margin_factor: number | string;
+  usd_per_eur_rate?: number | string | null;
+  idr_per_eur_rate?: number | string | null;
   updated_by: string | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface PricingSettingsWithMeta extends PricingSettings {
+  usdPerEurRate: number;
+  idrPerEurRate: number;
   updatedBy: string | null;
   createdAt: string | null;
   updatedAt: string | null;
@@ -28,16 +34,25 @@ export interface UpdatePricingSettingsInput {
   containerVolumeM3: number;
   productMarginFactor: number;
   shippingMarginFactor: number;
+  usdPerEurRate: number;
+  idrPerEurRate: number;
 }
 
 function normalizeNumber(value: number | string): number {
   return typeof value === 'number' ? value : Number(value);
 }
 
+function normalizeRate(value: number | string | null | undefined, fallback: number): number {
+  const parsed = normalizeNumber((value ?? Number.NaN) as number | string);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 function mapPricingSettings(row: PricingSettingsRow | null): PricingSettingsWithMeta {
   if (!row) {
     return {
       ...DEFAULT_PRICING_SETTINGS,
+      usdPerEurRate: DEFAULT_FX_RATES.usdPerEur,
+      idrPerEurRate: DEFAULT_FX_RATES.idrPerEur,
       updatedBy: null,
       createdAt: null,
       updatedAt: null,
@@ -49,6 +64,8 @@ function mapPricingSettings(row: PricingSettingsRow | null): PricingSettingsWith
     containerVolumeM3: normalizeNumber(row.container_volume_m3),
     productMarginFactor: normalizeNumber(row.product_margin_factor),
     shippingMarginFactor: normalizeNumber(row.shipping_margin_factor),
+    usdPerEurRate: normalizeRate(row.usd_per_eur_rate, DEFAULT_FX_RATES.usdPerEur),
+    idrPerEurRate: normalizeRate(row.idr_per_eur_rate, DEFAULT_FX_RATES.idrPerEur),
     updatedBy: row.updated_by,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -61,6 +78,8 @@ function validatePricingSettings(input: UpdatePricingSettingsInput): string | nu
     ['containerVolumeM3', 'Container volume'],
     ['productMarginFactor', 'Product margin'],
     ['shippingMarginFactor', 'Multiplier'],
+    ['usdPerEurRate', 'USD per EUR rate'],
+    ['idrPerEurRate', 'IDR per EUR rate'],
   ];
 
   for (const [key, label] of entries) {
@@ -91,26 +110,6 @@ export async function getPricingSettings(): Promise<PricingSettingsWithMeta> {
   return mapPricingSettings(data as PricingSettingsRow | null);
 }
 
-/**
- * Fetch settings for internal pricing calculations.
- * Supplier quote submissions do not have an authenticated Supabase session, so this uses service role.
- */
-export async function getEffectivePricingSettings(): Promise<PricingSettings> {
-  const supabase = createServiceRoleClient();
-  const { data, error } = await supabase
-    .from('pricing_settings')
-    .select('*')
-    .eq('id', 1)
-    .maybeSingle();
-
-  if (error) {
-    console.error('Failed to fetch effective pricing settings; falling back to defaults:', error.message);
-    return DEFAULT_PRICING_SETTINGS;
-  }
-
-  return mapPricingSettings(data as PricingSettingsRow | null);
-}
-
 export async function updatePricingSettings(input: UpdatePricingSettingsInput) {
   const user = await requireRole('sales');
   const validationError = validatePricingSettings(input);
@@ -128,6 +127,8 @@ export async function updatePricingSettings(input: UpdatePricingSettingsInput) {
         container_volume_m3: input.containerVolumeM3,
         product_margin_factor: input.productMarginFactor,
         shipping_margin_factor: input.shippingMarginFactor,
+        usd_per_eur_rate: input.usdPerEurRate,
+        idr_per_eur_rate: input.idrPerEurRate,
         updated_by: user.id,
       },
       { onConflict: 'id' }
@@ -150,9 +151,12 @@ export async function updatePricingSettings(input: UpdatePricingSettingsInput) {
       containerVolumeM3: input.containerVolumeM3,
       productMarginFactor: input.productMarginFactor,
       shippingMarginFactor: input.shippingMarginFactor,
+      usdPerEurRate: input.usdPerEurRate,
+      idrPerEurRate: input.idrPerEurRate,
     },
   });
 
   revalidatePath('/admin/management');
+  updateTag(FX_RATES_CACHE_TAG);
   return { data: mapPricingSettings(data as PricingSettingsRow) };
 }

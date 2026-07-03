@@ -11,7 +11,8 @@ import {
   isTableTopsProductType,
 } from '@/lib/rfq-format';
 import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvironment } from '@/lib/supplier-language';
-import { IDR_PER_EUR_RATE, USD_PER_EUR_RATE, normalizeQuotePriceCurrency } from '@/lib/currency';
+import { normalizeQuotePriceCurrency } from '@/lib/currency';
+import { getFxRates } from '@/lib/fx-rates';
 import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
 import { Card, CardContent } from '@/components/ui/card';
 import Image from 'next/image';
@@ -78,14 +79,18 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const result = await validateSupplierToken(rfqId, supplierToken);
 
   if (result.error) {
-    return <SupplierMessageCard title="Access denied" message={result.error} />;
+    const errorTitle = 'errorTitle' in result && result.errorTitle ? result.errorTitle : 'Access denied';
+    return <SupplierMessageCard title={errorTitle} message={result.error} />;
   }
 
   const { rfq, supplier, invite, existingQuote } = result.data!;
   const language = normalizeSupplierLanguage(supplier?.preferred_language);
   const supplierQuoteCurrency = normalizeQuotePriceCurrency(supplier?.quote_price_currency);
   const labels = getSupplierTranslations(language);
-  const commentResult = await listSupplierComments(rfqId, supplierToken);
+  const [commentResult, fxRates] = await Promise.all([
+    listSupplierComments(rfqId, supplierToken),
+    getFxRates(),
+  ]);
   const initialComments = 'data' in commentResult ? commentResult.data : [];
   const isRound = isRoundShape(rfq.shape);
   const isTablesType = rfq.product_type?.trim().toLowerCase() === 'tables';
@@ -93,17 +98,18 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const invitePart = invite.invite_part ?? 'default';
   const showTableTop = isTablesType && (invitePart === 'table_top' || invitePart === 'table_both' || invitePart === 'default');
   const showTableFoot = isTablesType && (invitePart === 'table_foot' || invitePart === 'table_both' || invitePart === 'default');
-  const canSubmitOrUpdateQuote = !invite.used_at || Boolean(existingQuote);
+  const isClosed = rfq.status === 'closed';
+  const canSubmitOrUpdateQuote = !isClosed && (!invite.used_at || Boolean(existingQuote));
   const isAutomaticSanneVosBluestoneQuote = isSanneVosBluestoneAutoPricingCandidate(supplier?.name, rfq);
   const initialBasePrice = existingQuote
     ? supplierQuoteCurrency === 'IDR'
       ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
         ? Number(existingQuote.supplier_input_price)
-        : Math.round(Number(existingQuote.base_price) * IDR_PER_EUR_RATE)
+        : Math.round(Number(existingQuote.base_price) * fxRates.idrPerEur)
       : supplierQuoteCurrency === 'USD'
         ? existingQuote.supplier_input_currency === 'USD' && existingQuote.supplier_input_price
           ? Number(existingQuote.supplier_input_price)
-          : Math.round(Number(existingQuote.base_price) * USD_PER_EUR_RATE * 100) / 100
+          : Math.round(Number(existingQuote.base_price) * fxRates.usdPerEur * 100) / 100
         : Number(existingQuote.base_price)
     : null;
   const quoteInitialValues = existingQuote
@@ -118,6 +124,14 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   return (
     <SupplierPageShell>
       <div>
+        {isClosed && (
+          <Card className="mb-6 border-amber-500/50 bg-amber-500/10">
+            <CardContent className="pt-6">
+              <p className="font-medium">{labels.requestClosedTitle}</p>
+              <p className="mt-1 text-sm text-muted-foreground">{labels.requestClosedSubmitError}</p>
+            </CardContent>
+          </Card>
+        )}
         <Card className="mb-6">
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center justify-between">
@@ -219,7 +233,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
 
         {existingQuote && !canSubmitOrUpdateQuote ? (
           <SupplierQuoteReadOnly quote={existingQuote} language={language} />
-        ) : isAutomaticSanneVosBluestoneQuote ? (
+        ) : isClosed ? null : isAutomaticSanneVosBluestoneQuote ? (
           <SupplierAutomaticQuoteForm
             rfqId={rfqId}
             token={supplierToken}
@@ -235,6 +249,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             isUpdate={Boolean(existingQuote)}
             language={language}
             quotePriceCurrency={supplierQuoteCurrency}
+            usdPerEurRate={fxRates.usdPerEur}
+            idrPerEurRate={fxRates.idrPerEur}
           />
         )}
 
@@ -244,6 +260,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             token={supplierToken}
             initialComments={initialComments}
             language={language}
+            disabled={isClosed}
           />
         </div>
       </div>

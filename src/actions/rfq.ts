@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { requireAuth, requireRole } from '@/lib/auth';
 import {
@@ -20,8 +21,10 @@ import {
   sendPricingTeamRfqCrmNotification,
   sendPricingTeamRfqNotification,
   sendSupplierInviteEmail,
+  sendSupplierRfqClosedEmail,
 } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
+import { INVITE_EXPIRATION_MS } from '@/lib/supplier-invite';
 import {
   formatRfqDimensionsWithOptions,
   isTableTopsProductType,
@@ -33,7 +36,6 @@ import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
 
 const TOKEN_CONFIG_ERROR_MESSAGE = 'RFQ invites are not configured. Set TOKEN_HASH_SECRET and try again.';
-const INVITE_EXPIRATION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_ATTACHMENT_SIZE_BYTES = 25 * 1024 * 1024;
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 type InvitePart = 'default' | 'table_top' | 'table_foot' | 'table_both';
@@ -1001,107 +1003,117 @@ export async function sendRfq(rfqId: string) {
   );
   const quantity = Number(rfq.quantity ?? 1);
 
-  for (const invite of invites) {
-    if (!invite.supplier) {
-      results.push({ supplier: 'Unknown', success: false, error: 'Supplier not found' });
-      continue;
-    }
+  // Refresh tokens and send invite emails per supplier concurrently — result
+  // semantics per supplier stay identical to the previous sequential loop.
+  const inviteResults = await Promise.all(
+    invites.map(async (invite): Promise<{ supplier: string; success: boolean; error?: string }> => {
+      if (!invite.supplier) {
+        return { supplier: 'Unknown', success: false, error: 'Supplier not found' };
+      }
 
-    // Generate a fresh token for this send.
-    const token = generateToken();
-    const tokenHash = hashToken(token);
-    const expiresAt = new Date(Date.now() + INVITE_EXPIRATION_MS).toISOString();
+      try {
+        // Generate a fresh token for this send.
+        const token = generateToken();
+        const tokenHash = hashToken(token);
+        const expiresAt = new Date(Date.now() + INVITE_EXPIRATION_MS).toISOString();
 
-    // Refresh invite state before emailing. If this fails, don't send a broken link.
-    const { data: refreshedInvite, error: refreshInviteError } = await supabase
-      .from('rfq_invites')
-      .update({
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-        revoked_at: null,
-        used_at: null,
-        last_access_at: null,
-      })
-      .eq('id', invite.id)
-      .select('id')
-      .single();
+        // Refresh invite state before emailing. If this fails, don't send a broken link.
+        const { data: refreshedInvite, error: refreshInviteError } = await supabase
+          .from('rfq_invites')
+          .update({
+            token_hash: tokenHash,
+            expires_at: expiresAt,
+            revoked_at: null,
+            used_at: null,
+            last_access_at: null,
+          })
+          .eq('id', invite.id)
+          .select('id')
+          .single();
 
-    if (refreshInviteError || !refreshedInvite) {
-      const reason = refreshInviteError?.message ?? 'Unknown invite update error';
-      console.error('Failed to refresh supplier invite before send:', {
-        rfqId,
-        inviteId: invite.id,
-        supplierId: invite.supplier.id,
-        reason,
-      });
-      results.push({
-        supplier: invite.supplier.name,
-        success: false,
-        error: `Failed to refresh invite token: ${reason}`,
-      });
-      continue;
-    }
+        if (refreshInviteError || !refreshedInvite) {
+          const reason = refreshInviteError?.message ?? 'Unknown invite update error';
+          console.error('Failed to refresh supplier invite before send:', {
+            rfqId,
+            inviteId: invite.id,
+            supplierId: invite.supplier.id,
+            reason,
+          });
+          return {
+            supplier: invite.supplier.name,
+            success: false,
+            error: `Failed to refresh invite token: ${reason}`,
+          };
+        }
 
-    await logAuditEvent({
-      actorType: user.role,
-      actorId: user.id,
-      action: 'INVITE_CREATED',
-      entityType: 'rfq_invite',
-      entityId: invite.id,
-      metadata: { rfqId, supplierId: invite.supplier.id, invitePart: invite.invite_part ?? 'default' },
-    });
+        await logAuditEvent({
+          actorType: user.role,
+          actorId: user.id,
+          action: 'INVITE_CREATED',
+          entityType: 'rfq_invite',
+          entityId: invite.id,
+          metadata: { rfqId, supplierId: invite.supplier.id, invitePart: invite.invite_part ?? 'default' },
+        });
 
-    // Send email
-    const materialDetails = Array.isArray(rfq.material_details)
-      ? rfq.material_details[0]
-      : rfq.material_details;
-    const materialName = materialDetails?.name || rfq.material;
-    const supplierEmails = getSupplierRecipientEmails(invite.supplier);
-    const emailResult = await sendSupplierInviteEmail({
-      supplierEmails,
-      supplierName: invite.supplier.name,
-      rfqId,
-      token,
-      material: materialName,
-      productType: rfq.product_type,
-      shape: rfq.shape,
-      finish: rfq.finish,
-      finishTop: rfq.finish_top,
-      finishEdge: rfq.finish_edge,
-      finishColor: rfq.finish_color,
-      model: rfq.model,
-      invitePart: invite.invite_part ?? 'default',
-      materialTableTop: rfq.material_table_top,
-      finishTableTop: rfq.finish_table_top,
-      materialTableFoot: rfq.material_table_foot,
-      finishTableFoot: rfq.finish_table_foot,
-      usageEnvironment: rfq.usage_environment,
-      dimensionsText,
-      quantity,
-      language: invite.supplier.preferred_language,
-    });
+        // Send email
+        const materialDetails = Array.isArray(rfq.material_details)
+          ? rfq.material_details[0]
+          : rfq.material_details;
+        const materialName = materialDetails?.name || rfq.material;
+        const supplierEmails = getSupplierRecipientEmails(invite.supplier);
+        const emailResult = await sendSupplierInviteEmail({
+          supplierEmails,
+          supplierName: invite.supplier.name,
+          rfqId,
+          token,
+          material: materialName,
+          productType: rfq.product_type,
+          shape: rfq.shape,
+          finish: rfq.finish,
+          finishTop: rfq.finish_top,
+          finishEdge: rfq.finish_edge,
+          finishColor: rfq.finish_color,
+          model: rfq.model,
+          invitePart: invite.invite_part ?? 'default',
+          materialTableTop: rfq.material_table_top,
+          finishTableTop: rfq.finish_table_top,
+          materialTableFoot: rfq.material_table_foot,
+          finishTableFoot: rfq.finish_table_foot,
+          usageEnvironment: rfq.usage_environment,
+          dimensionsText,
+          quantity,
+          language: invite.supplier.preferred_language,
+        });
 
-    await logAuditEvent({
-      actorType: 'system',
-      actorId: 'mailer',
-      action: 'EMAIL_SENT',
-      entityType: 'rfq_invite',
-      entityId: invite.id,
-      metadata: {
-        success: emailResult.success,
-        error: emailResult.error,
-        supplierEmails,
-        emailResults: emailResult.results,
-        invitePart: invite.invite_part ?? 'default',
-      },
-    });
+        await logAuditEvent({
+          actorType: 'system',
+          actorId: 'mailer',
+          action: 'EMAIL_SENT',
+          entityType: 'rfq_invite',
+          entityId: invite.id,
+          metadata: {
+            success: emailResult.success,
+            error: emailResult.error,
+            supplierEmails,
+            emailResults: emailResult.results,
+            invitePart: invite.invite_part ?? 'default',
+          },
+        });
 
-    results.push({
-      supplier: invite.supplier.name,
-      success: emailResult.success,
-      error: emailResult.error,
-    });
-  }
+        return {
+          supplier: invite.supplier.name,
+          success: emailResult.success,
+          error: emailResult.error,
+        };
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'Unknown send error';
+        console.error('Failed to send supplier invite:', { rfqId, inviteId: invite.id, reason });
+        return { supplier: invite.supplier.name, success: false, error: reason };
+      }
+    })
+  );
+
+  results.push(...inviteResults);
 
   const sentCount = results.filter((r) => r.success).length;
   const totalCount = results.length;
@@ -1492,7 +1504,9 @@ export async function closeRfq(rfqId: string) {
 
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
-    .select('id, status')
+    .select(
+      'id, status, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, notes, attachments:rfq_attachments(file_name)'
+    )
     .eq('id', rfqId)
     .single();
 
@@ -1514,6 +1528,43 @@ export async function closeRfq(rfqId: string) {
     return { error: error.message };
   }
 
+  // Revoke outstanding links so suppliers can no longer submit; each supplier
+  // receives a closing summary email below so they keep the request details.
+  const { data: inviteRows, error: inviteFetchError } = await supabase
+    .from('rfq_invites')
+    .select('id, supplier_id, revoked_at, supplier:suppliers(id, name, email, additional_emails, preferred_language)')
+    .eq('rfq_id', rfqId);
+
+  if (inviteFetchError) {
+    console.error('closeRfq: failed to fetch invites for revocation.', {
+      rfqId,
+      error: inviteFetchError.message,
+    });
+  }
+
+  const activeInvites = (inviteRows ?? []).filter((invite) => !invite.revoked_at);
+
+  if (activeInvites.length > 0) {
+    const { error: revokeError } = await supabase
+      .from('rfq_invites')
+      .update({ revoked_at: new Date().toISOString() })
+      .eq('rfq_id', rfqId)
+      .is('revoked_at', null);
+
+    if (revokeError) {
+      console.error('closeRfq: failed to revoke invites.', { rfqId, error: revokeError.message });
+    } else {
+      await logAuditEvent({
+        actorType: user.role,
+        actorId: user.id,
+        action: 'INVITE_REVOKED',
+        entityType: 'rfq',
+        entityId: rfqId,
+        metadata: { inviteIds: activeInvites.map((invite) => invite.id), reason: 'rfq_closed' },
+      });
+    }
+  }
+
   await logAuditEvent({
     actorType: user.role,
     actorId: user.id,
@@ -1522,6 +1573,98 @@ export async function closeRfq(rfqId: string) {
     entityId: rfqId,
     metadata: { status: 'closed', previousStatus: rfq.status },
   });
+
+  // Closing summaries go out after the response; mail failures never block closing.
+  if (activeInvites.length > 0) {
+    after(async () => {
+      try {
+        const serviceSupabase = createServiceRoleClient();
+        const { data: quotes } = await serviceSupabase
+          .from('rfq_quotes')
+          .select(
+            'supplier_id, base_price, volume_m3, lead_time_days, comment, submitted_at, pricing_formula_version, supplier_input_price, supplier_input_currency'
+          )
+          .eq('rfq_id', rfqId);
+
+        const quotesBySupplierId = new Map((quotes ?? []).map((quote) => [quote.supplier_id, quote]));
+        const attachmentRows = Array.isArray(rfq.attachments) ? rfq.attachments : [];
+        const attachmentNames = attachmentRows
+          .map((attachment) => attachment?.file_name)
+          .filter((fileName): fileName is string => Boolean(fileName));
+
+        const results = await Promise.allSettled(
+          activeInvites.map(async (invite) => {
+            const supplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
+            if (!supplier?.email) {
+              return { supplierId: invite.supplier_id, success: false, error: 'No supplier email' };
+            }
+
+            const quote = quotesBySupplierId.get(invite.supplier_id) ?? null;
+            const emailResult = await sendSupplierRfqClosedEmail({
+              supplierEmails: getSupplierRecipientEmails({
+                email: supplier.email,
+                additional_emails: supplier.additional_emails ?? [],
+              }),
+              supplierName: supplier.name,
+              rfq: {
+                productType: rfq.product_type,
+                material: rfq.material,
+                shape: rfq.shape,
+                finish: rfq.finish,
+                finishTop: rfq.finish_top,
+                finishEdge: rfq.finish_edge,
+                finishColor: rfq.finish_color,
+                materialTableTop: rfq.material_table_top,
+                materialTableFoot: rfq.material_table_foot,
+                finishTableTop: rfq.finish_table_top,
+                finishTableFoot: rfq.finish_table_foot,
+                length: Number(rfq.length),
+                width: Number(rfq.width),
+                height: Number(rfq.height),
+                thickness: Number(rfq.thickness),
+                quantity: Number(rfq.quantity ?? 1),
+                model: rfq.model,
+                usageEnvironment: rfq.usage_environment,
+                notes: rfq.notes,
+                attachmentNames,
+              },
+              quote: quote
+                ? {
+                    basePriceEur: Number(quote.base_price),
+                    supplierInputPrice: quote.supplier_input_price,
+                    supplierInputCurrency: quote.supplier_input_currency,
+                    volumeM3: Number(quote.volume_m3),
+                    leadTimeDays: quote.lead_time_days,
+                    comment: quote.comment,
+                    submittedAt: quote.submitted_at,
+                    isAutomatic: quote.pricing_formula_version === 'sanne_vos_bluestone_v1',
+                  }
+                : null,
+              language: supplier.preferred_language,
+            });
+
+            return { supplierId: invite.supplier_id, success: emailResult.success, error: emailResult.error };
+          })
+        );
+
+        await logAuditEvent({
+          actorType: 'system',
+          actorId: 'mailer',
+          action: 'EMAIL_SENT',
+          entityType: 'rfq',
+          entityId: rfqId,
+          metadata: {
+            emailType: 'supplier_rfq_closed',
+            results: results.map((result) =>
+              result.status === 'fulfilled' ? result.value : { success: false, error: String(result.reason) }
+            ),
+          },
+        });
+      } catch (error) {
+        console.error('closeRfq: failed to send closing summaries.', { rfqId, error });
+      }
+    });
+  }
 
   revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
@@ -1555,6 +1698,22 @@ export async function reopenRfq(rfqId: string) {
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Restore links that were revoked on close and haven't expired yet, so
+  // suppliers can use their existing emails again without a resend.
+  const { error: restoreError } = await supabase
+    .from('rfq_invites')
+    .update({ revoked_at: null })
+    .eq('rfq_id', rfqId)
+    .not('revoked_at', 'is', null)
+    .gt('expires_at', new Date().toISOString());
+
+  if (restoreError) {
+    console.error('reopenRfq: failed to restore revoked invites.', {
+      rfqId,
+      error: restoreError.message,
+    });
   }
 
   await logAuditEvent({

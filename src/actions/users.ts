@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { requireRole } from '@/lib/auth';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { revalidateUserEmailMap } from '@/lib/user-directory';
 import { logAuditEvent } from './audit';
 import type { UserRole, UserWithRole } from '@/types';
 
@@ -128,6 +129,7 @@ export async function createUserWithRole(input: { email: string; role: UserRole 
   });
 
   revalidatePath('/admin/management');
+  revalidateUserEmailMap();
   return {
     data: {
       id: createdUser.id,

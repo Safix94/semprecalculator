@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import type { AuthUser, UserRole } from '@/types';
@@ -13,7 +14,9 @@ import type { AuthUser, UserRole } from '@/types';
  * - Remove Supabase Auth dependency after migration
  */
 
-export async function getCurrentUser(): Promise<AuthUser | null> {
+// Wrapped in React cache() so layout, page and actions within the same
+// request share one auth resolution instead of each hitting Supabase Auth.
+export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   try {
     const supabase = await createClient();
 
@@ -41,7 +44,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     console.error('Failed to resolve current user:', error);
     return null;
   }
-}
+});
 
 export async function requireAuth(): Promise<AuthUser> {
   const user = await getCurrentUser();

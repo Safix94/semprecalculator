@@ -14,6 +14,8 @@ interface SupplierCommentThreadProps {
   token: string;
   initialComments: RfqComment[];
   language: SupplierLanguage;
+  /** Hides the message form (history stays visible), e.g. for closed requests. */
+  disabled?: boolean;
 }
 
 function formatTimestamp(value: string, language: SupplierLanguage) {
@@ -26,7 +28,7 @@ function formatTimestamp(value: string, language: SupplierLanguage) {
   });
 }
 
-export function SupplierCommentThread({ rfqId, token, initialComments, language }: SupplierCommentThreadProps) {
+export function SupplierCommentThread({ rfqId, token, initialComments, language, disabled = false }: SupplierCommentThreadProps) {
   const t = getSupplierTranslations(normalizeSupplierLanguage(language));
   const [comments, setComments] = useState(initialComments);
   const [body, setBody] = useState('');
@@ -78,6 +80,7 @@ export function SupplierCommentThread({ rfqId, token, initialComments, language 
           </ul>
         )}
 
+        {!disabled && (
         <form onSubmit={handleSubmit} className="space-y-3">
           <Textarea
             name="message"
@@ -99,6 +102,7 @@ export function SupplierCommentThread({ rfqId, token, initialComments, language 
             {submitting ? t.sending : t.sendMessage}
           </Button>
         </form>
+        )}
       </CardContent>
     </Card>
   );

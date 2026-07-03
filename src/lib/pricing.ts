@@ -56,52 +56,6 @@ function assertPositiveNumber(value: number | null, label: string): asserts valu
   }
 }
 
-/**
- * Calculate legacy/global shipping cost based on supplier-entered volume.
- * Formula: (containerPriceEur / containerVolumeM3) * volumeM3
- * Rounded to 3 decimal places.
- */
-export function calculateShippingCost(
-  volumeM3: number,
-  settings: PricingSettings = DEFAULT_PRICING_SETTINGS
-): number {
-  return roundTo((settings.containerPriceEur / settings.containerVolumeM3) * volumeM3, 3);
-}
-
-/**
- * Legacy calculation retained for older/global settings code paths.
- * Formula: (basePrice * productMarginFactor * shippingMarginFactor) + shippingCost
- * Rounded to 2 decimal places.
- */
-export function calculateFinalPrice(
-  basePrice: number,
-  shippingCostCalculated: number,
-  settings: PricingSettings = DEFAULT_PRICING_SETTINGS
-): number {
-  return roundTo(
-    basePrice * settings.productMarginFactor * settings.shippingMarginFactor +
-      shippingCostCalculated,
-    2
-  );
-}
-
-/**
- * Legacy/global pricing calculation retained for compatibility.
- */
-export function calculateAllPricing(
-  basePrice: number,
-  volumeM3: number,
-  settings: PricingSettings = DEFAULT_PRICING_SETTINGS
-) {
-  const shippingCostCalculated = calculateShippingCost(volumeM3, settings);
-  const finalPriceCalculated = calculateFinalPrice(
-    basePrice,
-    shippingCostCalculated,
-    settings
-  );
-  return { shippingCostCalculated, finalPriceCalculated };
-}
-
 function baseSnapshot(profile: SupplierPricingProfile) {
   return {
     formulaVersion: profile.formulaVersion || SUPPLIER_PRICING_FORMULA_VERSION,

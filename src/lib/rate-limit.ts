@@ -43,6 +43,15 @@ const RATE_LIMIT_RULES: Record<SupplierLinkRateLimitAction, RateLimitRule> = {
   supplier_attachment_url: { maxAttempts: 60, windowSeconds: 10 * 60 },
 };
 
+// Write actions fail closed when the rate-limit store is unreachable: a DB
+// that can't answer the check is likely degraded for the write itself, and
+// these are the abuse-sensitive paths. Read paths stay fail-open so a blip
+// never locks suppliers out of their links.
+const FAIL_CLOSED_ACTIONS: SupplierLinkRateLimitAction[] = [
+  'supplier_quote_submit',
+  'supplier_comment_add',
+];
+
 function getRateLimitSecret(): string {
   return (
     process.env.TOKEN_HASH_SECRET ||
@@ -116,6 +125,19 @@ export async function checkSupplierLinkRateLimits(
       .gte('created_at', since);
 
     if (error) {
+      if (FAIL_CLOSED_ACTIONS.includes(options.action)) {
+        console.warn('Supplier link rate-limit check failed; blocking write request.', {
+          action: options.action,
+          scope: scope.name,
+          error: error.message,
+        });
+        return {
+          allowed: false,
+          error: 'The request could not be processed right now. Please try again in a few minutes.',
+          retryAfterSeconds: 60,
+        };
+      }
+
       console.warn('Supplier link rate-limit check failed; allowing request.', {
         action: options.action,
         scope: scope.name,

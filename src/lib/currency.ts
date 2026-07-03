@@ -1,9 +1,23 @@
 export type QuotePriceCurrency = 'EUR' | 'USD' | 'IDR';
 
+// Fallback rates, used when pricing_settings can't be read. The live values
+// are admin-configurable in Management → Pricing (see src/lib/fx-rates.ts).
 export const USD_PER_EUR_RATE = 1.1401;
 export const IDR_PER_EUR_RATE = 20361.16;
 export const FX_RATE_SOURCE = 'ECB daily reference rate, 2026-06-29';
 export const IDR_RATE_SOURCE = FX_RATE_SOURCE;
+
+export interface FxRates {
+  /** Units of USD per 1 EUR. */
+  usdPerEur: number;
+  /** Units of IDR per 1 EUR. */
+  idrPerEur: number;
+}
+
+export const DEFAULT_FX_RATES: FxRates = {
+  usdPerEur: USD_PER_EUR_RATE,
+  idrPerEur: IDR_PER_EUR_RATE,
+};
 
 export interface SupplierBasePriceConversion {
   basePriceEur: number;
@@ -30,13 +44,16 @@ export function normalizeQuotePriceCurrency(value: unknown): QuotePriceCurrency 
   return 'EUR';
 }
 
-export function getSupplierInputCurrencyPerEur(currency: QuotePriceCurrency): number | null {
+export function getSupplierInputCurrencyPerEur(
+  currency: QuotePriceCurrency,
+  rates: FxRates = DEFAULT_FX_RATES
+): number | null {
   if (currency === 'USD') {
-    return USD_PER_EUR_RATE;
+    return rates.usdPerEur;
   }
 
   if (currency === 'IDR') {
-    return IDR_PER_EUR_RATE;
+    return rates.idrPerEur;
   }
 
   return null;
@@ -82,20 +99,21 @@ export function formatSupplierInputAmount(
 
 export function convertSupplierBasePriceToEur(
   amount: number,
-  currency: QuotePriceCurrency
+  currency: QuotePriceCurrency,
+  rates: FxRates = DEFAULT_FX_RATES
 ): SupplierBasePriceConversion {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('Supplier base price must be positive.');
   }
 
-  const rate = getSupplierInputCurrencyPerEur(currency);
+  const rate = getSupplierInputCurrencyPerEur(currency, rates);
   if (rate) {
     return {
       basePriceEur: Math.round((amount / rate) * 100) / 100,
       supplierInputPrice: amount,
       supplierInputCurrency: currency,
       supplierInputExchangeRatePerEur: rate,
-      supplierInputExchangeRateIdrPerEur: currency === 'IDR' ? IDR_PER_EUR_RATE : null,
+      supplierInputExchangeRateIdrPerEur: currency === 'IDR' ? rate : null,
       supplierInputConvertedAt: new Date().toISOString(),
     };
   }

@@ -29,7 +29,6 @@ import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Su
 
 interface RfqDetailModalProps {
   rfqId: string | null;
-  refreshToken: string;
   userRole: UserRole;
 }
 
@@ -52,10 +51,13 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
 
-export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModalProps) {
+export function RfqDetailModal({ rfqId, userRole }: RfqDetailModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RfqDetailData | null>(null);
+  // Bumped after mutations (own handlers or children) to refetch the detail;
+  // replaces the old server-generated refreshToken that refetched on every render.
+  const [refreshCounter, setRefreshCounter] = useState(0);
   const [pricingTeamLoading, setPricingTeamLoading] = useState(false);
   const [pricingTeamResult, setPricingTeamResult] = useState<string | null>(null);
   const [detailsEditing, setDetailsEditing] = useState(false);
@@ -73,6 +75,10 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const open = Boolean(rfqId);
+
+  const handleMutated = useCallback(() => {
+    setRefreshCounter((current) => current + 1);
+  }, []);
 
   const closeModal = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -132,7 +138,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     return () => {
       active = false;
     };
-  }, [open, refreshToken, rfqId]);
+  }, [open, refreshCounter, rfqId]);
 
   const invitesWithSupplier = useMemo(
     () =>
@@ -206,6 +212,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
       } else {
         setPricingTeamResult(`Sent to pricing team (${res.data.sent}/${res.data.total})`);
         router.refresh();
+        handleMutated();
       }
     } catch (err) {
       console.error('Send to pricing team failed:', err);
@@ -213,7 +220,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
     } finally {
       setPricingTeamLoading(false);
     }
-  }, [detail?.rfq.id, router]);
+  }, [detail?.rfq.id, handleMutated, router]);
 
   const startDetailsEdit = useCallback(() => {
     if (!detail) {
@@ -387,6 +394,7 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                   materialIdTableTop={detail.rfq.material_id_table_top}
                   materialIdTableFoot={detail.rfq.material_id_table_foot}
                   hidePricingTeamButton
+                  onMutated={handleMutated}
                 />
                 {pricingTeamResult && (
                   <span className="min-w-0 shrink text-sm text-muted-foreground">{pricingTeamResult}</span>
@@ -530,11 +538,12 @@ export function RfqDetailModal({ rfqId, refreshToken, userRole }: RfqDetailModal
                   attachments={detail.attachments}
                   canOpen={canManageRfq}
                   canDelete={canManageRfq && detail.rfq.status !== 'closed'}
+                  onMutated={handleMutated}
                 />
 
                 {detail.rfq.status !== 'closed' && (
                   <div className="mt-4">
-                    <AttachmentUpload rfqId={detail.rfq.id} />
+                    <AttachmentUpload rfqId={detail.rfq.id} onUploaded={handleMutated} />
                   </div>
                 )}
               </CardContent>

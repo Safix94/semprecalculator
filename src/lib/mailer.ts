@@ -502,6 +502,210 @@ export async function sendSupplierQuoteConfirmationEmail(params: {
   };
 }
 
+type SupplierRfqClosedCopy = {
+  subject: string;
+  title: string;
+  intro: string;
+  linkNote: string;
+  requestOverview: string;
+  yourQuote: string;
+  noQuote: string;
+  automaticNote: string;
+};
+
+const supplierRfqClosedCopy: Record<SupplierLanguage, SupplierRfqClosedCopy> = {
+  en: {
+    subject: 'Request closed',
+    title: 'This request for quotation has been closed',
+    intro: 'The request below has been closed by Sempre. This summary is for your records.',
+    linkNote: 'The link from previous emails is no longer active.',
+    requestOverview: 'Request overview',
+    yourQuote: 'Your submitted quote',
+    noQuote: 'No quote was submitted for this request.',
+    automaticNote: 'This quote was calculated automatically by Sempre.',
+  },
+  nl: {
+    subject: 'Aanvraag gesloten',
+    title: 'Deze prijsaanvraag is afgesloten',
+    intro: 'Onderstaande aanvraag is door Sempre afgesloten. Dit overzicht is voor uw administratie.',
+    linkNote: 'De link uit eerdere e-mails is niet langer actief.',
+    requestOverview: 'Overzicht aanvraag',
+    yourQuote: 'Uw ingediende offerte',
+    noQuote: 'Er werd geen offerte ingediend voor deze aanvraag.',
+    automaticNote: 'Deze offerte werd automatisch berekend door Sempre.',
+  },
+  fr: {
+    subject: 'Demande clôturée',
+    title: 'Cette demande de prix a été clôturée',
+    intro: 'La demande ci-dessous a été clôturée par Sempre. Ce récapitulatif est destiné à vos archives.',
+    linkNote: 'Le lien des e-mails précédents n’est plus actif.',
+    requestOverview: 'Aperçu de la demande',
+    yourQuote: 'Votre offre soumise',
+    noQuote: 'Aucune offre n’a été soumise pour cette demande.',
+    automaticNote: 'Cette offre a été calculée automatiquement par Sempre.',
+  },
+  es: {
+    subject: 'Solicitud cerrada',
+    title: 'Esta solicitud de cotización ha sido cerrada',
+    intro: 'La solicitud siguiente ha sido cerrada por Sempre. Este resumen es para sus registros.',
+    linkNote: 'El enlace de los correos anteriores ya no está activo.',
+    requestOverview: 'Resumen de la solicitud',
+    yourQuote: 'Su cotización enviada',
+    noQuote: 'No se envió ninguna cotización para esta solicitud.',
+    automaticNote: 'Esta cotización fue calculada automáticamente por Sempre.',
+  },
+  pt: {
+    subject: 'Pedido encerrado',
+    title: 'Este pedido de cotação foi encerrado',
+    intro: 'O pedido abaixo foi encerrado pela Sempre. Este resumo destina-se aos seus registos.',
+    linkNote: 'A ligação dos e-mails anteriores já não está ativa.',
+    requestOverview: 'Resumo do pedido',
+    yourQuote: 'A sua cotação submetida',
+    noQuote: 'Não foi submetida nenhuma cotação para este pedido.',
+    automaticNote: 'Esta cotação foi calculada automaticamente pela Sempre.',
+  },
+};
+
+/**
+ * Send the closing summary to a supplier when an RFQ is closed and their
+ * magic link is revoked. Includes the request overview and their own
+ * submitted values only — never internal retail prices or margins.
+ */
+export async function sendSupplierRfqClosedEmail(params: {
+  supplierEmails: string[];
+  supplierName: string;
+  rfq: {
+    productType?: string | null;
+    material: string;
+    shape: string;
+    finish?: string | null;
+    finishTop?: string | null;
+    finishEdge?: string | null;
+    finishColor?: string | null;
+    materialTableTop?: string | null;
+    materialTableFoot?: string | null;
+    finishTableTop?: string | null;
+    finishTableFoot?: string | null;
+    length: number;
+    width: number;
+    height: number;
+    thickness: number;
+    quantity: number;
+    model?: string | null;
+    usageEnvironment?: 'Indoor' | 'Outdoor' | null;
+    notes?: string | null;
+    attachmentNames?: string[];
+  };
+  quote: {
+    basePriceEur: number;
+    supplierInputPrice?: number | null;
+    supplierInputCurrency?: QuotePriceCurrency | null;
+    volumeM3: number;
+    leadTimeDays?: number | null;
+    comment?: string | null;
+    submittedAt: string;
+    isAutomatic: boolean;
+  } | null;
+  language?: SupplierLanguage;
+}) {
+  const language = normalizeSupplierLanguage(params.language);
+  const t = getSupplierTranslations(language);
+  const copy = supplierRfqClosedCopy[language];
+  const requestTitle = buildSupplierQuoteConfirmationTitle({
+    productType: params.rfq.productType,
+    material: params.rfq.material,
+    shape: params.rfq.shape,
+  });
+  const subject = `${copy.subject}: ${requestTitle}`;
+
+  const requestLines: string[] = [];
+  addEscapedDetailLine(requestLines, t.productType, params.rfq.productType);
+  addEscapedDetailLine(requestLines, t.material, params.rfq.material);
+  addEscapedDetailLine(requestLines, t.shape, params.rfq.shape);
+  addEscapedDetailLine(requestLines, t.finish, params.rfq.finish);
+  addEscapedDetailLine(requestLines, t.topFinish, params.rfq.finishTop);
+  addEscapedDetailLine(requestLines, t.edgeFinish, params.rfq.finishEdge);
+  addEscapedDetailLine(requestLines, t.colorFinish, params.rfq.finishColor);
+  addEscapedDetailLine(requestLines, t.tableTop, [params.rfq.materialTableTop, params.rfq.finishTableTop].filter(Boolean).join(' - '));
+  addEscapedDetailLine(requestLines, t.tableFoot, [params.rfq.materialTableFoot, params.rfq.finishTableFoot].filter(Boolean).join(' - '));
+  addEscapedDetailLine(
+    requestLines,
+    t.dimensions,
+    formatRfqDimensionsWithOptions(params.rfq, { includeThickness: true })
+  );
+  addEscapedDetailLine(requestLines, t.quantity, params.rfq.quantity);
+  addEscapedDetailLine(requestLines, t.model, params.rfq.model);
+  addEscapedDetailLine(
+    requestLines,
+    t.use,
+    translateUsageEnvironment(params.rfq.usageEnvironment, language) ?? params.rfq.usageEnvironment
+  );
+  addEscapedDetailLine(requestLines, t.notes, params.rfq.notes);
+  if (params.rfq.attachmentNames && params.rfq.attachmentNames.length > 0) {
+    addEscapedDetailLine(requestLines, t.attachments, params.rfq.attachmentNames.join(', '));
+  }
+
+  let quoteSection = `<p>${escapeHtml(copy.noQuote)}</p>`;
+  if (params.quote) {
+    const quoteLines: string[] = [];
+    if (params.quote.isAutomatic) {
+      quoteLines.push(`<li>${escapeHtml(copy.automaticNote)}</li>`);
+    } else {
+      const submittedBasePrice =
+        params.quote.supplierInputPrice && params.quote.supplierInputCurrency && params.quote.supplierInputCurrency !== 'EUR'
+          ? formatSupplierInputAmount(params.quote.supplierInputPrice, params.quote.supplierInputCurrency)
+          : `€${Number(params.quote.basePriceEur).toFixed(2)}`;
+      addEscapedDetailLine(quoteLines, t.basePrice, submittedBasePrice);
+      addEscapedDetailLine(quoteLines, t.volumeM3, `${params.quote.volumeM3} m³`);
+    }
+    if (params.quote.leadTimeDays !== null && params.quote.leadTimeDays !== undefined) {
+      addEscapedDetailLine(quoteLines, t.leadTime, `${params.quote.leadTimeDays} ${t.days}`);
+    }
+    addEscapedDetailLine(quoteLines, t.comment, params.quote.comment);
+    const submittedAt = new Intl.DateTimeFormat(SUPPLIER_LANGUAGE_LOCALES[language], {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date(params.quote.submittedAt));
+    addEscapedDetailLine(quoteLines, t.submittedOn, submittedAt);
+    quoteSection = `<ul>${quoteLines.join('')}</ul>`;
+  }
+
+  const supplierEmails = dedupeEmails(params.supplierEmails).filter(isValidEmail);
+  const htmlContent = `
+      <h2>${escapeHtml(copy.title)}</h2>
+      <p>${t.dear} ${escapeHtml(params.supplierName)},</p>
+      <p>${escapeHtml(copy.intro)}</p>
+      <h3>${escapeHtml(copy.requestOverview)}</h3>
+      <ul>${requestLines.join('')}</ul>
+      <h3>${escapeHtml(copy.yourQuote)}</h3>
+      ${quoteSection}
+      <p style="color:#666;font-size:12px;">${escapeHtml(copy.linkNote)}</p>
+    `;
+
+  const results = await Promise.all(
+    supplierEmails.map(async (email) => ({
+      email,
+      ...(await sendEmail({
+        to: { email, name: params.supplierName },
+        subject,
+        htmlContent,
+      })),
+    }))
+  );
+
+  const sent = results.filter((result) => result.success).length;
+  const failedEmails = results.filter((result) => !result.success).map((result) => result.email);
+  return {
+    success: sent > 0,
+    sent,
+    total: supplierEmails.length,
+    results,
+    error: failedEmails.length > 0
+      ? `Failed to send closing summary to ${failedEmails.length}/${supplierEmails.length} email(s): ${failedEmails.join(', ')}`
+      : undefined,
+  };
+}
+
 /**
  * Notify sales that a supplier has submitted a quote.
  */

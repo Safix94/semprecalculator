@@ -1,5 +1,6 @@
 import { requireRole } from '@/lib/auth';
-import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
+import { getUserEmailMap } from '@/lib/user-directory';
 import { AuditLogTable } from '@/components/audit-log-table';
 import type { AuditLog } from '@/types';
 
@@ -33,17 +34,12 @@ async function buildActorDisplayNameMap(logs: AuditLog[]): Promise<Map<string, s
     return new Map();
   }
 
-  const serviceClient = createServiceRoleClient();
-  const { data, error } = await serviceClient.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  if (error) {
-    console.error('Failed to resolve audit actor names:', error.message);
-    return new Map();
-  }
+  const emailMap = await getUserEmailMap();
 
   return new Map(
-    (data.users ?? [])
-      .filter((user) => userActorIds.includes(user.id))
-      .map((user) => [user.id, getEmailPrefix(user.email) ?? user.id])
+    userActorIds
+      .filter((actorId) => emailMap.has(actorId))
+      .map((actorId) => [actorId, getEmailPrefix(emailMap.get(actorId)) ?? actorId])
   );
 }
 
@@ -64,7 +60,7 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
 
   let query = supabase
     .from('audit_logs')
-    .select('*', { count: 'exact' })
+    .select('*', { count: 'estimated' })
     .order('created_at', { ascending: false })
     .range(offset, offset + PAGE_SIZE - 1);
 

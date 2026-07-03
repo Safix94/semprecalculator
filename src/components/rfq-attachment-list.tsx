@@ -12,6 +12,7 @@ interface RfqAttachmentListProps {
   attachments: RfqAttachment[];
   canOpen: boolean;
   canDelete?: boolean;
+  onMutated?: () => void;
 }
 
 export function RfqAttachmentList({
@@ -19,6 +20,7 @@ export function RfqAttachmentList({
   attachments,
   canOpen,
   canDelete = false,
+  onMutated,
 }: RfqAttachmentListProps) {
   const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(null);
   const [deletingAttachmentId, setDeletingAttachmentId] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export function RfqAttachmentList({
       }
 
       router.refresh();
+      onMutated?.();
     } catch (deleteError) {
       console.error('Failed to delete attachment:', deleteError);
       setError('Could not delete attachment.');

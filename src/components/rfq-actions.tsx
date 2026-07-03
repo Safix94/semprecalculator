@@ -27,6 +27,8 @@ interface RfqActionsProps {
   materialIdTableFoot?: string | null;
   /** When true, only "Send to supplier" is shown for draft (e.g. when modal has its own "Send to pricing team" button). */
   hidePricingTeamButton?: boolean;
+  /** Called after a successful mutation so a parent (e.g. the detail modal) can refetch. */
+  onMutated?: () => void;
 }
 
 export function RfqActions({
@@ -37,6 +39,7 @@ export function RfqActions({
   materialIdTableTop = null,
   materialIdTableFoot = null,
   hidePricingTeamButton = false,
+  onMutated,
 }: RfqActionsProps) {
   const [loading, setLoading] = useState(false);
   const [pricingLoading, setPricingLoading] = useState(false);
@@ -244,6 +247,7 @@ export function RfqActions({
             : `Sent to ${res.data.sent}/${res.data.total} suppliers`
         );
         router.refresh();
+        onMutated?.();
       }
     } catch (error) {
       console.error('Failed to send RFQ:', error);
@@ -301,6 +305,7 @@ export function RfqActions({
       );
       setPickerOpen(false);
       router.refresh();
+      onMutated?.();
     } catch (error) {
       console.error('Failed to save suppliers and send RFQ:', error);
       setPickerError('Failed to save suppliers and send RFQ.');
@@ -320,6 +325,7 @@ export function RfqActions({
       }
 
       router.refresh();
+      onMutated?.();
     } catch (error) {
       console.error('Failed to close RFQ:', error);
       setResult('Error: Failed to close RFQ');
@@ -342,6 +348,7 @@ export function RfqActions({
 
       setResult('Request reopened');
       router.refresh();
+      onMutated?.();
     } catch (error) {
       console.error('Failed to reopen RFQ:', error);
       setResult('Error: Failed to reopen RFQ');
@@ -361,6 +368,7 @@ export function RfqActions({
       } else {
         setResult(`Sent to pricing team (${res.data.sent}/${res.data.total})`);
         router.refresh();
+        onMutated?.();
       }
     } catch (error) {
       console.error('Failed to send RFQ to pricing team:', error);
@@ -381,6 +389,7 @@ export function RfqActions({
       } else {
         setResult(`Sent to pricing (CRM) (${res.data.sent}/${res.data.total})`);
         router.refresh();
+        onMutated?.();
       }
     } catch (error) {
       console.error('Failed to send RFQ to pricing CRM:', error);

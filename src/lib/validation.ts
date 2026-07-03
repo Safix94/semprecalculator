@@ -276,29 +276,6 @@ export const updateRfqNotesSchema = z.object({
   notes: z.string().max(5000, 'Notes may be at most 5000 characters').nullable(),
 });
 
-export const createMaterialSchema = z.object({
-  name: z.string().min(1, 'Material name is required').max(100, 'Material name may be at most 100 characters'),
-  finish_options: z.array(z.string().min(1, 'Finish may not be empty')),
-  finish_options_top: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  finish_options_edge: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  finish_options_color: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  supplier_ids: z.array(z.string().uuid()).optional(),
-});
-
-export const updateMaterialSchema = z.object({
-  name: z.string().min(1, 'Material name is required').max(100, 'Material name may be at most 100 characters').optional(),
-  finish_options: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  finish_options_top: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  finish_options_edge: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  finish_options_color: z.array(z.string().min(1, 'Finish may not be empty')).optional(),
-  is_active: z.boolean().optional(),
-});
-
-export const linkMaterialSupplierSchema = z.object({
-  material_id: z.string().uuid('Invalid material ID'),
-  supplier_id: z.string().uuid('Invalid supplier ID'),
-});
-
 export type CreateRfqInput = z.infer<typeof createRfqSchema>;
 export type UpdateRfqInput = z.infer<typeof updateRfqSchema>;
 type UpdateRfqDetailsSchemaInput = z.infer<typeof updateRfqDetailsSchema>;
@@ -306,6 +283,3 @@ export type UpdateRfqDetailsInput = Omit<UpdateRfqDetailsSchemaInput, 'shape'>;
 export type SubmitQuoteInput = z.infer<typeof submitQuoteSchema>;
 export type SubmitAutomaticQuoteInput = z.infer<typeof submitAutomaticQuoteSchema>;
 export type UpdateRfqNotesInput = z.infer<typeof updateRfqNotesSchema>;
-export type CreateMaterialInput = z.infer<typeof createMaterialSchema>;
-export type UpdateMaterialInput = z.infer<typeof updateMaterialSchema>;
-export type LinkMaterialSupplierInput = z.infer<typeof linkMaterialSupplierSchema>;

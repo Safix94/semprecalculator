@@ -107,13 +107,10 @@ function supplierBasePriceLabel(result: RfqSearchResponse['results'][number]): s
   if (result.supplierBasePrices.length === 0) return '-';
 
   return result.supplierBasePrices
-    .map((price) => {
-      const supplier = price.supplierName ?? 'Unknown';
-      const amount = price.isAutomatic
-        ? 'Automatic'
-        : formatSupplierInputAmount(price.supplierInputPrice, price.supplierInputCurrency);
-      return `${supplier}: ${amount}`;
-    })
+    .map((price) => price.isAutomatic
+      ? 'Automatic'
+      : formatSupplierInputAmount(price.supplierInputPrice, price.supplierInputCurrency)
+    )
     .join(' / ');
 }
 
@@ -378,7 +375,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                 <TableHead>Customer</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Supplier base price</TableHead>
-                <TableHead>Best price</TableHead>
+                <TableHead>Retail price</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>

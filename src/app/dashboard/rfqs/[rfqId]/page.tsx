@@ -6,7 +6,6 @@ import { createClient } from '@/lib/supabase/server';
 import { RfqActions } from '@/components/rfq-actions';
 import { RfqNotesEditor } from '@/components/rfq-notes-editor';
 import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
-import { QuoteComparison } from '@/components/quote-comparison';
 import { AttachmentUpload } from '@/components/attachment-upload';
 import { RfqAttachmentList } from '@/components/rfq-attachment-list';
 import { RfqDirectDetailsCard } from '@/components/rfq-direct-details-card';
@@ -100,6 +99,10 @@ export default async function RfqDetailPage({ params }: PageProps) {
   const bestQuote = typedQuotes[0];
   const supplierSummary = bestQuote?.supplier?.name ?? typedInvites[0]?.supplier?.name ?? '-';
   const leadTimeSummary = bestQuote?.lead_time_days ? `${bestQuote.lead_time_days} dagen` : '-';
+  const quoteVolumeLabel =
+    bestQuote && !isAutomaticQuote(bestQuote) && bestQuote.volume_m3
+      ? `${parseFloat(Number(bestQuote.volume_m3).toFixed(3))} m³`
+      : null;
 
   return (
     <div className="space-y-4">
@@ -162,7 +165,10 @@ export default async function RfqDetailPage({ params }: PageProps) {
         <div className="sempre-metric-card">
           <div className="sempre-label">Supplier basisprijs</div>
           <div className="sempre-metric-value">{supplierBasePriceLabel(bestQuote)}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Beste offerte · {supplierSummary}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            Beste offerte · {supplierSummary}
+            {quoteVolumeLabel && <> · {quoteVolumeLabel}</>}
+          </div>
         </div>
         <div className="sempre-metric-card">
           <div className="sempre-label">Levertijd</div>
@@ -214,13 +220,6 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </div>
 
         <div className="space-y-4">
-          {typedRfq.status !== 'draft' && (
-            <QuoteComparison
-              invites={typedInvites as (RfqInvite & { supplier: Supplier })[]}
-              quotes={typedQuotes}
-            />
-          )}
-
           <RfqSupplierThreads
             key={`rfq-threads-${rfqId}`}
             rfqId={rfqId}

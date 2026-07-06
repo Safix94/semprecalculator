@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { submitQuote } from '@/actions/quote';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { IDR_PER_EUR_RATE, USD_PER_EUR_RATE } from '@/lib/currency';
+import { calculateVolumeM3FromCm } from '@/lib/pricing';
 import type { QuotePriceCurrency, SupplierLanguage } from '@/types';
 
 interface SupplierQuoteFormProps {
@@ -27,6 +28,19 @@ interface SupplierQuoteFormProps {
   /** Current admin-configured rates; fall back to the pinned defaults. */
   usdPerEurRate?: number;
   idrPerEurRate?: number;
+}
+
+function parseDimension(value: string) {
+  if (!value.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function formatVolume(value: number) {
+  return value.toLocaleString('nl-BE', {
+    minimumFractionDigits: 3,
+    maximumFractionDigits: 6,
+  });
 }
 
 export function SupplierQuoteForm({
@@ -62,6 +76,18 @@ export function SupplierQuoteForm({
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]> | string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [lengthCm, setLengthCm] = useState('');
+  const [widthCm, setWidthCm] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+
+  const calculatedVolumeM3 = useMemo(() => {
+    const length = parseDimension(lengthCm);
+    const width = parseDimension(widthCm);
+    const height = parseDimension(heightCm);
+
+    if (length === null || width === null || height === null) return null;
+    return calculateVolumeM3FromCm(length, width, height);
+  }, [heightCm, lengthCm, widthCm]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -71,7 +97,9 @@ export function SupplierQuoteForm({
     const form = new FormData(e.currentTarget);
     const input = {
       basePrice: Number(form.get('basePrice')),
-      volumeM3: Number(form.get('volumeM3')),
+      lengthCm: Number(form.get('lengthCm')),
+      widthCm: Number(form.get('widthCm')),
+      heightCm: Number(form.get('heightCm')),
       leadTimeDays: form.get('leadTimeDays') ? Number(form.get('leadTimeDays')) : null,
       comment: (form.get('comment') as string) || null,
     };
@@ -92,8 +120,8 @@ export function SupplierQuoteForm({
     return (
       <Card className="border-chart-2/50">
         <CardContent className="py-8 text-center">
-          <div className="text-chart-2 text-4xl mb-4">✓</div>
-          <h2 className="text-lg font-semibold text-chart-2 mb-2">
+          <div className="text-chart-2 mb-4 text-4xl">✓</div>
+          <h2 className="text-chart-2 mb-2 text-lg font-semibold">
             {isUpdate ? t.quoteUpdated : t.quoteSubmitted}
           </h2>
           <p className="text-muted-foreground">
@@ -117,7 +145,7 @@ export function SupplierQuoteForm({
     <Card>
       <CardHeader>
         <CardTitle>{isUpdate ? t.updateQuote : t.submitQuote}</CardTitle>
-        <p className="text-sm text-muted-foreground">Voer jullie basisprijs per stuk, volume en levertijd in. Sempre berekent de klantprijs intern.</p>
+        <p className="text-sm text-muted-foreground">{t.dimensionsHelp}</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,21 +177,69 @@ export function SupplierQuoteForm({
                 <p className="text-destructive text-xs">{errors.basePrice[0]}</p>
               )}
             </div>
+            <div className="rounded-lg border bg-muted/30 p-3">
+              <div className="sempre-label">{t.calculatedVolumeM3}</div>
+              <div className="mt-1 text-xl font-bold tracking-[-0.01em]">
+                {calculatedVolumeM3 === null ? '—' : `${formatVolume(calculatedVolumeM3)} m³`}
+              </div>
+              {initialValues?.volumeM3 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {t.yourSubmittedQuote}: {formatVolume(initialValues.volumeM3)} m³
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="volumeM3" className="sempre-label">{t.volumeM3Required}</Label>
+              <Label htmlFor="lengthCm" className="sempre-label">{t.lengthCmRequired}</Label>
               <Input
-                id="volumeM3"
-                name="volumeM3"
+                id="lengthCm"
+                name="lengthCm"
                 type="number"
-                step="0.001"
-                min="0.001"
+                step="0.1"
+                min="0.1"
                 required
-                placeholder="0.000"
-                defaultValue={initialValues?.volumeM3 ?? ''}
-                aria-invalid={Boolean(typeof errors === 'object' && errors?.volumeM3)}
+                value={lengthCm}
+                onChange={(event) => setLengthCm(event.target.value)}
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.lengthCm)}
               />
-              {typeof errors === 'object' && errors?.volumeM3 && (
-                <p className="text-destructive text-xs">{errors.volumeM3[0]}</p>
+              {typeof errors === 'object' && errors?.lengthCm && (
+                <p className="text-destructive text-xs">{errors.lengthCm[0]}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="widthCm" className="sempre-label">{t.widthCmRequired}</Label>
+              <Input
+                id="widthCm"
+                name="widthCm"
+                type="number"
+                step="0.1"
+                min="0.1"
+                required
+                value={widthCm}
+                onChange={(event) => setWidthCm(event.target.value)}
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.widthCm)}
+              />
+              {typeof errors === 'object' && errors?.widthCm && (
+                <p className="text-destructive text-xs">{errors.widthCm[0]}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="heightCm" className="sempre-label">{t.heightCmRequired}</Label>
+              <Input
+                id="heightCm"
+                name="heightCm"
+                type="number"
+                step="0.1"
+                min="0.1"
+                required
+                value={heightCm}
+                onChange={(event) => setHeightCm(event.target.value)}
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.heightCm)}
+              />
+              {typeof errors === 'object' && errors?.heightCm && (
+                <p className="text-destructive text-xs">{errors.heightCm[0]}</p>
               )}
             </div>
           </div>
@@ -197,9 +273,9 @@ export function SupplierQuoteForm({
           )}
 
           <div className="flex items-center justify-between gap-4 border-t pt-4">
-            <span className="text-xs text-muted-foreground">Controleer goed voor je indient.</span>
+            <span className="text-xs text-muted-foreground">{t.calculatedVolumeM3}: {calculatedVolumeM3 === null ? '—' : `${formatVolume(calculatedVolumeM3)} m³`}</span>
             <Button type="submit" disabled={loading} className="min-w-[180px]">
-            {loading ? t.submitting : isUpdate ? t.updateQuote : t.submitQuote}
+              {loading ? t.submitting : isUpdate ? t.updateQuote : t.submitQuote}
             </Button>
           </div>
         </form>

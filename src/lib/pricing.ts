@@ -56,6 +56,14 @@ function assertPositiveNumber(value: number | null, label: string): asserts valu
   }
 }
 
+export function calculateVolumeM3FromCm(lengthCm: number, widthCm: number, heightCm: number): number {
+  assertPositiveNumber(lengthCm, 'Length');
+  assertPositiveNumber(widthCm, 'Width');
+  assertPositiveNumber(heightCm, 'Height');
+
+  return roundTo((lengthCm * widthCm * heightCm) / 1_000_000, 6);
+}
+
 function baseSnapshot(profile: SupplierPricingProfile) {
   return {
     formulaVersion: profile.formulaVersion || SUPPLIER_PRICING_FORMULA_VERSION,

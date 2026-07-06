@@ -254,13 +254,15 @@ export const submitQuoteSchema = z.object({
   basePrice: z.coerce
     .number()
     .positive('Base price must be positive'),
-  volumeM3: z.coerce
+  lengthCm: z.coerce
     .number()
-    .positive('Volume must be positive')
-    .refine((v) => {
-      const parts = v.toString().split('.');
-      return !parts[1] || parts[1].length <= 3;
-    }, 'Volume may have at most 3 decimal places'),
+    .positive('Length must be positive'),
+  widthCm: z.coerce
+    .number()
+    .positive('Width must be positive'),
+  heightCm: z.coerce
+    .number()
+    .positive('Height must be positive'),
   leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
   comment: z.string().max(2000).optional().nullable(),
 });

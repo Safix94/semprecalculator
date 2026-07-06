@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  calculateVolumeM3FromCm,
   calculateSupplierPricing,
   DEFAULT_TRUCK_MULTIPLIER_FACTOR,
   type SupplierPricingProfile,
@@ -21,6 +22,11 @@ function profile(overrides: Partial<SupplierPricingProfile> = {}): SupplierPrici
 
 // Golden values: guard the live pricing formulas against accidental changes.
 describe('calculateSupplierPricing', () => {
+  it('calculates supplier quote volume from centimetre dimensions', () => {
+    expect(calculateVolumeM3FromCm(200, 100, 50)).toBe(1);
+    expect(calculateVolumeM3FromCm(123.4, 56.7, 8.9)).toBe(0.062271);
+  });
+
   it('container mode: transport + margin + retail multiplier', () => {
     const result = calculateSupplierPricing(100, 2, profile());
 

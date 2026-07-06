@@ -5,7 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { resolveSupplierInviteByToken } from '@/lib/supplier-invite';
 import { submitAutomaticQuoteSchema, submitQuoteSchema } from '@/lib/validation';
-import { calculateSupplierPricing } from '@/lib/pricing';
+import { calculateSupplierPricing, calculateVolumeM3FromCm } from '@/lib/pricing';
 import {
   convertSupplierBasePriceToEur,
   normalizeQuotePriceCurrency,
@@ -168,9 +168,10 @@ export async function submitQuote(
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { basePrice, volumeM3, leadTimeDays, comment } = parsed.data;
+  const { basePrice, lengthCm, widthCm, heightCm, leadTimeDays, comment } = parsed.data;
+  const volumeM3 = calculateVolumeM3FromCm(lengthCm, widthCm, heightCm);
 
-  // Supplier provides volume directly in m3. Do not derive pricing volume from RFQ thickness.
+  // Supplier provides dimensions in cm; backend calculates volume in m³ for pricing.
   const { data: rfqForPricing, error: rfqForPricingError } = await supabase
     .from('rfqs')
     .select(`
@@ -204,7 +205,7 @@ export async function submitQuote(
     return { error: 'Request not found' };
   }
 
-  // Supplier-level pricing calculation. Supplier provides volume directly in m3.
+  // Supplier-level pricing calculation. Supplier dimensions were converted to volumeM3 above.
   const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
 
   // Closed requests no longer accept quotes, even while the link is valid.
@@ -392,6 +393,9 @@ export async function submitQuote(
       exchangeRatePerEur: convertedBasePrice.supplierInputExchangeRatePerEur,
       exchangeRateIdrPerEur: convertedBasePrice.supplierInputExchangeRateIdrPerEur,
       volumeM3,
+      lengthCm,
+      widthCm,
+      heightCm,
       shippingCostCalculated,
       transportCostCalculated,
       productPriceAfterMargin,

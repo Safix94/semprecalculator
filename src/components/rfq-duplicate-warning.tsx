@@ -73,7 +73,7 @@ export function RfqDuplicateWarning({ warning, loading, error }: RfqDuplicateWar
   const title = loading
     ? 'Controle op dubbele aanvragen'
     : error
-      ? 'Duplicate check niet gelukt'
+      ? 'Dubbelcontrole niet gelukt'
       : warning.exact.length > 0
         ? 'Mogelijke dubbele aanvraag gevonden'
         : 'Gelijkaardige aanvragen gevonden';

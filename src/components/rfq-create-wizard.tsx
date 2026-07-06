@@ -346,7 +346,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     } catch (error) {
       console.error('Failed to load product types:', error);
       setProductTypes([]);
-      setProductTypesError('Product types could not be loaded.');
+      setProductTypesError('Producttypes konden niet geladen worden.');
     } finally {
       setProductTypesLoading(false);
     }
@@ -362,7 +362,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     } catch (error) {
       console.error('Failed to load finish options:', error);
       setFinishOptions([]);
-      setFinishOptionsError('Finishes could not be loaded.');
+      setFinishOptionsError('Afwerkingen konden niet geladen worden.');
     } finally {
       setFinishOptionsLoading(false);
     }
@@ -789,103 +789,103 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     if (currentStep === 0) {
       if (isTablesType) {
         if (!data.material_id_table_top) {
-          stepErrors.material_id_table_top = ['Table top material is required'];
+          stepErrors.material_id_table_top = ['Materiaal tafelblad is verplicht'];
         }
 
         if (showTableFoot && tableTopFinishOptions.length > 0 && !data.finish_table_top) {
-          stepErrors.finish_table_top = ['Table top finish is required'];
+          stepErrors.finish_table_top = ['Afwerking tafelblad is verplicht'];
         }
 
         if (isTableTopsType) {
           if (tableTopMaterialTopOptions.length > 0 && !data.finish_top) {
-            stepErrors.finish_top = ['Top finish is required'];
+            stepErrors.finish_top = ['Afwerking blad is verplicht'];
           }
           if (tableTopMaterialEdgeOptions.length > 0 && !data.finish_edge) {
-            stepErrors.finish_edge = ['Edge finish is required'];
+            stepErrors.finish_edge = ['Afwerking rand is verplicht'];
           }
           if (tableTopMaterialColorOptions.length > 0 && !data.finish_color) {
-            stepErrors.finish_color = ['Color finish is required'];
+            stepErrors.finish_color = ['Afwerking kleur is verplicht'];
           }
         }
 
         if (showTableFoot && !data.material_id_table_foot) {
-          stepErrors.material_id_table_foot = ['Table foot material is required'];
+          stepErrors.material_id_table_foot = ['Materiaal tafelpoot is verplicht'];
         }
 
         if (showTableFoot && tableFootFinishOptions.length > 0 && !data.finish_table_foot) {
-          stepErrors.finish_table_foot = ['Table foot finish is required'];
+          stepErrors.finish_table_foot = ['Afwerking tafelpoot is verplicht'];
         }
       } else {
         if (!data.material_id) {
-          stepErrors.material_id = ['Material is required'];
+          stepErrors.material_id = ['Materiaal is verplicht'];
         }
         if (availableFinishOptions.length > 0 && !data.finish) {
-          stepErrors.finish = ['Finish is required'];
+          stepErrors.finish = ['Afwerking is verplicht'];
         }
       }
     } else if (currentStep === 1) {
       if (isTablesType) {
         if (data.supplier_ids_table_top.length === 0) {
-          stepErrors.supplier_ids_table_top = ['Select at least one table top supplier'];
+          stepErrors.supplier_ids_table_top = ['Selecteer minstens één leverancier voor het tafelblad'];
         }
       } else if (data.supplier_ids.length === 0) {
-        stepErrors.supplier_ids = ['Select at least one supplier'];
+        stepErrors.supplier_ids = ['Selecteer minstens één leverancier'];
       }
     } else if (showTableFoot && currentStep === 2) {
       if (data.supplier_ids_table_foot.length === 0) {
-        stepErrors.supplier_ids_table_foot = ['Select at least one table foot supplier'];
+        stepErrors.supplier_ids_table_foot = ['Selecteer minstens één leverancier voor de tafelpoot'];
       }
     } else if (currentStep === detailsStepIndex) {
       const validatePositiveNumber = (field: keyof WizardData, label: string) => {
         const value = data[field];
         if (typeof value !== 'string' || value.trim() === '' || Number(value) <= 0) {
-          stepErrors[field] = [`${label} must be positive`];
+          stepErrors[field] = [`${label} moet groter dan 0 zijn`];
         }
       };
 
       const validateOptionalNonNegativeNumber = (field: keyof WizardData, label: string) => {
         const value = data[field];
         if (typeof value === 'string' && value.trim() !== '' && Number(value) < 0) {
-          stepErrors[field] = [`${label} must be zero or positive`];
+          stepErrors[field] = [`${label} moet 0 of groter zijn`];
         }
       };
 
       if (showModelField && isModelRequired && !data.model.trim()) {
-        stepErrors.model = ['Model is required'];
+        stepErrors.model = ['Model is verplicht'];
       }
 
       if (showShapeField && isShapeRequired && !data.shape) {
-        stepErrors.shape = ['Shape is required'];
+        stepErrors.shape = ['Vorm is verplicht'];
       }
 
       if (showUsageEnvironmentField && isUsageEnvironmentRequired && !data.usage_environment) {
-        stepErrors.usage_environment = ['Use is required'];
+        stepErrors.usage_environment = ['Gebruik is verplicht'];
       }
 
       if (showDiameterField && isDiameterRequired) {
         validatePositiveNumber('diameter', 'Diameter');
       }
       if (showLengthField && isLengthRequired) {
-        validatePositiveNumber('length', 'Length');
+        validatePositiveNumber('length', 'Lengte');
       }
       if (showWidthField && isWidthRequired) {
-        validatePositiveNumber('width', 'Width');
+        validatePositiveNumber('width', 'Breedte');
       }
       if (showHeightField && isHeightRequired) {
-        validatePositiveNumber('height', 'Height');
+        validatePositiveNumber('height', 'Hoogte');
       }
       if (showThicknessField && isThicknessRequired) {
-        validatePositiveNumber('thickness', 'Thickness top');
+        validatePositiveNumber('thickness', 'Dikte blad');
       } else if (showThicknessField) {
-        validateOptionalNonNegativeNumber('thickness', 'Thickness top');
+        validateOptionalNonNegativeNumber('thickness', 'Dikte blad');
       }
 
       if (showQuantityField) {
         const quantityValue = Number(data.quantity);
         if (isQuantityRequired && (!data.quantity || !Number.isInteger(quantityValue) || quantityValue < 1)) {
-          stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
+          stepErrors.quantity = ['Aantal moet een geheel getal van minstens 1 zijn'];
         } else if (data.quantity && (!Number.isInteger(quantityValue) || quantityValue < 1)) {
-          stepErrors.quantity = ['Quantity must be a whole number of at least 1'];
+          stepErrors.quantity = ['Aantal moet een geheel getal van minstens 1 zijn'];
         }
       }
 
@@ -1049,7 +1049,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         console.error('Failed to check duplicate RFQs:', error);
         setDuplicateWarning({ exact: [], similar: [] });
         setDuplicateWarningSignature(null);
-        setDuplicateError('Duplicate check could not be completed.');
+        setDuplicateError('Dubbelcontrole kon niet voltooid worden.');
       } finally {
         if (active) {
           setDuplicateLoading(false);
@@ -1129,7 +1129,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
       }
     } catch (error) {
       console.error('Failed to create RFQ:', error);
-      setErrors({ _form: ['Could not create request. Please try again.'] });
+      setErrors({ _form: ['Aanvraag kon niet aangemaakt worden. Probeer opnieuw.'] });
     } finally {
       setLoading(false);
     }
@@ -1196,7 +1196,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           {currentStep === 0 && (
             <>
               <div className="space-y-1.5">
-                <Label htmlFor="customer_name">Customer name (optional)</Label>
+                <Label htmlFor="customer_name">Klantnaam (optioneel)</Label>
                 <Input
                   id="customer_name"
                   value={data.customer_name}
@@ -1205,7 +1205,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="product_type">Type</Label>
+                <Label htmlFor="product_type">Producttype</Label>
                 <Select
                   value={data.product_type ?? ''}
                   onValueChange={handleProductTypeChange}
@@ -1215,10 +1215,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     <SelectValue
                       placeholder={
                         productTypesLoading
-                          ? 'Loading types...'
+                          ? 'Types laden…'
                           : productTypes.length === 0
-                            ? 'No types available'
-                            : 'Select type (optional)'
+                            ? 'Geen types beschikbaar'
+                            : 'Kies type (optioneel)'
                       }
                     />
                   </SelectTrigger>
@@ -1236,7 +1236,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               {!isTablesType && (
                 <>
                   <div className="space-y-1.5">
-                    <Label htmlFor="material">Material *</Label>
+                    <Label htmlFor="material">Materiaal *</Label>
                     <Select
                       value={data.material_id}
                       onValueChange={handleMaterialChange}
@@ -1246,10 +1246,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                         <SelectValue
                           placeholder={
                             materialsLoading
-                              ? 'Loading materials...'
+                              ? 'Materialen laden…'
                               : availableMaterialsForType.length === 0
-                                ? 'No materials available'
-                                : 'Select a material'
+                                ? 'Geen materialen beschikbaar'
+                                : 'Kies een materiaal'
                           }
                         />
                       </SelectTrigger>
@@ -1264,7 +1264,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     {materialsError && <p className="text-destructive text-xs">{materialsError}</p>}
                     {!materialsLoading && !materialsError && availableMaterialsForType.length === 0 && (
                       <p className="text-muted-foreground text-xs">
-                        No materials are linked to this product type yet.
+                        Er zijn nog geen materialen gekoppeld aan dit producttype.
                       </p>
                     )}
                     {errors.material_id && <p className="text-destructive text-xs">{errors.material_id[0]}</p>}
@@ -1272,10 +1272,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                   {selectedMaterial && !isTableTopsType && availableFinishOptions.length > 0 && (
                     <div className="space-y-1.5">
-                      <Label htmlFor="finish">Finish *</Label>
+                      <Label htmlFor="finish">Afwerking *</Label>
                       <Select value={data.finish} onValueChange={(value) => updateData('finish', value)}>
                         <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a finish" />
+                          <SelectValue placeholder="Kies een afwerking" />
                         </SelectTrigger>
                         <SelectContent className="z-[70]">
                           {availableFinishOptions.map((finish) => (
@@ -1293,8 +1293,8 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   {selectedMaterial && !isTableTopsType && availableFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
                       {finishOptionsLoading
-                        ? 'Loading finishes...'
-                        : 'No active finishes are available. Add finishes under Management > Finishes.'}
+                        ? 'Afwerkingen laden…'
+                        : 'Geen actieve afwerkingen beschikbaar. Voeg afwerkingen toe onder Beheer > Afwerkingen.'}
                     </p>
                   )}
                 </>
@@ -1303,7 +1303,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               {isTablesType && (
                 <>
                   <div className="space-y-1.5">
-                    <Label htmlFor="material-table-top">Material (Table top) *</Label>
+                    <Label htmlFor="material-table-top">Materiaal (Tafelblad) *</Label>
                     <Select
                       value={data.material_id_table_top}
                       onValueChange={handleTableTopMaterialChange}
@@ -1313,10 +1313,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                         <SelectValue
                           placeholder={
                             materialsLoading
-                              ? 'Loading materials...'
+                              ? 'Materialen laden…'
                               : availableMaterialsForType.length === 0
-                                ? 'No materials available'
-                                : 'Select table top material'
+                                ? 'Geen materialen beschikbaar'
+                                : 'Kies materiaal tafelblad'
                           }
                         />
                       </SelectTrigger>
@@ -1335,13 +1335,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                   {selectedTableTopMaterial && showTableFoot && tableTopFinishOptions.length > 0 && (
                     <div className="space-y-1.5">
-                      <Label htmlFor="finish-table-top">Finish (Table top) *</Label>
+                      <Label htmlFor="finish-table-top">Afwerking (Tafelblad) *</Label>
                       <Select
                         value={data.finish_table_top}
                         onValueChange={(value) => updateData('finish_table_top', value)}
                       >
                         <SelectTrigger className="w-full" id="finish-table-top">
-                          <SelectValue placeholder="Select a finish" />
+                          <SelectValue placeholder="Kies een afwerking" />
                         </SelectTrigger>
                         <SelectContent className="z-[70]">
                           {tableTopFinishOptions.map((finish) => (
@@ -1359,7 +1359,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                   {selectedTableTopMaterial && showTableFoot && tableTopFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
-                      No finishes are configured for the table top material.
+                      Er zijn geen afwerkingen ingesteld voor het tafelblad-materiaal.
                     </p>
                   )}
 
@@ -1367,12 +1367,12 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     <div className="space-y-3">
                       <div className="space-y-1.5">
                         <Label htmlFor="finish-top">
-                          Top finish {tableTopMaterialTopOptions.length > 0 ? '*' : ''}
+                          Afwerking blad {tableTopMaterialTopOptions.length > 0 ? '*' : ''}
                         </Label>
                         {tableTopMaterialTopOptions.length > 0 ? (
                           <Select value={data.finish_top} onValueChange={(value) => updateData('finish_top', value)}>
                             <SelectTrigger className="w-full" id="finish-top">
-                              <SelectValue placeholder="Select a finish" />
+                              <SelectValue placeholder="Kies een afwerking" />
                             </SelectTrigger>
                             <SelectContent className="z-[70]">
                               {tableTopMaterialTopOptions.map((finish) => (
@@ -1383,19 +1383,19 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <p className="text-muted-foreground text-sm">Top finish: N.v.t. (no options configured)</p>
+                          <p className="text-muted-foreground text-sm">Afwerking blad: N.v.t. (geen opties ingesteld)</p>
                         )}
                         {errors.finish_top && <p className="text-destructive text-xs">{errors.finish_top[0]}</p>}
                       </div>
 
                       <div className="space-y-1.5">
                         <Label htmlFor="finish-edge">
-                          Edge finish {tableTopMaterialEdgeOptions.length > 0 ? '*' : ''}
+                          Afwerking rand {tableTopMaterialEdgeOptions.length > 0 ? '*' : ''}
                         </Label>
                         {tableTopMaterialEdgeOptions.length > 0 ? (
                           <Select value={data.finish_edge} onValueChange={(value) => updateData('finish_edge', value)}>
                             <SelectTrigger className="w-full" id="finish-edge">
-                              <SelectValue placeholder="Select a finish" />
+                              <SelectValue placeholder="Kies een afwerking" />
                             </SelectTrigger>
                             <SelectContent className="z-[70]">
                               {tableTopMaterialEdgeOptions.map((finish) => (
@@ -1406,19 +1406,19 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <p className="text-muted-foreground text-sm">Edge finish: N.v.t. (no options configured)</p>
+                          <p className="text-muted-foreground text-sm">Afwerking rand: N.v.t. (geen opties ingesteld)</p>
                         )}
                         {errors.finish_edge && <p className="text-destructive text-xs">{errors.finish_edge[0]}</p>}
                       </div>
 
                       <div className="space-y-1.5">
                         <Label htmlFor="finish-color">
-                          Color finish {tableTopMaterialColorOptions.length > 0 ? '*' : ''}
+                          Afwerking kleur {tableTopMaterialColorOptions.length > 0 ? '*' : ''}
                         </Label>
                         {tableTopMaterialColorOptions.length > 0 ? (
                           <Select value={data.finish_color} onValueChange={(value) => updateData('finish_color', value)}>
                             <SelectTrigger className="w-full" id="finish-color">
-                              <SelectValue placeholder="Select a finish" />
+                              <SelectValue placeholder="Kies een afwerking" />
                             </SelectTrigger>
                             <SelectContent className="z-[70]">
                               {tableTopMaterialColorOptions.map((finish) => (
@@ -1429,7 +1429,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             </SelectContent>
                           </Select>
                         ) : (
-                          <p className="text-muted-foreground text-sm">Color finish: N.v.t. (no options configured)</p>
+                          <p className="text-muted-foreground text-sm">Afwerking kleur: N.v.t. (geen opties ingesteld)</p>
                         )}
                         {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
                       </div>
@@ -1439,7 +1439,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                   {!isTableTopsType && (
                     <>
                       <div className="space-y-1.5">
-                        <Label htmlFor="material-table-foot">Material (Table foot) *</Label>
+                        <Label htmlFor="material-table-foot">Materiaal (Tafelpoot) *</Label>
                         <Select
                           value={data.material_id_table_foot}
                           onValueChange={handleTableFootMaterialChange}
@@ -1449,10 +1449,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             <SelectValue
                               placeholder={
                                 materialsLoading
-                                  ? 'Loading materials...'
+                                  ? 'Materialen laden…'
                                   : availableMaterialsForType.length === 0
-                                    ? 'No materials available'
-                                    : 'Select table foot material'
+                                    ? 'Geen materialen beschikbaar'
+                                    : 'Kies materiaal tafelpoot'
                               }
                             />
                           </SelectTrigger>
@@ -1471,13 +1471,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                       {selectedTableFootMaterial && tableFootFinishOptions.length > 0 && (
                         <div className="space-y-1.5">
-                          <Label htmlFor="finish-table-foot">Finish (Table foot) *</Label>
+                          <Label htmlFor="finish-table-foot">Afwerking (Tafelpoot) *</Label>
                           <Select
                             value={data.finish_table_foot}
                             onValueChange={(value) => updateData('finish_table_foot', value)}
                           >
                             <SelectTrigger className="w-full" id="finish-table-foot">
-                              <SelectValue placeholder="Select a finish" />
+                              <SelectValue placeholder="Kies een afwerking" />
                             </SelectTrigger>
                             <SelectContent className="z-[70]">
                               {tableFootFinishOptions.map((finish) => (
@@ -1495,7 +1495,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                       {selectedTableFootMaterial && tableFootFinishOptions.length === 0 && (
                         <p className="text-muted-foreground text-xs">
-                          No finishes are configured for the table foot material.
+                          Er zijn geen afwerkingen ingesteld voor het tafelpoot-materiaal.
                         </p>
                       )}
                     </>
@@ -1508,18 +1508,18 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           {currentStep === 1 && (
             <div className="space-y-4">
               <div>
-                <Label>Select suppliers *</Label>
+                <Label>Selecteer leveranciers *</Label>
                 <p className="mb-3 text-sm text-muted-foreground">
                   {isTablesType
-                    ? 'Choose one or more suppliers for the selected table top material.'
-                    : `Choose one or more suppliers for ${data.material_name || 'this material'}.`}
+                    ? 'Kies één of meer leveranciers voor het gekozen tafelblad-materiaal.'
+                    : `Kies één of meer leveranciers voor ${data.material_name || 'dit materiaal'}.`}
                 </p>
               </div>
 
               {(isTablesType ? tableTopSuppliersLoading : suppliersLoading) ? (
                 <Card>
                   <CardContent className="pt-6">
-                    <p className="text-center text-muted-foreground">Loading suppliers...</p>
+                    <p className="text-center text-muted-foreground">Leveranciers laden…</p>
                   </CardContent>
                 </Card>
               ) : (isTablesType ? tableTopSuppliersError : suppliersError) ? (
@@ -1534,7 +1534,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 <Card>
                   <CardContent className="pt-6">
                     <p className="text-center text-muted-foreground">
-                      No suppliers available for the selected material.
+                      Geen leveranciers beschikbaar voor het gekozen materiaal.
                     </p>
                   </CardContent>
                 </Card>
@@ -1580,16 +1580,16 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           {showTableFoot && currentStep === 2 && (
             <div className="space-y-4">
               <div>
-                <Label>Select suppliers *</Label>
+                <Label>Selecteer leveranciers *</Label>
                 <p className="mb-3 text-sm text-muted-foreground">
-                  Choose one or more suppliers for the selected table foot material.
+                  Kies één of meer leveranciers voor het gekozen tafelpoot-materiaal.
                 </p>
               </div>
 
               {tableFootSuppliersLoading ? (
                 <Card>
                   <CardContent className="pt-6">
-                    <p className="text-center text-muted-foreground">Loading suppliers...</p>
+                    <p className="text-center text-muted-foreground">Leveranciers laden…</p>
                   </CardContent>
                 </Card>
               ) : tableFootSuppliersError ? (
@@ -1602,7 +1602,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                 <Card>
                   <CardContent className="pt-6">
                     <p className="text-center text-muted-foreground">
-                      No suppliers available for the selected material.
+                      Geen leveranciers beschikbaar voor het gekozen materiaal.
                     </p>
                   </CardContent>
                 </Card>
@@ -1640,7 +1640,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
             <>
               {showModelField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="model">Model {isModelRequired ? '*' : '(optional)'}</Label>
+                  <Label htmlFor="model">Model {isModelRequired ? '*' : '(optioneel)'}</Label>
                   <Input
                     id="model"
                     value={data.model}
@@ -1653,10 +1653,10 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
               {showShapeField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="shape">Shape {isShapeRequired ? '*' : '(optional)'}</Label>
+                  <Label htmlFor="shape">Vorm {isShapeRequired ? '*' : '(optioneel)'}</Label>
                   <Select value={data.shape} onValueChange={handleShapeChange}>
                     <SelectTrigger id="shape" className="w-full" aria-invalid={Boolean(errors.shape)}>
-                      <SelectValue placeholder="Select a shape" />
+                      <SelectValue placeholder="Kies een vorm" />
                     </SelectTrigger>
                     <SelectContent className="z-[70]">
                       <SelectItem value="Rectangular">Rectangular</SelectItem>
@@ -1671,13 +1671,13 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
               {showUsageEnvironmentField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="usage-environment">Use {isUsageEnvironmentRequired ? '*' : '(optional)'}</Label>
+                  <Label htmlFor="usage-environment">Gebruik {isUsageEnvironmentRequired ? '*' : '(optioneel)'}</Label>
                   <Select
                     value={data.usage_environment}
                     onValueChange={handleUsageEnvironmentChange}
                   >
                     <SelectTrigger id="usage-environment" className="w-full" aria-invalid={Boolean(errors.usage_environment)}>
-                      <SelectValue placeholder="Select Indoor or Outdoor" />
+                      <SelectValue placeholder="Kies gebruik" />
                     </SelectTrigger>
                     <SelectContent className="z-[70]">
                       <SelectItem value="Indoor">Indoor</SelectItem>
@@ -1693,7 +1693,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               <div className="grid grid-cols-2 gap-4">
                 {showDiameterField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="diameter">Diameter (cm) {isDiameterRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="diameter">Diameter (cm) {isDiameterRequired ? '*' : '(optioneel)'}</Label>
                     <Input
                       id="diameter"
                       type="number"
@@ -1709,7 +1709,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                 {showLengthField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="length">Length (cm) {isLengthRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="length">Lengte (cm) {isLengthRequired ? '*' : '(optioneel)'}</Label>
                     <Input
                       id="length"
                       type="number"
@@ -1725,7 +1725,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                 {showWidthField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="width">Width (cm) {isWidthRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="width">Breedte (cm) {isWidthRequired ? '*' : '(optioneel)'}</Label>
                     <Input
                       id="width"
                       type="number"
@@ -1741,7 +1741,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                 {showHeightField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="height">Height (cm) {isHeightRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="height">Hoogte (cm) {isHeightRequired ? '*' : '(optioneel)'}</Label>
                     <Input
                       id="height"
                       type="number"
@@ -1757,7 +1757,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                 {showThicknessField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="thickness">Thickness top (cm) {isThicknessRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="thickness">Dikte blad (cm) {isThicknessRequired ? '*' : '(optioneel)'}</Label>
                     <Input
                       id="thickness"
                       type="number"
@@ -1773,7 +1773,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
                 {showQuantityField && (
                   <div className="space-y-1.5">
-                    <Label htmlFor="quantity">Number of pieces {isQuantityRequired ? '*' : '(optional)'}</Label>
+                    <Label htmlFor="quantity">Aantal {isQuantityRequired ? '*' : '(optioneel)'}</Label>
                     <Input
                       id="quantity"
                       type="number"
@@ -1790,7 +1790,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
               {showNotesField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="notes">Notes {isNotesRequired ? '*' : '(optional)'}</Label>
+                  <Label htmlFor="notes">Notities {isNotesRequired ? '*' : '(optioneel)'}</Label>
                   <Textarea
                     id="notes"
                     rows={3}
@@ -1804,7 +1804,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
 
               {showAttachmentsField && (
                 <div className="space-y-2">
-                  <Label>Attachments {isAttachmentsRequired ? '*' : '(optional)'}</Label>
+                  <Label>Bijlagen {isAttachmentsRequired ? '*' : '(optioneel)'}</Label>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -1818,7 +1818,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    Add files
+                    Bestanden toevoegen
                   </Button>
                   {errors.attachments && <p className="text-destructive text-xs">{errors.attachments[0]}</p>}
                   {attachments.length > 0 && (
@@ -1832,7 +1832,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
                             size="sm"
                             onClick={() => removeAttachment(index)}
                           >
-                            Remove
+                            Verwijderen
                           </Button>
                         </div>
                       ))}

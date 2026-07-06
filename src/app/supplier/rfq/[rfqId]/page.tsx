@@ -26,8 +26,8 @@ interface PageProps {
 function SupplierPageShell({ children, centered = false }: { children: ReactNode; centered?: boolean }) {
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-background/95 supports-[backdrop-filter]:bg-background/80 backdrop-blur">
-        <div className="mx-auto flex h-14 w-full max-w-2xl items-center px-4">
+      <header className="border-b bg-card">
+        <div className="mx-auto flex h-[60px] w-full max-w-3xl items-center justify-between px-4">
           <Image
             src="/sempre-logo-word.svg"
             alt="Sempre"
@@ -36,11 +36,12 @@ function SupplierPageShell({ children, centered = false }: { children: ReactNode
             className="h-5 w-auto"
             priority
           />
+          <span className="sempre-label hidden sm:inline">Supplier portal</span>
         </div>
       </header>
       <main
-        className={`mx-auto w-full max-w-2xl px-4 py-8 ${
-          centered ? 'flex min-h-[calc(100vh-3.5rem)] items-center justify-center' : ''
+        className={`mx-auto w-full max-w-3xl px-4 py-7 ${
+          centered ? 'flex min-h-[calc(100vh-3.75rem)] items-center justify-center' : ''
         }`}
       >
         {children}

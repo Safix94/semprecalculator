@@ -233,8 +233,31 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </AlertDescription>
         </Alert>
       )}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Price request</h1>
+      <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="sempre-page-title">Prijsaanvragen</h1>
+          <p className="sempre-page-subtitle">Overzicht van alle RFQ&apos;s · elke aanvraag gaat naar één leverancier</p>
+        </div>
+        <div className="flex items-end gap-3">
+          <div className="text-right">
+            <div className="sempre-label">Open</div>
+            <div className="text-[19px] font-bold text-[oklch(0.42_0.07_150)]">
+              {rfqs.filter((rfq) => rfq.status !== 'closed').length}
+            </div>
+          </div>
+          <div className="h-8 w-px bg-border" />
+          <div className="text-right">
+            <div className="sempre-label">Wacht op offerte</div>
+            <div className="text-[19px] font-bold">
+              {rfqs.filter((rfq) => rfq.status === 'sent_to_supplier' || rfq.status === 'supplier_replied').length}
+            </div>
+          </div>
+          <div className="h-8 w-px bg-border" />
+          <div className="text-right">
+            <div className="sempre-label">Totaal</div>
+            <div className="text-[19px] font-bold">{totalCount}</div>
+          </div>
+        </div>
       </div>
 
       <Card className="min-w-0 overflow-hidden">

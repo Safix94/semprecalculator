@@ -1,10 +1,10 @@
 'use client';
 
-import type { ComponentType, ReactNode } from 'react';
+import type { CSSProperties, ComponentType, ReactNode } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileText, Search, ScrollText, Settings } from 'lucide-react';
+import { FileText, Plus, Search, ScrollText, Settings } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
 import { RfqCreateWizardLazy } from '@/components/rfq-create-wizard-lazy';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -59,12 +59,17 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || user.role === 'admin');
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon" variant="sidebar">
-        <SidebarHeader>
+    <SidebarProvider
+      style={{
+        '--sidebar-width': '238px',
+        '--sidebar-width-icon': '52px',
+      } as CSSProperties}
+    >
+      <Sidebar collapsible="icon" variant="sidebar" className="border-sidebar-border bg-sidebar">
+        <SidebarHeader className="h-[60px] justify-center border-b border-sidebar-border px-5">
           <Link
             href="/dashboard"
-            className="focus-visible:ring-ring flex h-9 items-center rounded-md px-2 outline-none focus-visible:ring-2"
+            className="focus-visible:ring-ring flex h-9 items-center rounded-md outline-none focus-visible:ring-2"
           >
             <Image
               src="/sempre-logo-word.svg"
@@ -75,7 +80,7 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
               priority
             />
             <Image
-              src="/favicon.ico"
+              src="/icon.svg"
               alt="Sempre"
               width={28}
               height={28}
@@ -83,20 +88,25 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
             />
           </Link>
         </SidebarHeader>
-        <SidebarSeparator />
-        <SidebarContent>
-          <SidebarGroup>
+        <SidebarContent className="bg-sidebar">
+          <SidebarGroup className="px-3 py-3">
+            <div className="sempre-label px-3 pb-2 pt-1 group-data-[collapsible=icon]:hidden">Menu</div>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="gap-1">
                 {visibleNavItems.map((item) => {
                   const active = isNavItemActive(pathname, item.href);
                   const Icon = item.icon;
 
                   return (
                     <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={active}
+                        tooltip={item.label}
+                        className="h-[38px] rounded-lg px-3 text-[13.5px] font-medium data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-sidebar-accent-foreground"
+                      >
                         <Link href={item.href}>
-                          <Icon />
+                          <Icon className="size-[17px]" />
                           <span>{item.label}</span>
                         </Link>
                       </SidebarMenuButton>
@@ -108,34 +118,38 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
           </SidebarGroup>
         </SidebarContent>
         <SidebarSeparator />
-        <SidebarFooter>
-          <p className="text-sidebar-foreground/70 truncate px-2 text-xs group-data-[collapsible=icon]:hidden">
+        <SidebarFooter className="gap-0 px-4 py-3">
+          <p className="truncate text-xs text-sidebar-foreground/80 group-data-[collapsible=icon]:hidden">
             {user.email}
           </p>
-          <SidebarTrigger className="mt-2 w-full justify-center" />
+          <p className="mt-0.5 text-[11px] capitalize text-sidebar-foreground/60 group-data-[collapsible=icon]:hidden">
+            {user.role}
+          </p>
+          <SidebarTrigger className="mt-3 w-full justify-center" />
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset>
-        <header className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-0 z-30 border-b backdrop-blur">
-          <div className="mx-auto flex h-14 w-full max-w-screen-2xl items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-muted-foreground sm:hidden">Sempre</span>
-            </div>
-            <div className="flex items-center gap-2 sm:gap-3">
+      <SidebarInset className="bg-background">
+        <header className="sticky top-0 z-30 h-[60px] border-b border-border bg-card">
+          <div className="flex h-full w-full max-w-[1520px] items-center justify-between px-7">
+            <span className="sempre-label">Sempre pricing</span>
+            <div className="flex items-center gap-3">
               <ThemeToggle />
-              <span className="hidden text-sm text-muted-foreground md:inline">
-                {user.email} ({user.role})
+              <span className="hidden text-[12.5px] text-muted-foreground md:inline">
+                {user.email} · <span className="capitalize">{user.role}</span>
               </span>
               <RfqCreateWizardLazy>
-                <Button size="sm">New request</Button>
+                <Button size="sm">
+                  <Plus className="size-[15px]" />
+                  Nieuwe aanvraag
+                </Button>
               </RfqCreateWizardLazy>
               <LogoutButton />
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <main className="w-full max-w-[1520px] flex-1 px-[30px] py-[26px]">
           {children}
         </main>
       </SidebarInset>

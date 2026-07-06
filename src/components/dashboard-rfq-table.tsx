@@ -179,12 +179,12 @@ export function DashboardRfqTable({
 
   return (
     <div className="min-w-0">
-      <div className="flex flex-wrap items-end justify-between gap-4 border-b px-4 py-3">
-        <div className="flex flex-wrap items-end gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-[14px] py-3">
+        <div className="flex flex-wrap items-end gap-2">
           <form onSubmit={handleSearchSubmit} className="flex items-end gap-2">
             <div className="space-y-1">
-              <Label htmlFor="customer-search" className="text-xs text-muted-foreground">
-                Customer
+              <Label htmlFor="customer-search" className="sempre-label">
+                Klant
               </Label>
               <Input
                 key={`search-${searchQuery ?? ''}`}
@@ -193,24 +193,24 @@ export function DashboardRfqTable({
                 type="search"
                 name="search"
                 defaultValue={searchQuery ?? ''}
-                placeholder="Search customer"
+                placeholder="Zoek op klant…"
                 className="w-[190px]"
                 aria-label="Search by customer"
               />
             </div>
             <Button type="submit" variant="secondary" size="sm">
-              Search
+              Zoeken
             </Button>
           </form>
 
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Type</Label>
+            <Label className="sempre-label">Type</Label>
             <Select value={selectedProductTypeValue} onValueChange={(value) => setFilter('product_type', value)}>
               <SelectTrigger className="w-[190px]">
                 <SelectValue placeholder="All types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="all">Alle producttypes</SelectItem>
                 {productTypes.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}
@@ -221,13 +221,13 @@ export function DashboardRfqTable({
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Supplier</Label>
+            <Label className="sempre-label">Leverancier</Label>
             <Select value={selectedSupplierValue} onValueChange={(value) => setFilter('supplier', value)}>
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="All suppliers" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All suppliers</SelectItem>
+                <SelectItem value="all">Alle leveranciers</SelectItem>
                 {supplierOptions.map((supplier) => (
                   <SelectItem key={supplier.id} value={supplier.id}>
                     {supplier.name}
@@ -238,13 +238,13 @@ export function DashboardRfqTable({
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Status</Label>
+            <Label className="sempre-label">Status</Label>
             <Select value={selectedStatusValue} onValueChange={(value) => setFilter('status', value)}>
               <SelectTrigger className="w-[190px]">
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="all">Alle statussen</SelectItem>
                 {statusOptions.map((status) => (
                   <SelectItem key={status} value={status}>
                     {statusLabels[status]?.label ?? status}
@@ -255,11 +255,11 @@ export function DashboardRfqTable({
           </div>
 
           <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
-            Reset filters
+            Filters wissen
           </Button>
 
           <span className="pb-2 text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
+            Pagina {currentPage} van {totalPages}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -270,7 +270,7 @@ export function DashboardRfqTable({
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1}
           >
-            Previous
+            Vorige
           </Button>
           <Button
             type="button"
@@ -279,7 +279,7 @@ export function DashboardRfqTable({
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages}
           >
-            Next
+            Volgende
           </Button>
         </div>
       </div>
@@ -287,14 +287,14 @@ export function DashboardRfqTable({
       <Table className="table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[17%]">Request</TableHead>
-            <TableHead className="w-[18%]">Material / Finish</TableHead>
-            <TableHead className="w-[13%]">Dimensions</TableHead>
-            <TableHead className="w-[18%]">Supplier(s)</TableHead>
-            <TableHead className="w-[11%]">Customer</TableHead>
-            <TableHead className="w-[9%]">Req. by</TableHead>
+            <TableHead className="w-[17%]">Aanvraag</TableHead>
+            <TableHead className="w-[18%]">Materiaal / afwerking</TableHead>
+            <TableHead className="w-[13%]">Afmetingen</TableHead>
+            <TableHead className="w-[18%]">Leverancier(s)</TableHead>
+            <TableHead className="w-[11%]">Klant</TableHead>
+            <TableHead className="w-[9%]">Aangevraagd door</TableHead>
             <TableHead className="w-[8%]">Status</TableHead>
-            <TableHead className="w-[6%]">Date</TableHead>
+            <TableHead className="w-[6%]">Datum</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -325,7 +325,7 @@ export function DashboardRfqTable({
               return (
                 <TableRow
                   key={rfq.id}
-                  className={`cursor-pointer ${selectedRfqId === rfq.id ? 'bg-accent/30 hover:bg-accent/40' : ''}`}
+                  className={`cursor-pointer ${selectedRfqId === rfq.id ? 'bg-accent hover:bg-accent' : ''}`}
                   onClick={() => openRfq(rfq.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
@@ -337,7 +337,7 @@ export function DashboardRfqTable({
                   tabIndex={0}
                 >
                   <TableCell title={[rfq.product_type, rfq.model, rfq.shape].filter(Boolean).join(' | ') || '-'}>
-                    <div className="truncate font-medium">{rfq.product_type || '-'}</div>
+                    <div className="truncate font-semibold">{rfq.product_type || '-'}</div>
                     {rfq.model && <div className="truncate text-xs text-muted-foreground">Model: {rfq.model}</div>}
                     <div className="truncate text-xs text-muted-foreground">{rfq.shape}</div>
                   </TableCell>
@@ -346,7 +346,7 @@ export function DashboardRfqTable({
                   </TableCell>
                   <TableCell className="text-muted-foreground" title={dimensions}>
                     <div className="truncate">{dimensions}</div>
-                    <div className="text-xs text-muted-foreground">Qty: {rfq.quantity}</div>
+                    <div className="text-xs text-muted-foreground">Aantal: {rfq.quantity}</div>
                   </TableCell>
                   <TableCell className="truncate font-medium text-primary" title={supplierLabel}>
                     {supplierLabel}
@@ -358,7 +358,7 @@ export function DashboardRfqTable({
                     {requestedBy}
                   </TableCell>
                   <TableCell className="truncate" title={status.label}>
-                    <span className={`inline-flex max-w-full items-center truncate rounded px-2 py-0.5 text-xs font-medium ${status.color}`}>
+                    <span className={`sempre-status ${status.color}`}>
                       {status.label}
                     </span>
                   </TableCell>

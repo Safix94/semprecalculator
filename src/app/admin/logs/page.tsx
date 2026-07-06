@@ -88,7 +88,10 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
 
   return (
     <>
-      <h1 className="text-2xl font-bold mb-6">Audit Logs</h1>
+      <div className="mb-[18px]">
+        <h1 className="sempre-page-title">Audit logs</h1>
+        <p className="sempre-page-subtitle">Bekijk acties, systeemevents en metadata van RFQ-workflows.</p>
+      </div>
       <AuditLogTable
         logs={decoratedLogs}
         currentPage={page}

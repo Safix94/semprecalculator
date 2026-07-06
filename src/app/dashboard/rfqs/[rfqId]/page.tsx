@@ -76,29 +76,38 @@ export default async function RfqDetailPage({ params }: PageProps) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {requestTitle}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Created on {new Date(typedRfq.created_at).toLocaleDateString('en-GB')}
-            {typedRfq.sent_at && ` | Sent on ${new Date(typedRfq.sent_at).toLocaleDateString('en-GB')}`}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-medium ${status.color}`}>
-            {status.label}
-          </span>
-          <RfqActions
-            rfqId={rfqId}
-            status={typedRfq.status}
-            productType={typedRfq.product_type}
-            materialId={typedRfq.material_id}
-            materialIdTableTop={typedRfq.material_id_table_top}
-            materialIdTableFoot={typedRfq.material_id_table_foot}
-          />
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b px-6 py-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="sempre-page-title truncate">
+                {requestTitle}
+              </h1>
+              <span className="rounded-md border bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                RFQ-{typedRfq.id.slice(0, 8)}
+              </span>
+            </div>
+            <p className="mt-1 text-[12.5px] text-muted-foreground">
+              Klant · <span className="font-semibold text-foreground/80">{typedRfq.customer_name || '-'}</span>
+              {' | '}Aangemaakt {new Date(typedRfq.created_at).toLocaleDateString('nl-BE')}
+              {typedRfq.sent_at && ` | Verzonden ${new Date(typedRfq.sent_at).toLocaleDateString('nl-BE')}`}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`inline-flex h-7 items-center gap-2 rounded-full px-3 text-[12.5px] font-semibold ${status.color}`}>
+              <span className="size-1.5 rounded-full bg-current" />
+              {status.label}
+            </span>
+            <RfqActions
+              rfqId={rfqId}
+              status={typedRfq.status}
+              productType={typedRfq.product_type}
+              materialId={typedRfq.material_id}
+              materialIdTableTop={typedRfq.material_id_table_top}
+              materialIdTableFoot={typedRfq.material_id_table_foot}
+            />
+          </div>
         </div>
       </div>
 

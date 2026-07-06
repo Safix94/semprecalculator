@@ -16,7 +16,7 @@ export function LogoutButton() {
 
   return (
     <Button onClick={handleLogout} variant="ghost" size="sm">
-      Log out
+      Uitloggen
     </Button>
   );
 }

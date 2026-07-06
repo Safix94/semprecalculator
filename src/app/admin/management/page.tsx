@@ -28,10 +28,10 @@ export default async function ManagementPage() {
 
   return (
     <>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight">Management</h1>
-        <p className="text-muted-foreground">
-          Manage pricing, materials, finishes, suppliers, product types, and (admin only) user roles.
+      <div className="mb-[18px]">
+        <h1 className="sempre-page-title">Beheer</h1>
+        <p className="sempre-page-subtitle">
+          Beheer pricing, materialen, afwerkingen, leveranciers, producttypes en gebruikersrollen.
         </p>
       </div>
 

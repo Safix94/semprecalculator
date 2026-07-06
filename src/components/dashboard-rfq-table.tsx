@@ -170,7 +170,7 @@ export function DashboardRfqTable({
   };
 
   const openRfq = (rfqId: string) => {
-    router.push(buildHref(currentPage, rfqId));
+    router.push(`/dashboard/rfqs/${rfqId}`);
   };
 
   const goToPage = (page: number) => {

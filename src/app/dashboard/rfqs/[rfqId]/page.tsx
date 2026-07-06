@@ -1,3 +1,5 @@
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import { requireAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -101,6 +103,14 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
   return (
     <div className="space-y-4">
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronLeft className="size-4" />
+        Terug naar aanvragen
+      </Link>
+
       <div className="rounded-xl border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b px-6 py-4">
           <div className="min-w-0">

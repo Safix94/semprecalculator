@@ -2,7 +2,6 @@ import { requireAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getUserEmailMap } from '@/lib/user-directory';
 import { DashboardRfqTable, type DashboardRfqInvite } from '@/components/dashboard-rfq-table';
-import { RfqDetailModal } from '@/components/rfq-detail-modal';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { getProductTypes } from '@/actions/product-types';
@@ -289,8 +288,6 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           />
         </CardContent>
       </Card>
-
-      <RfqDetailModal rfqId={selectedRfqId} userRole={user.role} />
     </div>
   );
 }

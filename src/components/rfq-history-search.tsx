@@ -15,14 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { formatSupplierInputAmount } from '@/lib/currency';
 import { formatRfqDimensions } from '@/lib/rfq-format';
 import type { RfqSearchResponse, RfqStatus, Supplier } from '@/types';
@@ -183,6 +175,12 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
     router.push(buildQuery(form, page));
   };
 
+  const changeSort = (patch: Partial<Pick<RfqHistoryFilters, 'sortBy' | 'sortDirection'>>) => {
+    const next = { ...filters, ...patch };
+    setForm((current) => ({ ...current, ...patch }));
+    router.push(buildQuery(next, 1));
+  };
+
   return (
     <div className="grid items-start gap-4 xl:grid-cols-[264px_1fr]">
       <Card>
@@ -304,34 +302,6 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                   <Label htmlFor="history-thickness" className="sempre-label">Dikte blad</Label>
                   <Input id="history-thickness" type="number" step="any" min="0" value={form.thickness} onChange={(event) => updateField('thickness', event.target.value)} placeholder="cm" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="sempre-label">Sorteren op</Label>
-                  <Select value={form.sortBy || 'created_at'} onValueChange={(value) => updateField('sortBy', value === 'created_at' ? '' : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Date" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="created_at">Date</SelectItem>
-                      <SelectItem value="dimensions">Dimensions (L×W×H)</SelectItem>
-                      <SelectItem value="length">Length / diameter</SelectItem>
-                      <SelectItem value="width">Width</SelectItem>
-                      <SelectItem value="height">Height</SelectItem>
-                      <SelectItem value="thickness">Thickness top</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="sempre-label">Richting</Label>
-                  <Select value={form.sortDirection || 'desc'} onValueChange={(value) => updateField('sortDirection', value === 'desc' ? '' : value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Descending" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="desc">Descending</SelectItem>
-                      <SelectItem value="asc">Ascending</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             </details>
 
@@ -352,6 +322,103 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
         <CardContent className="p-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
             <p className="text-sm text-muted-foreground">
+              {search.totalCount} resultaat{search.totalCount === 1 ? '' : 'en'}
+            </p>
+            <div className="flex items-center gap-2">
+              <Label className="sempre-label hidden sm:block">Sorteren</Label>
+              <Select
+                value={filters.sortBy || 'created_at'}
+                onValueChange={(value) => changeSort({ sortBy: value === 'created_at' ? '' : value })}
+              >
+                <SelectTrigger size="sm" className="w-[168px]">
+                  <SelectValue placeholder="Datum" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Datum</SelectItem>
+                  <SelectItem value="dimensions">Afmetingen (L×B×H)</SelectItem>
+                  <SelectItem value="length">Lengte / diameter</SelectItem>
+                  <SelectItem value="width">Breedte</SelectItem>
+                  <SelectItem value="height">Hoogte</SelectItem>
+                  <SelectItem value="thickness">Dikte blad</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select
+                value={filters.sortDirection || 'desc'}
+                onValueChange={(value) => changeSort({ sortDirection: value === 'desc' ? '' : value })}
+              >
+                <SelectTrigger size="sm" className="w-[128px]">
+                  <SelectValue placeholder="Aflopend" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desc">Nieuwste eerst</SelectItem>
+                  <SelectItem value="asc">Oudste eerst</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {search.results.length === 0 ? (
+            <p className="px-4 py-12 text-center text-sm text-muted-foreground">
+              Geen RFQ&apos;s gevonden voor deze filters.
+            </p>
+          ) : (
+            <div className="divide-y">
+              {search.results.map((result) => {
+                const rfq = result.rfq;
+                const status = statusLabels[rfq.status] ?? {
+                  label: rfq.status,
+                  color: 'bg-muted text-muted-foreground',
+                };
+                const material = materialSummary(rfq);
+                const finish = finishSummary(rfq);
+                const dimensions = formatRfqDimensions(rfq);
+                const suppliersLabel = result.supplierNames.join(', ') || '-';
+                const supplierBasePrices = supplierBasePriceLabel(result);
+
+                return (
+                  <Link
+                    key={rfq.id}
+                    href={`/dashboard/rfqs/${rfq.id}`}
+                    className="grid items-center gap-x-4 gap-y-2 px-4 py-3.5 transition-colors hover:bg-[oklch(0.975_0.01_152)] md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_auto]"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="truncate font-semibold">{rfq.product_type || 'RFQ'}</span>
+                        {rfq.model && <span className="truncate text-xs text-muted-foreground">· {rfq.model}</span>}
+                      </div>
+                      <div className="truncate text-[13px] text-muted-foreground">
+                        {rfq.customer_name || 'Onbekende klant'}
+                        {material !== '-' && <> · {material}</>}
+                        {finish !== '-' && <span className="text-muted-foreground/80"> · {finish}</span>}
+                      </div>
+                      {dimensions && dimensions !== '-' && (
+                        <div className="truncate text-xs text-muted-foreground/80">{dimensions}</div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 text-[13px]">
+                      <div className="sempre-label">Leverancier</div>
+                      <div className="truncate text-foreground/80" title={suppliersLabel}>{suppliersLabel}</div>
+                      {supplierBasePrices !== '-' && (
+                        <div className="truncate text-xs text-muted-foreground">Basis: {supplierBasePrices}</div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col items-start gap-1 md:items-end md:text-right">
+                      <span className={`sempre-status ${status.color}`}>{status.label}</span>
+                      <span className="text-sm font-bold">{priceLabel(result.bestFinalPrice)}</span>
+                      <span className="text-xs text-muted-foreground">
+                        <FormattedDate value={rfq.created_at} dateStyle="short" />
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
+            <p className="text-sm text-muted-foreground">
               Pagina {search.currentPage} van {search.totalPages}
             </p>
             <div className="flex gap-2">
@@ -363,87 +430,6 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
               </Button>
             </div>
           </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Datum</TableHead>
-                <TableHead>Producttype</TableHead>
-                <TableHead>Leverancier(s)</TableHead>
-                <TableHead>Materiaal / afwerking</TableHead>
-                <TableHead>Afmetingen</TableHead>
-                <TableHead>Klant</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Supplier basisprijs</TableHead>
-                <TableHead>Retail price</TableHead>
-                <TableHead className="text-right">Actie</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {search.results.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
-                    Geen RFQ&apos;s gevonden voor deze filters.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                search.results.map((result) => {
-                  const rfq = result.rfq;
-                  const status = statusLabels[rfq.status] ?? {
-                    label: rfq.status,
-                    color: 'bg-muted text-muted-foreground',
-                  };
-                  const material = materialSummary(rfq);
-                  const finish = finishSummary(rfq);
-                  const dimensions = formatRfqDimensions(rfq);
-                  const suppliersLabel = result.supplierNames.join(', ') || '-';
-                  const supplierBasePrices = supplierBasePriceLabel(result);
-
-                  return (
-                    <TableRow key={rfq.id}>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        <FormattedDate value={rfq.created_at} dateStyle="short" />
-                      </TableCell>
-                      <TableCell className="max-w-[160px] font-medium" title={[rfq.product_type, rfq.model].filter(Boolean).join(' | ') || '-'}>
-                        <span className="block truncate">{rfq.product_type || '-'}</span>
-                        {rfq.model && <span className="block truncate text-xs font-normal text-muted-foreground">Model: {rfq.model}</span>}
-                      </TableCell>
-                      <TableCell className="max-w-[180px] truncate text-muted-foreground" title={suppliersLabel}>
-                        {suppliersLabel}
-                      </TableCell>
-                      <TableCell className="max-w-[220px] truncate text-muted-foreground" title={`${material} | ${finish}`}>
-                        <span className="font-medium text-foreground/90">{material}</span>
-                        <br />
-                        <span className="text-xs">{finish}</span>
-                      </TableCell>
-                      <TableCell className="max-w-[180px] truncate text-muted-foreground" title={dimensions}>
-                        {dimensions}
-                      </TableCell>
-                      <TableCell className="max-w-[160px] truncate text-muted-foreground" title={rfq.customer_name || '-'}>
-                        {rfq.customer_name || '-'}
-                      </TableCell>
-                      <TableCell>
-                        <span className={`sempre-status ${status.color}`}>
-                          {status.label}
-                        </span>
-                      </TableCell>
-                      <TableCell className="max-w-[220px] truncate text-muted-foreground" title={supplierBasePrices}>
-                        {supplierBasePrices}
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap text-muted-foreground">
-                        {priceLabel(result.bestFinalPrice)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild size="sm" variant="outline">
-                          <Link href={`/dashboard/rfqs/${rfq.id}`}>Open</Link>
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
         </CardContent>
       </Card>
     </div>

@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { formatSupplierInputAmount } from '@/lib/currency';
 import { formatRfqDimensions } from '@/lib/rfq-format';
 import type { RfqSearchResponse, RfqStatus, Supplier } from '@/types';
 
@@ -41,6 +42,8 @@ export interface RfqHistoryFilters {
   width: string;
   height: string;
   thickness: string;
+  sortBy: string;
+  sortDirection: string;
 }
 
 interface RfqHistorySearchProps {
@@ -98,6 +101,20 @@ function finishSummary(rfq: RfqSearchResponse['results'][number]['rfq']): string
 function priceLabel(value: number | null): string {
   if (value === null) return '-';
   return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(value);
+}
+
+function supplierBasePriceLabel(result: RfqSearchResponse['results'][number]): string {
+  if (result.supplierBasePrices.length === 0) return '-';
+
+  return result.supplierBasePrices
+    .map((price) => {
+      const supplier = price.supplierName ?? 'Unknown';
+      const amount = price.isAutomatic
+        ? 'Automatic'
+        : formatSupplierInputAmount(price.supplierInputPrice, price.supplierInputCurrency);
+      return `${supplier}: ${amount}`;
+    })
+    .join(' / ');
 }
 
 function sanitizeFilters(filters: RfqHistoryFilters): RfqHistoryFilters {
@@ -158,6 +175,8 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
       width: '',
       height: '',
       thickness: '',
+      sortBy: '',
+      sortDirection: '',
     };
     setForm(emptyFilters);
     router.push('/dashboard/history');
@@ -288,6 +307,34 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                   <Label htmlFor="history-thickness">Thickness top</Label>
                   <Input id="history-thickness" type="number" step="any" min="0" value={form.thickness} onChange={(event) => updateField('thickness', event.target.value)} placeholder="cm" />
                 </div>
+                <div className="space-y-1.5">
+                  <Label>Sort by</Label>
+                  <Select value={form.sortBy || 'created_at'} onValueChange={(value) => updateField('sortBy', value === 'created_at' ? '' : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="created_at">Date</SelectItem>
+                      <SelectItem value="dimensions">Dimensions (L×W×H)</SelectItem>
+                      <SelectItem value="length">Length / diameter</SelectItem>
+                      <SelectItem value="width">Width</SelectItem>
+                      <SelectItem value="height">Height</SelectItem>
+                      <SelectItem value="thickness">Thickness top</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Sort direction</Label>
+                  <Select value={form.sortDirection || 'desc'} onValueChange={(value) => updateField('sortDirection', value === 'desc' ? '' : value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Descending" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="desc">Descending</SelectItem>
+                      <SelectItem value="asc">Ascending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </details>
 
@@ -330,6 +377,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                 <TableHead>Dimensions</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Supplier base price</TableHead>
                 <TableHead>Best price</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
@@ -337,7 +385,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
             <TableBody>
               {search.results.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="py-10 text-center text-muted-foreground">
                     No RFQs found for these filters.
                   </TableCell>
                 </TableRow>
@@ -352,6 +400,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                   const finish = finishSummary(rfq);
                   const dimensions = formatRfqDimensions(rfq);
                   const suppliersLabel = result.supplierNames.join(', ') || '-';
+                  const supplierBasePrices = supplierBasePriceLabel(result);
 
                   return (
                     <TableRow key={rfq.id}>
@@ -380,6 +429,9 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                         <span className={`inline-flex max-w-full items-center truncate rounded px-2 py-0.5 text-xs font-medium ${status.color}`}>
                           {status.label}
                         </span>
+                      </TableCell>
+                      <TableCell className="max-w-[220px] truncate text-muted-foreground" title={supplierBasePrices}>
+                        {supplierBasePrices}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {priceLabel(result.bestFinalPrice)}

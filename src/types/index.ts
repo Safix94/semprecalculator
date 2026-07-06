@@ -228,12 +228,23 @@ export interface RfqWithRelations extends Rfq {
 }
 
 
+export interface RfqSearchSupplierBasePrice {
+  quoteId: string;
+  supplierId: string;
+  supplierName: string | null;
+  supplierInputPrice: number | null;
+  supplierInputCurrency: import('@/lib/currency').QuotePriceCurrency;
+  basePriceEur: number;
+  isAutomatic: boolean;
+}
+
 export interface RfqSearchResult {
   rfq: Rfq;
   supplierNames: string[];
   supplierIds: string[];
   supplierMatchKeys: string[];
   quoteCount: number;
+  supplierBasePrices: RfqSearchSupplierBasePrice[];
   bestFinalPrice: number | null;
 }
 

@@ -31,6 +31,8 @@ function getFilters(params: Record<string, string | string[] | undefined>): RfqH
     width: getStringParam(params.width).trim(),
     height: getStringParam(params.height).trim(),
     thickness: getStringParam(params.thickness).trim(),
+    sortBy: getStringParam(params.sortBy).trim(),
+    sortDirection: getStringParam(params.sortDirection).trim(),
   };
 }
 

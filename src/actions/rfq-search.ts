@@ -35,7 +35,12 @@ const RFQ_SEARCH_SELECT = `
   ),
   rfq_quotes (
     id,
-    final_price_calculated
+    supplier_id,
+    base_price,
+    supplier_input_price,
+    supplier_input_currency,
+    final_price_calculated,
+    pricing_formula_version
   )
 `;
 
@@ -56,6 +61,8 @@ export interface SearchRfqsInput {
   width?: string | number | null;
   height?: string | number | null;
   thickness?: string | number | null;
+  sortBy?: string | null;
+  sortDirection?: string | null;
 }
 
 type InviteRow = {
@@ -64,7 +71,16 @@ type InviteRow = {
   supplier: Supplier | Supplier[] | null;
 };
 
-type QuoteRow = Pick<RfqQuote, 'id' | 'final_price_calculated'>;
+type QuoteRow = Pick<
+  RfqQuote,
+  | 'id'
+  | 'supplier_id'
+  | 'base_price'
+  | 'supplier_input_price'
+  | 'supplier_input_currency'
+  | 'final_price_calculated'
+  | 'pricing_formula_version'
+>;
 
 type RfqSearchRow = Rfq & {
   rfq_invites?: InviteRow[] | null;
@@ -100,6 +116,56 @@ function parseNumberFilter(value: string | number | null | undefined): number | 
 function numbersMatch(actual: number, expected: number | null): boolean {
   if (expected === null) return true;
   return Math.abs(Number(actual) - expected) < 0.0001;
+}
+
+type RfqHistorySortBy = 'created_at' | 'dimensions' | 'length' | 'width' | 'height' | 'thickness';
+type RfqHistorySortDirection = 'asc' | 'desc';
+
+function normalizeSortBy(value: string | null | undefined): RfqHistorySortBy {
+  if (value === 'dimensions' || value === 'length' || value === 'width' || value === 'height' || value === 'thickness') {
+    return value;
+  }
+  return 'created_at';
+}
+
+function normalizeSortDirection(value: string | null | undefined): RfqHistorySortDirection {
+  return value === 'asc' ? 'asc' : 'desc';
+}
+
+function compareNumberValue(a: number | null | undefined, b: number | null | undefined): number {
+  const aNumber = Number(a);
+  const bNumber = Number(b);
+  const aValid = Number.isFinite(aNumber);
+  const bValid = Number.isFinite(bNumber);
+  if (!aValid && !bValid) return 0;
+  if (!aValid) return 1;
+  if (!bValid) return -1;
+  return aNumber - bNumber;
+}
+
+function compareDimensions(a: RfqSearchRow, b: RfqSearchRow): number {
+  return (
+    compareNumberValue(a.length, b.length) ||
+    compareNumberValue(a.width, b.width) ||
+    compareNumberValue(a.height, b.height) ||
+    compareNumberValue(a.thickness, b.thickness)
+  );
+}
+
+function sortRows(rows: RfqSearchRow[], sortBy: RfqHistorySortBy, sortDirection: RfqHistorySortDirection): RfqSearchRow[] {
+  const direction = sortDirection === 'asc' ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    let comparison = 0;
+    if (sortBy === 'created_at') {
+      comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    } else if (sortBy === 'dimensions') {
+      comparison = compareDimensions(a, b);
+    } else {
+      comparison = compareNumberValue(a[sortBy], b[sortBy]);
+    }
+
+    return comparison * direction || new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 }
 
 function textIncludes(value: string | null | undefined, needle: string): boolean {
@@ -191,6 +257,31 @@ function rowToResult(row: RfqSearchRow): RfqSearchResult {
       })
   );
   const quotes = row.rfq_quotes ?? [];
+  const supplierNameById = new Map(
+    (row.rfq_invites ?? [])
+      .map((invite) => [invite.supplier_id, supplierFromInvite(invite)?.name] as const)
+      .filter(([supplierId, supplierName]) => Boolean(supplierId && supplierName))
+  );
+  const supplierBasePrices = quotes
+    .map((quote) => {
+      const isAutomatic = quote.pricing_formula_version === 'sanne_vos_bluestone_v1';
+      const supplierInputPrice = quote.supplier_input_price === null || quote.supplier_input_price === undefined
+        ? isAutomatic
+          ? null
+          : Number(quote.base_price)
+        : Number(quote.supplier_input_price);
+
+      return {
+        quoteId: quote.id,
+        supplierId: quote.supplier_id,
+        supplierName: supplierNameById.get(quote.supplier_id) ?? null,
+        supplierInputPrice,
+        supplierInputCurrency: quote.supplier_input_currency ?? 'EUR',
+        basePriceEur: Number(quote.base_price),
+        isAutomatic,
+      };
+    })
+    .sort((a, b) => (a.supplierName ?? '').localeCompare(b.supplierName ?? '', undefined, { sensitivity: 'base' }));
   const bestFinalPrice = quotes
     .map((quote) => Number(quote.final_price_calculated))
     .filter(Number.isFinite)
@@ -205,6 +296,7 @@ function rowToResult(row: RfqSearchRow): RfqSearchResult {
     supplierIds,
     supplierMatchKeys,
     quoteCount: quotes.length,
+    supplierBasePrices,
     bestFinalPrice,
   };
 }
@@ -228,6 +320,8 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
   const widthFilter = parseNumberFilter(input.width);
   const heightFilter = parseNumberFilter(input.height);
   const thicknessFilter = parseNumberFilter(input.thickness);
+  const sortBy = normalizeSortBy(input.sortBy);
+  const sortDirection = normalizeSortDirection(input.sortDirection);
 
   try {
     const supabase = await createClient();
@@ -287,10 +381,11 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
       });
 
       const totalCount = filteredRows.length;
+      const sortedRows = sortRows(filteredRows, sortBy, sortDirection);
       const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
       const currentPage = Math.min(requestedPage, totalPages);
       const start = (currentPage - 1) * pageSize;
-      const results = filteredRows.slice(start, start + pageSize).map(rowToResult);
+      const results = sortedRows.slice(start, start + pageSize).map(rowToResult);
 
       return {
         data: {
@@ -349,7 +444,19 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
         .select(headCount ? 'id' : RFQ_SEARCH_SELECT, { count: 'exact', head: headCount });
 
       if (!headCount) {
-        query = query.order('created_at', { ascending: false });
+        const ascending = sortDirection === 'asc';
+        if (sortBy === 'dimensions') {
+          query = query
+            .order('length', { ascending })
+            .order('width', { ascending })
+            .order('height', { ascending })
+            .order('thickness', { ascending })
+            .order('created_at', { ascending: false });
+        } else if (sortBy === 'created_at') {
+          query = query.order('created_at', { ascending });
+        } else {
+          query = query.order(sortBy, { ascending }).order('created_at', { ascending: false });
+        }
       }
       if (productTypeFilter) {
         query = query.eq('product_type', productTypeFilter);

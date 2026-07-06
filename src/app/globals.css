@@ -222,4 +222,40 @@
   .sempre-status {
     @apply inline-flex h-[22px] max-w-full items-center rounded-md px-2.5 text-[11.5px] font-semibold;
   }
+
+  .sempre-section-title {
+    @apply text-[13.5px] font-bold tracking-[-0.005em];
+  }
+
+  .sempre-panel {
+    @apply rounded-xl border bg-card;
+  }
+
+  .sempre-panel-pad {
+    @apply p-4 md:p-[18px];
+  }
+
+  .sempre-info-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.09em] text-muted-foreground;
+  }
+
+  .sempre-info-value {
+    @apply mt-1 break-words text-[13px] font-semibold text-foreground/90;
+  }
+
+  .sempre-metric-card {
+    @apply rounded-xl border bg-card p-[15px] md:p-[17px];
+  }
+
+  .sempre-metric-card-primary {
+    @apply rounded-xl border border-primary/25 bg-primary/10 p-[15px] md:p-[17px];
+  }
+
+  .sempre-metric-value {
+    @apply mt-1 text-[26px] font-extrabold tracking-[-0.02em];
+  }
+
+  .sempre-message {
+    @apply rounded-lg border px-3 py-2.5 text-[12.5px] leading-5;
+  }
 }

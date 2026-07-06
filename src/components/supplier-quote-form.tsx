@@ -117,12 +117,13 @@ export function SupplierQuoteForm({
     <Card>
       <CardHeader>
         <CardTitle>{isUpdate ? t.updateQuote : t.submitQuote}</CardTitle>
+        <p className="text-sm text-muted-foreground">Voer jullie basisprijs per stuk, volume en levertijd in. Sempre berekent de klantprijs intern.</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5">
-              <Label htmlFor="basePrice">{basePriceLabel}</Label>
+              <Label htmlFor="basePrice" className="sempre-label">{basePriceLabel}</Label>
               <Input
                 id="basePrice"
                 name="basePrice"
@@ -149,7 +150,7 @@ export function SupplierQuoteForm({
               )}
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="volumeM3">{t.volumeM3Required}</Label>
+              <Label htmlFor="volumeM3" className="sempre-label">{t.volumeM3Required}</Label>
               <Input
                 id="volumeM3"
                 name="volumeM3"
@@ -168,7 +169,7 @@ export function SupplierQuoteForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="leadTimeDays">{t.leadTimeOptional}</Label>
+            <Label htmlFor="leadTimeDays" className="sempre-label">{t.leadTimeOptional}</Label>
             <Input
               id="leadTimeDays"
               name="leadTimeDays"
@@ -179,7 +180,7 @@ export function SupplierQuoteForm({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="comment">{t.commentOptional}</Label>
+            <Label htmlFor="comment" className="sempre-label">{t.commentOptional}</Label>
             <Textarea
               id="comment"
               name="comment"
@@ -195,9 +196,12 @@ export function SupplierQuoteForm({
             </Alert>
           )}
 
-          <Button type="submit" disabled={loading} className="w-full">
+          <div className="flex items-center justify-between gap-4 border-t pt-4">
+            <span className="text-xs text-muted-foreground">Controleer goed voor je indient.</span>
+            <Button type="submit" disabled={loading} className="min-w-[180px]">
             {loading ? t.submitting : isUpdate ? t.updateQuote : t.submitQuote}
-          </Button>
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

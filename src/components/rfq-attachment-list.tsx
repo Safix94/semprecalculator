@@ -85,7 +85,7 @@ export function RfqAttachmentList({
   }
 
   if (attachments.length === 0) {
-    return <p className="text-sm text-muted-foreground">No attachments.</p>;
+    return <p className="text-sm text-muted-foreground">Geen bijlagen.</p>;
   }
 
   return (
@@ -96,9 +96,12 @@ export function RfqAttachmentList({
           const isDeleting = deletingAttachmentId === attachment.id;
 
           return (
-            <li key={attachment.id} className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-medium">{attachment.file_name}</span>
-              <span className="text-xs text-muted-foreground">({attachment.mime_type})</span>
+            <li key={attachment.id} className="flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-sm">
+              <span className="flex size-7 items-center justify-center rounded-md bg-muted text-[9px] font-extrabold uppercase text-muted-foreground">
+                {attachment.file_name.split('.').pop()?.slice(0, 3) ?? 'file'}
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium">{attachment.file_name}</span>
+              <span className="text-xs text-muted-foreground">{attachment.mime_type}</span>
               {canOpen && (
                 <Button
                   type="button"
@@ -108,7 +111,7 @@ export function RfqAttachmentList({
                   disabled={isOpening || isDeleting}
                   onClick={() => handleOpenAttachment(attachment.id)}
                 >
-                  {isOpening ? 'Opening...' : 'Open'}
+                  {isOpening ? 'Openen...' : 'Open'}
                 </Button>
               )}
               {canDelete && (
@@ -120,7 +123,7 @@ export function RfqAttachmentList({
                   disabled={isDeleting || isOpening}
                   onClick={() => handleDeleteAttachment(attachment)}
                 >
-                  {isDeleting ? 'Deleting...' : 'Delete'}
+                  {isDeleting ? 'Verwijderen...' : 'Verwijder'}
                 </Button>
               )}
             </li>

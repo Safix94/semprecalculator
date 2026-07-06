@@ -142,10 +142,10 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Date</TableHead>
-                <TableHead>Action</TableHead>
+                <TableHead>Tijdstip</TableHead>
+                <TableHead>Actie</TableHead>
                 <TableHead>Actor</TableHead>
-                <TableHead>Entity</TableHead>
+                <TableHead>Entiteit</TableHead>
                 <TableHead>Metadata</TableHead>
               </TableRow>
             </TableHeader>
@@ -153,7 +153,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
               {logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    No logs found.
+                    Geen logs gevonden.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -163,7 +163,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
                       <FormattedDate value={log.created_at} locale="en-GB" />
                     </TableCell>
                     <TableCell>
-                      <span className="inline-flex px-2 py-0.5 rounded bg-secondary text-secondary-foreground text-xs font-medium">
+                      <span className="inline-flex rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
                         {log.action}
                       </span>
                     </TableCell>

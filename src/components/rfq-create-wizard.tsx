@@ -1156,8 +1156,8 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     setAttachments([]);
   };
   const stepTitles = showTableFoot
-    ? ['Material & finish', 'Suppliers - table top', 'Suppliers - table foot', 'Details & dimensions']
-    : ['Material & finish', 'Suppliers', 'Details & dimensions'];
+    ? ['Materiaal & afwerking', 'Leveranciers blad', 'Leveranciers voet', 'Details & afmetingen']
+    : ['Materiaal & afwerking', 'Leveranciers', 'Details & afmetingen'];
 
   return (
     <Dialog
@@ -1169,24 +1169,30 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         }
       }}
     >
-      <DialogTrigger asChild>{children || <Button>New request</Button>}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+      <DialogTrigger asChild>{children || <Button>Nieuwe aanvraag</Button>}</DialogTrigger>
+      <DialogContent className="max-h-[92vh] overflow-y-auto p-0 sm:max-w-5xl">
         <DialogHeader>
-          <DialogTitle>New request for quotation - {stepTitles[currentStep]}</DialogTitle>
+          <div className="border-b px-6 py-5">
+            <DialogTitle>Nieuwe prijsaanvraag</DialogTitle>
+            <p className="mt-1 text-sm text-muted-foreground">{stepTitles[currentStep]}</p>
+          </div>
           <DialogDescription className="sr-only">
             Complete the steps to create a new request for quotation.
           </DialogDescription>
-          <div className="mt-2 flex items-center space-x-2">
-            {stepTitles.map((_, index) => (
-              <div
-                key={index}
-                className={`h-2 flex-1 rounded-full ${index <= currentStep ? 'bg-primary' : 'bg-muted'}`}
-              />
+          <div className="flex items-center gap-0 px-6 pt-5">
+            {stepTitles.map((title, index) => (
+              <div key={title} className="flex flex-1 items-center gap-3">
+                <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${index < currentStep ? 'bg-primary text-primary-foreground' : index === currentStep ? 'bg-primary text-primary-foreground' : 'border bg-card text-muted-foreground'}`}>
+                  {index < currentStep ? '✓' : index + 1}
+                </span>
+                <span className={`hidden text-[13px] font-semibold md:inline ${index <= currentStep ? 'text-foreground' : 'text-muted-foreground'}`}>{title}</span>
+                {index < stepTitles.length - 1 && <span className={`mx-3 h-0.5 flex-1 rounded-full ${index < currentStep ? 'bg-primary' : 'bg-border'}`} />}
+              </div>
             ))}
           </div>
         </DialogHeader>
 
-        <div className="min-h-[400px] space-y-4">
+        <div className="min-h-[400px] space-y-4 px-6 py-5">
           {currentStep === 0 && (
             <>
               <div className="space-y-1.5">
@@ -1848,29 +1854,29 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           {errors._form && <p className="text-destructive text-sm">{errors._form[0]}</p>}
         </div>
 
-        <DialogFooter className="flex justify-between">
+        <DialogFooter className="border-t bg-muted/25 px-6 py-4 sm:justify-between">
           <div>
             {currentStep > 0 && (
               <Button type="button" variant="outline" onClick={prevStep}>
-                Previous
+                Vorige
               </Button>
             )}
           </div>
           <div className="flex gap-2">
             <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
-              Cancel
+              Annuleren
             </Button>
             {currentStep < detailsStepIndex ? (
               <Button type="button" onClick={nextStep}>
-                Next
+                Volgende stap
               </Button>
             ) : (
               <Button type="button" onClick={handleSubmit} disabled={loading}>
                 {loading
-                  ? 'Loading...'
+                  ? 'Aanmaken...'
                   : duplicateWarning.exact.length > 0 || allowDuplicate
-                    ? 'Create anyway'
-                    : 'Create'}
+                    ? 'Toch aanmaken'
+                    : 'Aanvraag aanmaken'}
               </Button>
             )}
           </div>

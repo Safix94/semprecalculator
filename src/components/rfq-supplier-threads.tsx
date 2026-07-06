@@ -17,7 +17,7 @@ interface RfqSupplierThreadsProps {
 }
 
 function formatTimestamp(value: string) {
-  return new Date(value).toLocaleString('en-GB', {
+  return new Date(value).toLocaleString('nl-BE', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
@@ -27,9 +27,9 @@ function formatTimestamp(value: string) {
 }
 
 function getInviteStatus(invite: RfqInvite) {
-  if (invite.revoked_at) return 'Revoked';
-  if (invite.used_at) return 'Quote submitted';
-  if (new Date(invite.expires_at) < new Date()) return 'Expired';
+  if (invite.revoked_at) return 'Ingetrokken';
+  if (invite.used_at) return 'Offerte ingediend';
+  if (new Date(invite.expires_at) < new Date()) return 'Verlopen';
   return 'Open';
 }
 
@@ -142,10 +142,10 @@ export function RfqSupplierThreads({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Supplier conversation</CardTitle>
+          <CardTitle>Leverancierscommunicatie</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">No suppliers invited yet.</p>
+          <p className="text-sm text-muted-foreground">Nog geen leveranciers uitgenodigd.</p>
         </CardContent>
       </Card>
     );
@@ -156,7 +156,10 @@ export function RfqSupplierThreads({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Supplier conversation</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Leverancierscommunicatie</CardTitle>
+          <span className="text-xs font-medium text-muted-foreground">Per leverancier</span>
+        </div>
       </CardHeader>
       <CardContent>
         <Tabs
@@ -181,16 +184,23 @@ export function RfqSupplierThreads({
 
             return (
               <TabsContent key={invite.id} value={supplierId} className="space-y-4">
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs font-medium text-muted-foreground">
                   Status: {getInviteStatus(invite)}
                 </div>
 
                 {supplierComments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No messages yet.</p>
+                  <p className="text-sm text-muted-foreground">Nog geen berichten.</p>
                 ) : (
                   <ul className="space-y-3">
                     {supplierComments.map((comment) => (
-                      <li key={comment.id} className="rounded-md border px-3 py-2">
+                      <li
+                        key={comment.id}
+                        className={`sempre-message ${
+                          comment.author_type === 'supplier'
+                            ? 'ml-auto max-w-[88%] border-primary/20 bg-primary/10'
+                            : 'border-border bg-muted/45'
+                        }`}
+                      >
                         <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
                           <span>
                             {comment.author_type === 'supplier'
@@ -216,7 +226,7 @@ export function RfqSupplierThreads({
                         [supplierId]: event.target.value,
                       }))
                     }
-                    placeholder="Write your reply to this supplier..."
+                    placeholder="Schrijf je antwoord aan deze leverancier…"
                     disabled={actionsDisabled || busyAction !== null}
                   />
 
@@ -229,7 +239,7 @@ export function RfqSupplierThreads({
                   {info && <p className="text-sm text-muted-foreground">{info}</p>}
 
                   {actionsDisabled && (
-                    <p className="text-sm text-muted-foreground">Thread is locked because this RFQ is closed.</p>
+                    <p className="text-sm text-muted-foreground">Thread is vergrendeld omdat deze RFQ gesloten is.</p>
                   )}
 
                   <div className="flex flex-wrap gap-2">
@@ -238,7 +248,7 @@ export function RfqSupplierThreads({
                       disabled={actionsDisabled || busyAction !== null}
                       onClick={() => handleReply(supplierId, false)}
                     >
-                      {busyAction === `${supplierId}:reply` ? 'Sending...' : 'Reply'}
+                      {busyAction === `${supplierId}:reply` ? 'Versturen...' : 'Antwoorden'}
                     </Button>
                     <Button
                       type="button"
@@ -246,7 +256,7 @@ export function RfqSupplierThreads({
                       disabled={actionsDisabled || busyAction !== null}
                       onClick={() => handleReply(supplierId, true)}
                     >
-                      {busyAction === `${supplierId}:update` ? 'Sending...' : 'Request updated quote'}
+                      {busyAction === `${supplierId}:update` ? 'Versturen...' : 'Nieuwe offerte vragen'}
                     </Button>
                     <Button
                       type="button"
@@ -254,7 +264,7 @@ export function RfqSupplierThreads({
                       disabled={actionsDisabled || busyAction !== null}
                       onClick={() => handleResendLink(supplierId)}
                     >
-                      {busyAction === `${supplierId}:resend` ? 'Sending...' : 'Resend link'}
+                      {busyAction === `${supplierId}:resend` ? 'Versturen...' : 'Link opnieuw'}
                     </Button>
                   </div>
                 </div>

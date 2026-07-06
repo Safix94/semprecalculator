@@ -26,8 +26,8 @@ interface RfqDetailsOverviewProps {
 function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs uppercase text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-medium">{value || '-'}</dd>
+      <dt className="sempre-info-label">{label}</dt>
+      <dd className="sempre-info-value">{value || '-'}</dd>
     </div>
   );
 }
@@ -66,126 +66,78 @@ export function RfqDetailsOverview({ rfq, invites = [], status, showDates = true
   const suppliers = supplierLabels(invites, isTablesType);
 
   return (
-    <div className="grid gap-4 xl:grid-cols-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Request overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <InfoItem label="Product type" value={rfq.product_type || '-'} />
-            <InfoItem label="Customer" value={rfq.customer_name || '-'} />
-            {status && (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Specificaties</CardTitle>
+          {status && <span className={`sempre-status ${status.color}`}>{status.label}</span>}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <dl className="grid gap-4 sm:grid-cols-2">
+          {rfq.model && <InfoItem label="Model" value={rfq.model} />}
+          <InfoItem label="Producttype" value={rfq.product_type || '-'} />
+          <InfoItem label="Klant" value={rfq.customer_name || '-'} />
+          {isTablesType ? (
+            <>
               <InfoItem
-                label="Status"
-                value={(
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${status.color}`}>
-                    {status.label}
-                  </span>
-                )}
+                label={isTableTopsType ? 'Tafelblad' : 'Tafelblad'}
+                value={[rfq.material_table_top, rfq.finish_table_top].filter(Boolean).join(' — ') || '-'}
               />
-            )}
-            {showDates && (
-              <>
+              {!isTableTopsType && (
                 <InfoItem
-                  label="Created"
-                  value={(
-                    <FormattedDate
-                      value={rfq.created_at}
-                      locale="nl-NL"
-                      dateStyle="short"
-                      timeStyle="short"
-                    />
-                  )}
+                  label="Tafelpoot"
+                  value={[rfq.material_table_foot, rfq.finish_table_foot].filter(Boolean).join(' — ') || '-'}
                 />
-                {rfq.sent_at && (
-                  <InfoItem
-                    label="Sent"
-                    value={(
-                      <FormattedDate
-                        value={rfq.sent_at}
-                        locale="nl-NL"
-                        dateStyle="short"
-                        timeStyle="short"
-                      />
-                    )}
-                  />
-                )}
-              </>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Product details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            {isTablesType ? (
-              <>
-                {rfq.model && <InfoItem label="Model" value={rfq.model} />}
-                <InfoItem
-                  label={isTableTopsType ? 'Tafelblad' : 'Tafelblad'}
-                  value={[rfq.material_table_top, rfq.finish_table_top].filter(Boolean).join(' — ') || '-'}
-                />
-                {!isTableTopsType && (
-                  <InfoItem
-                    label="Tafelpoot"
-                    value={[rfq.material_table_foot, rfq.finish_table_foot].filter(Boolean).join(' — ') || '-'}
-                  />
-                )}
-              </>
-            ) : (
-              <>
-                <InfoItem label="Material" value={rfq.material || '-'} />
-                <InfoItem label="Finish" value={rfq.finish || '-'} />
-                {rfq.finish_top && <InfoItem label="Top finish" value={rfq.finish_top} />}
-                {rfq.finish_edge && <InfoItem label="Edge finish" value={rfq.finish_edge} />}
-                {rfq.finish_color && <InfoItem label="Color finish" value={rfq.finish_color} />}
-              </>
-            )}
-            <InfoItem label="Shape" value={rfq.shape || '-'} />
-            <InfoItem label="Use" value={rfq.usage_environment || '-'} />
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Dimensions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <InfoItem
-              label={isRound ? 'Dimensions (Ø x H)' : 'Dimensions (LxWxH)'}
-              value={formatRfqDimensionsWithOptions(rfq, { includeThickness: false })}
-            />
-            <InfoItem label="Thickness top" value={`${rfq.thickness} cm`} />
-            <InfoItem label="Quantity" value={rfq.quantity} />
-          </dl>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Supplier(s)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {suppliers.length > 0 ? (
-            <ul className="space-y-2 text-sm font-medium">
-              {suppliers.map((supplier) => (
-                <li key={supplier} className="break-words rounded-md bg-muted/40 px-2 py-1">
-                  {supplier}
-                </li>
-              ))}
-            </ul>
+              )}
+            </>
           ) : (
-            <p className="text-sm text-muted-foreground">-</p>
+            <>
+              <InfoItem label="Materiaal" value={rfq.material || '-'} />
+              <InfoItem label="Afwerking" value={rfq.finish || '-'} />
+              {rfq.finish_top && <InfoItem label="Afwerking blad" value={rfq.finish_top} />}
+              {rfq.finish_edge && <InfoItem label="Afwerking rand" value={rfq.finish_edge} />}
+              {rfq.finish_color && <InfoItem label="Kleurafwerking" value={rfq.finish_color} />}
+            </>
           )}
-        </CardContent>
-      </Card>
-    </div>
+          <InfoItem label="Vorm" value={rfq.shape || '-'} />
+          <InfoItem label="Gebruik" value={rfq.usage_environment || '-'} />
+          <InfoItem
+            label={isRound ? 'Afmeting (Ø×H)' : 'Afmeting (L×B×H)'}
+            value={formatRfqDimensionsWithOptions(rfq, { includeThickness: false })}
+          />
+          <InfoItem label="Dikte blad" value={`${rfq.thickness} cm`} />
+          <InfoItem label="Aantal" value={`${rfq.quantity} stuks`} />
+          {showDates && (
+            <>
+              <InfoItem
+                label="Aangemaakt"
+                value={<FormattedDate value={rfq.created_at} locale="nl-NL" dateStyle="short" timeStyle="short" />}
+              />
+              {rfq.sent_at && (
+                <InfoItem
+                  label="Verzonden"
+                  value={<FormattedDate value={rfq.sent_at} locale="nl-NL" dateStyle="short" timeStyle="short" />}
+                />
+              )}
+            </>
+          )}
+          <div className="sm:col-span-2">
+            <dt className="sempre-info-label">Leverancier(s)</dt>
+            {suppliers.length > 0 ? (
+              <dd className="mt-2 flex flex-wrap gap-2">
+                {suppliers.map((supplier) => (
+                  <span key={supplier} className="rounded-md border bg-muted/60 px-2.5 py-1 text-[12.5px] font-semibold text-foreground/80">
+                    {supplier}
+                  </span>
+                ))}
+              </dd>
+            ) : (
+              <dd className="sempre-info-value">-</dd>
+            )}
+          </div>
+        </dl>
+      </CardContent>
+    </Card>
   );
 }

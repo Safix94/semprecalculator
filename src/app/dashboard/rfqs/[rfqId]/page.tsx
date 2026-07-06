@@ -10,6 +10,7 @@ import { RfqAttachmentList } from '@/components/rfq-attachment-list';
 import { RfqDirectDetailsCard } from '@/components/rfq-direct-details-card';
 import type { Rfq, RfqAttachment, RfqComment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatSupplierInputAmount } from '@/lib/currency';
 
 interface PageProps {
   params: Promise<{ rfqId: string }>;
@@ -25,6 +26,24 @@ const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
   sent_to_pricing_crm: { label: 'Sent to pricing (CRM)', color: 'bg-chart-4/15 text-chart-4' },
   closed: { label: 'Closed', color: 'bg-accent text-accent-foreground' },
 };
+
+function formatEuro(value: number | string | null | undefined) {
+  if (value === null || value === undefined) return '-';
+  return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(Number(value));
+}
+
+function isAutomaticQuote(quote: RfqQuote | undefined) {
+  return quote?.pricing_formula_version === 'sanne_vos_bluestone_v1';
+}
+
+function supplierBasePriceLabel(quote: RfqQuote | undefined) {
+  if (!quote) return '-';
+  if (isAutomaticQuote(quote)) return 'Automatic';
+  if (quote.supplier_input_currency && quote.supplier_input_currency !== 'EUR' && quote.supplier_input_price) {
+    return formatSupplierInputAmount(quote.supplier_input_price, quote.supplier_input_currency);
+  }
+  return formatEuro(quote.base_price);
+}
 
 export default async function RfqDetailPage({ params }: PageProps) {
   const user = await requireAuth();
@@ -74,6 +93,11 @@ export default async function RfqDetailPage({ params }: PageProps) {
     label: typedRfq.status,
     color: 'bg-muted text-muted-foreground',
   };
+  const typedQuotes = (quotes as (RfqQuote & { supplier: Supplier })[]) ?? [];
+  const typedInvites = (invites as (RfqInvite & { supplier: Supplier | null })[]) ?? [];
+  const bestQuote = typedQuotes[0];
+  const supplierSummary = bestQuote?.supplier?.name ?? typedInvites[0]?.supplier?.name ?? '-';
+  const leadTimeSummary = bestQuote?.lead_time_days ? `${bestQuote.lead_time_days} dagen` : '-';
 
   return (
     <div className="space-y-4">
@@ -111,59 +135,83 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </div>
       </div>
 
-      <RfqDirectDetailsCard
-        rfq={typedRfq}
-        userRole={user.role}
-        invites={(invites as (RfqInvite & { supplier: Supplier | null })[]) ?? []}
-      />
+      <div className="grid gap-3 md:grid-cols-3">
+        <div className="sempre-metric-card-primary">
+          <div className="sempre-label text-primary">Retail price</div>
+          <div className="sempre-metric-value text-primary">{formatEuro(bestQuote?.final_price_calculated)}</div>
+          <div className="mt-1 text-xs text-primary/80">Klantprijs incl. marge & transport</div>
+        </div>
+        <div className="sempre-metric-card">
+          <div className="sempre-label">Supplier basisprijs</div>
+          <div className="sempre-metric-value">{supplierBasePriceLabel(bestQuote)}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Beste offerte · {supplierSummary}</div>
+        </div>
+        <div className="sempre-metric-card">
+          <div className="sempre-label">Levertijd</div>
+          <div className="sempre-metric-value">{leadTimeSummary}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Gebaseerd op goedkoopste/actieve offerte</div>
+        </div>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Notes</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RfqNotesEditor
-            key={`rfq-notes-${rfqId}`}
-            rfqId={rfqId}
-            initialNotes={typedRfq.notes}
-            disabled={typedRfq.status === 'closed'}
+      <div className="grid items-start gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-4">
+          <RfqDirectDetailsCard
+            rfq={typedRfq}
+            userRole={user.role}
+            invites={typedInvites}
           />
-        </CardContent>
-      </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Attachments</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RfqAttachmentList
-            rfqId={rfqId}
-            attachments={(attachments as RfqAttachment[]) ?? []}
-            canOpen={canManageRfq}
-            canDelete={canManageRfq && typedRfq.status !== 'closed'}
-          />
-          {typedRfq.status !== 'closed' && (
-            <div className="mt-4">
-              <AttachmentUpload rfqId={rfqId} />
-            </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Notities</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RfqNotesEditor
+                key={`rfq-notes-${rfqId}`}
+                rfqId={rfqId}
+                initialNotes={typedRfq.notes}
+                disabled={typedRfq.status === 'closed'}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Bijlagen</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RfqAttachmentList
+                rfqId={rfqId}
+                attachments={(attachments as RfqAttachment[]) ?? []}
+                canOpen={canManageRfq}
+                canDelete={canManageRfq && typedRfq.status !== 'closed'}
+              />
+              {typedRfq.status !== 'closed' && (
+                <div className="mt-4">
+                  <AttachmentUpload rfqId={rfqId} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          {typedRfq.status !== 'draft' && (
+            <QuoteComparison
+              invites={typedInvites as (RfqInvite & { supplier: Supplier })[]}
+              quotes={typedQuotes}
+            />
           )}
-        </CardContent>
-      </Card>
 
-      {typedRfq.status !== 'draft' && (
-        <QuoteComparison
-          invites={(invites as (RfqInvite & { supplier: Supplier })[]) ?? []}
-          quotes={(quotes as (RfqQuote & { supplier: Supplier })[]) ?? []}
-        />
-      )}
-
-      <RfqSupplierThreads
-        key={`rfq-threads-${rfqId}`}
-        rfqId={rfqId}
-        rfqStatus={typedRfq.status}
-        invites={(invites as (RfqInvite & { supplier: Supplier | null })[]) ?? []}
-        initialComments={(comments as RfqComment[]) ?? []}
-      />
+          <RfqSupplierThreads
+            key={`rfq-threads-${rfqId}`}
+            rfqId={rfqId}
+            rfqStatus={typedRfq.status}
+            invites={typedInvites}
+            initialComments={(comments as RfqComment[]) ?? []}
+          />
+        </div>
+      </div>
     </div>
   );
 }

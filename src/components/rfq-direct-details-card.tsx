@@ -151,26 +151,26 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>Edit details</CardTitle>
+            <CardTitle>Details bewerken</CardTitle>
             {canEditRfqDetails && !editing && (
               <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-                Edit
+                Bewerken
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent>
           {editing && canEditRfqDetails ? (
-            <div className="rounded-md border p-3">
+            <div className="rounded-lg border bg-muted/25 p-3">
               <div className={`grid gap-3 ${isRound ? 'md:grid-cols-3' : 'md:grid-cols-4'}`}>
                 {isTablesType && (
-                  <label className="space-y-1 text-xs uppercase text-muted-foreground md:col-span-full">
-                    Model
+                  <label className="space-y-1 md:col-span-full">
+                    <span className="sempre-label">Model</span>
                     <Input value={form.model} onChange={(event) => updateField('model', event.target.value)} />
                   </label>
                 )}
-                <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                  {isRound ? 'Diameter (cm)' : 'Length (cm)'}
+                <label className="space-y-1">
+                  <span className="sempre-label">{isRound ? 'Diameter (cm)' : 'Lengte (cm)'}</span>
                   <Input
                     type="number"
                     step="any"
@@ -180,8 +180,8 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                   />
                 </label>
                 {!isRound && (
-                  <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                    Width (cm)
+                  <label className="space-y-1">
+                    <span className="sempre-label">Breedte (cm)</span>
                     <Input
                       type="number"
                       step="any"
@@ -191,8 +191,8 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                     />
                   </label>
                 )}
-                <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                  Height (cm)
+                <label className="space-y-1">
+                  <span className="sempre-label">Hoogte (cm)</span>
                   <Input
                     type="number"
                     step="any"
@@ -201,8 +201,8 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                     onChange={(event) => updateField('height', event.target.value)}
                   />
                 </label>
-                <label className="space-y-1 text-xs uppercase text-muted-foreground">
-                  Thickness top (cm)
+                <label className="space-y-1">
+                  <span className="sempre-label">Dikte blad (cm)</span>
                   <Input
                     type="number"
                     step="any"
@@ -215,15 +215,15 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
               {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
               <div className="mt-4 flex gap-2">
                 <Button type="button" size="sm" onClick={saveDetails} disabled={saving}>
-                  {saving ? 'Saving...' : 'Save changes'}
+                  {saving ? 'Opslaan...' : 'Wijzigingen opslaan'}
                 </Button>
                 <Button type="button" size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
-                  Cancel
+                  Annuleren
                 </Button>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Open edit mode to adjust dimensions or model before sending to suppliers.</p>
+            <p className="text-sm text-muted-foreground">Open bewerkmodus om model of afmetingen aan te passen vóór verzending naar leveranciers.</p>
           )}
 
           {result && <p className="mt-3 text-sm text-chart-2">{result}</p>}

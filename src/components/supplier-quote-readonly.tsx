@@ -38,16 +38,16 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
         </p>
       </CardHeader>
       <CardContent>
-        <dl className="grid grid-cols-2 gap-4">
+        <dl className="grid gap-4 sm:grid-cols-2">
           {isAutomaticQuote ? (
-            <div className="col-span-2 rounded-md border bg-muted/40 p-3 text-sm text-muted-foreground">
+            <div className="sm:col-span-2 rounded-lg border bg-muted/40 p-3 text-sm text-muted-foreground">
               This quote was calculated automatically by Sempre.
             </div>
           ) : (
             <>
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">{t.basePrice}</dt>
-                <dd className="mt-1 text-sm font-medium">{submittedBasePrice}</dd>
+                <dt className="sempre-info-label">{t.basePrice}</dt>
+                <dd className="sempre-info-value">{submittedBasePrice}</dd>
                 {isConvertedQuote && (
                   <dd className="mt-1 text-xs text-muted-foreground">
                     Converted: €{Number(quote.base_price).toFixed(2)}
@@ -55,20 +55,20 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
                 )}
               </div>
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">{t.volumeM3}</dt>
-                <dd className="mt-1 text-sm font-medium">{volumeValue}</dd>
+                <dt className="sempre-info-label">{t.volumeM3}</dt>
+                <dd className="sempre-info-value">{volumeValue}</dd>
               </div>
             </>
           )}
           {quote.lead_time_days && (
             <div>
-              <dt className="text-xs uppercase text-muted-foreground">{t.leadTime}</dt>
-              <dd className="mt-1 text-sm font-medium">{quote.lead_time_days} {t.days}</dd>
+              <dt className="sempre-info-label">{t.leadTime}</dt>
+              <dd className="sempre-info-value">{quote.lead_time_days} {t.days}</dd>
             </div>
           )}
           {quote.comment && (
-            <div className="col-span-2">
-              <dt className="text-xs uppercase text-muted-foreground">{t.comment}</dt>
+            <div className="sm:col-span-2">
+              <dt className="sempre-info-label">{t.comment}</dt>
               <dd className="mt-1 whitespace-pre-wrap text-sm">{quote.comment}</dd>
             </div>
           )}

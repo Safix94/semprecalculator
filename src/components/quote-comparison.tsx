@@ -97,7 +97,10 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Quote comparison</CardTitle>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>Offerte van leverancier</CardTitle>
+          <span className="text-xs font-medium text-muted-foreground">{quotes.length} ontvangen · {invites.length} uitgenodigd</span>
+        </div>
       </CardHeader>
       <CardContent>
         {invites.length === 0 ? (
@@ -106,16 +109,16 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Supplier</TableHead>
+                <TableHead>Leverancier</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Transport</TableHead>
-                <TableHead className="text-right">Supplier base price</TableHead>
+                <TableHead className="text-right">Supplier basisprijs</TableHead>
                 <TableHead className="text-right">Volume</TableHead>
                 <TableHead className="text-right">Transport cost / truck multiplier</TableHead>
                 <TableHead className="text-right">Calculation base</TableHead>
                 <TableHead className="text-right">Retail price</TableHead>
-                <TableHead className="text-right">Lead time</TableHead>
-                <TableHead>Comment</TableHead>
+                <TableHead className="text-right">Levertijd</TableHead>
+                <TableHead>Opmerking</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -144,11 +147,11 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                 return (
                   <TableRow
                     key={invite.id}
-                    className={isLowest ? 'bg-accent/40 hover:bg-accent/50' : undefined}
+                    className={isLowest ? 'bg-primary/10 hover:bg-primary/15' : undefined}
                   >
                     <TableCell className="font-medium">{invite.supplier?.name ?? 'Unknown'}</TableCell>
                     <TableCell>
-                      <span className={`text-sm font-medium ${status.color}`}>{status.label}</span>
+                      <span className={`text-[12px] font-semibold ${status.color}`}>{status.label}</span>
                     </TableCell>
                     <TableCell>{formatPricingMethod(quote)}</TableCell>
                     <TableCell className="text-right">
@@ -170,7 +173,7 @@ export function QuoteComparison({ invites, quotes }: QuoteComparisonProps) {
                       ) : '-'}
                     </TableCell>
                     <TableCell className="text-right">
-                      {quote?.lead_time_days ? `${quote.lead_time_days} days` : '-'}
+                      {quote?.lead_time_days ? `${quote.lead_time_days} dagen` : '-'}
                     </TableCell>
                     <TableCell className="max-w-[200px] truncate text-muted-foreground">
                       {quote?.comment || '-'}

@@ -35,14 +35,14 @@ export default async function ManagementPage() {
         </p>
       </div>
 
-      <Tabs defaultValue="pricing">
-        <TabsList>
+      <Tabs defaultValue="pricing" className="gap-[18px]">
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          <TabsTrigger value="materials">Materials</TabsTrigger>
-          <TabsTrigger value="finishes">Finishes</TabsTrigger>
-          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-          <TabsTrigger value="product-types">Product types</TabsTrigger>
-          {currentUser.role === 'admin' && <TabsTrigger value="users">Users</TabsTrigger>}
+          <TabsTrigger value="materials">Materialen</TabsTrigger>
+          <TabsTrigger value="finishes">Afwerkingen</TabsTrigger>
+          <TabsTrigger value="suppliers">Leveranciers</TabsTrigger>
+          <TabsTrigger value="product-types">Producttypes</TabsTrigger>
+          {currentUser.role === 'admin' && <TabsTrigger value="users">Gebruikers</TabsTrigger>}
         </TabsList>
         <TabsContent value="pricing">
           <PricingSettingsManagement settings={pricingSettings} />

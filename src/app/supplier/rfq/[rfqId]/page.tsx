@@ -14,7 +14,7 @@ import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvir
 import { normalizeQuotePriceCurrency } from '@/lib/currency';
 import { getFxRates } from '@/lib/fx-rates';
 import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
 
@@ -26,22 +26,22 @@ interface PageProps {
 function SupplierPageShell({ children, centered = false }: { children: ReactNode; centered?: boolean }) {
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="mx-auto flex h-[60px] w-full max-w-3xl items-center justify-between px-4">
+      <header className="bg-primary">
+        <div className="mx-auto flex h-[64px] w-full max-w-5xl items-center justify-between px-6">
           <Image
             src="/sempre-logo-word.svg"
             alt="Sempre"
             width={130}
             height={17}
-            className="h-5 w-auto"
+            className="h-5 w-auto brightness-0 invert"
             priority
           />
-          <span className="sempre-label hidden sm:inline">Supplier portal</span>
+          <span className="hidden text-[13px] font-medium text-white/80 sm:inline">Prijsaanvraag · beveiligde link</span>
         </div>
       </header>
       <main
-        className={`mx-auto w-full max-w-3xl px-4 py-7 ${
-          centered ? 'flex min-h-[calc(100vh-3.75rem)] items-center justify-center' : ''
+        className={`mx-auto w-full max-w-5xl px-6 py-8 ${
+          centered ? 'flex min-h-[calc(100vh-4rem)] items-center justify-center' : ''
         }`}
       >
         {children}
@@ -125,6 +125,13 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   return (
     <SupplierPageShell>
       <div>
+        <div className="mb-6">
+          <div className="sempre-label text-muted-foreground">Aanvraag {rfq.id.slice(0, 8)} · voor {supplier?.name ?? 'leverancier'}</div>
+          <h1 className="mt-2 text-[25px] font-bold tracking-[-0.01em]">
+            {labels.requestForQuotation}{rfq.product_type ? `: ${rfq.product_type}` : ''}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">Sempre vraagt jullie beste prijs voor onderstaande specificatie. Vul het formulier onderaan in.</p>
+        </div>
         {isClosed && (
           <Card className="mb-6 border-amber-500/50 bg-amber-500/10">
             <CardContent className="pt-6">
@@ -134,15 +141,12 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
           </Card>
         )}
         <Card className="mb-6">
-          <CardContent className="space-y-4 pt-6">
-            <div className="flex items-center justify-between">
-              <h1 className="text-xl font-bold">
-                {labels.requestForQuotation}{rfq.product_type ? `: ${rfq.product_type}` : ''}
-              </h1>
-              <span className="text-sm text-muted-foreground">{supplier?.name}</span>
-            </div>
+          <CardHeader>
+            <CardTitle>Specificatie</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
 
-            <dl className="grid grid-cols-2 gap-4">
+            <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {!isTablesType && (
                 <div>
                   <dt className="text-xs uppercase text-muted-foreground">{labels.material}</dt>
@@ -216,7 +220,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                 </div>
               )}
               {rfq.notes && (
-                <div className="col-span-2">
+                <div className="sm:col-span-2 lg:col-span-4">
                   <dt className="text-xs uppercase text-muted-foreground">{labels.notes}</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-sm">{rfq.notes}</dd>
                 </div>

@@ -15,15 +15,6 @@ import {
   type ProductTypeDetailFieldKey,
 } from '@/lib/product-type-detail-fields';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,9 +31,6 @@ import { RfqDuplicateWarning } from '@/components/rfq-duplicate-warning';
 import type { RfqDuplicateWarning as RfqDuplicateWarningData } from '@/lib/rfq-match';
 import type { FinishOption, Material, ProductType, Supplier, UsageEnvironment } from '@/types';
 
-interface RfqCreateWizardProps {
-  children?: React.ReactNode;
-}
 
 interface WizardData {
   customer_name: string;
@@ -142,8 +130,8 @@ function normalizeProductTypeName(productTypeName: string | null | undefined): s
   return (productTypeName ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
-  const [open, setOpen] = useState(false);
+export function RfqCreateWizard() {
+  const [open, setOpen] = useState(true);
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<WizardData>(initialData);
@@ -1081,7 +1069,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
         setDuplicateWarningSignature(duplicateCheckSignature);
         setAllowDuplicate(true);
         setErrors({
-          _form: ['A possible duplicate was found. Review the existing request or click Create anyway to continue.'],
+          _form: ['Mogelijk dubbele aanvraag gevonden. Bekijk de bestaande aanvraag of klik op “Toch aanmaken” om door te gaan.'],
         });
         return;
       }
@@ -1135,63 +1123,52 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
     }
   };
 
-  const resetDialog = () => {
-    setCurrentStep(0);
-    setData(initialData);
-    setErrors({});
-    setDuplicateWarning({ exact: [], similar: [] });
-    setDuplicateWarningSignature(null);
-    setDuplicateLoading(false);
-    setDuplicateError(null);
-    setAllowDuplicate(false);
-    setSuppliers([]);
-    setSuppliersError(null);
-    setTableTopSuppliers([]);
-    setTableTopSuppliersError(null);
-    setTableFootSuppliers([]);
-    setTableFootSuppliersError(null);
-    setMaterialsError(null);
-    setProductTypesError(null);
-    setFinishOptionsError(null);
-    setAttachments([]);
-  };
   const stepTitles = showTableFoot
     ? ['Materiaal & afwerking', 'Leveranciers blad', 'Leveranciers voet', 'Details & afmetingen']
     : ['Materiaal & afwerking', 'Leveranciers', 'Details & afmetingen'];
 
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(newOpen) => {
-        setOpen(newOpen);
-        if (!newOpen) {
-          resetDialog();
-        }
-      }}
-    >
-      <DialogTrigger asChild>{children || <Button>Nieuwe aanvraag</Button>}</DialogTrigger>
-      <DialogContent className="max-h-[92vh] overflow-y-auto p-0 sm:max-w-5xl">
-        <DialogHeader>
-          <div className="border-b px-6 py-5">
-            <DialogTitle>Nieuwe prijsaanvraag</DialogTitle>
-            <p className="mt-1 text-sm text-muted-foreground">{stepTitles[currentStep]}</p>
-          </div>
-          <DialogDescription className="sr-only">
-            Complete the steps to create a new request for quotation.
-          </DialogDescription>
-          <div className="flex items-center gap-0 px-6 pt-5">
-            {stepTitles.map((title, index) => (
-              <div key={title} className="flex flex-1 items-center gap-3">
-                <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${index < currentStep ? 'bg-primary text-primary-foreground' : index === currentStep ? 'bg-primary text-primary-foreground' : 'border bg-card text-muted-foreground'}`}>
-                  {index < currentStep ? '✓' : index + 1}
-                </span>
-                <span className={`hidden text-[13px] font-semibold md:inline ${index <= currentStep ? 'text-foreground' : 'text-muted-foreground'}`}>{title}</span>
-                {index < stepTitles.length - 1 && <span className={`mx-3 h-0.5 flex-1 rounded-full ${index < currentStep ? 'bg-primary' : 'bg-border'}`} />}
-              </div>
-            ))}
-          </div>
-        </DialogHeader>
+  const summaryMaterial = isTablesType
+    ? [
+        data.material_table_top ? `Blad: ${data.material_table_top}` : null,
+        data.material_table_foot ? `Poot: ${data.material_table_foot}` : null,
+      ].filter(Boolean).join(' · ') || '—'
+    : data.material_name || '—';
+  const summaryDimensions = [
+    data.diameter ? `Ø ${data.diameter}` : null,
+    data.length ? `L ${data.length}` : null,
+    data.width ? `B ${data.width}` : null,
+    data.height ? `H ${data.height}` : null,
+  ].filter(Boolean).join(' · ') || '—';
+  const summaryRows = [
+    { label: 'Klant', value: data.customer_name || '—' },
+    { label: 'Producttype', value: data.product_type || '—' },
+    { label: 'Model', value: data.model || '—' },
+    { label: 'Materiaal', value: summaryMaterial },
+    { label: 'Afmeting', value: summaryDimensions },
+    { label: 'Aantal', value: data.quantity || '—' },
+  ];
 
+  return (
+    <div className="mx-auto w-full max-w-[1180px]">
+      <div className="mb-4">
+        <h1 className="sempre-page-title">Nieuwe prijsaanvraag</h1>
+        <p className="sempre-page-subtitle">{stepTitles[currentStep]}</p>
+      </div>
+
+      <div className="rounded-xl border bg-card">
+        <div className="flex items-center gap-0 border-b px-6 py-5">
+          {stepTitles.map((title, index) => (
+            <div key={title} className="flex flex-1 items-center gap-3">
+              <span className={`flex size-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold ${index < currentStep ? 'bg-primary text-primary-foreground' : index === currentStep ? 'bg-primary text-primary-foreground' : 'border bg-card text-muted-foreground'}`}>
+                {index < currentStep ? '✓' : index + 1}
+              </span>
+              <span className={`hidden text-[13px] font-semibold md:inline ${index <= currentStep ? 'text-foreground' : 'text-muted-foreground'}`}>{title}</span>
+              {index < stepTitles.length - 1 && <span className={`mx-3 h-0.5 flex-1 rounded-full ${index < currentStep ? 'bg-primary' : 'bg-border'}`} />}
+            </div>
+          ))}
+        </div>
+
+        <div className="grid lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-h-[400px] space-y-4 px-6 py-5">
           {currentStep === 0 && (
             <>
@@ -1854,7 +1831,27 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
           {errors._form && <p className="text-destructive text-sm">{errors._form[0]}</p>}
         </div>
 
-        <DialogFooter className="border-t bg-muted/25 px-6 py-4 sm:justify-between">
+        <aside className="border-t bg-muted/20 px-6 py-5 lg:border-l lg:border-t-0">
+          <div className="lg:sticky lg:top-4">
+            <div className="sempre-label mb-3">Samenvatting</div>
+            <dl className="space-y-2.5">
+              {summaryRows.map((row) => (
+                <div key={row.label} className="flex items-baseline justify-between gap-3">
+                  <dt className="sempre-label">{row.label}</dt>
+                  <dd className="max-w-[60%] truncate text-right text-[13px] font-semibold text-foreground/90">
+                    {row.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-4 rounded-lg border border-primary/25 bg-primary/10 px-3 py-2.5 text-xs leading-5 text-primary">
+              De aanvraag wordt naar één gekozen leverancier verstuurd.
+            </div>
+          </div>
+        </aside>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t bg-muted/25 px-6 py-4">
           <div>
             {currentStep > 0 && (
               <Button type="button" variant="outline" onClick={prevStep}>
@@ -1863,7 +1860,7 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
             )}
           </div>
           <div className="flex gap-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => router.push('/dashboard')}>
               Annuleren
             </Button>
             {currentStep < detailsStepIndex ? (
@@ -1880,8 +1877,8 @@ export function RfqCreateWizard({ children }: RfqCreateWizardProps) {
               </Button>
             )}
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </div>
   );
 }

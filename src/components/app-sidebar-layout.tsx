@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FileText, Plus, Search, ScrollText, Settings } from 'lucide-react';
 import { LogoutButton } from '@/components/logout-button';
-import { RfqCreateWizardLazy } from '@/components/rfq-create-wizard-lazy';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { Button } from '@/components/ui/button';
 import {
@@ -139,12 +138,12 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
               <span className="hidden text-[12.5px] text-muted-foreground md:inline">
                 {user.email} · <span className="capitalize">{user.role}</span>
               </span>
-              <RfqCreateWizardLazy>
-                <Button size="sm">
+              <Button asChild size="sm">
+                <Link href="/dashboard/rfqs/new">
                   <Plus className="size-[15px]" />
                   Nieuwe aanvraag
-                </Button>
-              </RfqCreateWizardLazy>
+                </Link>
+              </Button>
               <LogoutButton />
             </div>
           </div>

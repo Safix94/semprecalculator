@@ -135,6 +135,14 @@ export default async function RfqDetailPage({ params }: PageProps) {
         </div>
       </div>
 
+      {typedInvites.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[12.5px] text-muted-foreground">
+          <span className="sempre-label">Leverancier</span>
+          <span className="font-semibold text-foreground/80">{supplierSummary}</span>
+          {typedInvites.length > 1 && <span>· {typedInvites.length} leveranciers uitgenodigd</span>}
+        </div>
+      )}
+
       <div className="grid gap-3 md:grid-cols-3">
         <div className="sempre-metric-card-primary">
           <div className="sempre-label text-primary">Retail price</div>
@@ -163,20 +171,6 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Notities</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RfqNotesEditor
-                key={`rfq-notes-${rfqId}`}
-                rfqId={rfqId}
-                initialNotes={typedRfq.notes}
-                disabled={typedRfq.status === 'closed'}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle>Bijlagen</CardTitle>
             </CardHeader>
             <CardContent>
@@ -191,6 +185,20 @@ export default async function RfqDetailPage({ params }: PageProps) {
                   <AttachmentUpload rfqId={rfqId} />
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Notities</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RfqNotesEditor
+                key={`rfq-notes-${rfqId}`}
+                rfqId={rfqId}
+                initialNotes={typedRfq.notes}
+                disabled={typedRfq.status === 'closed'}
+              />
             </CardContent>
           </Card>
         </div>

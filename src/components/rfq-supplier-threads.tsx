@@ -183,40 +183,41 @@ export function RfqSupplierThreads({
             const draftMessage = draftBySupplierId[supplierId] ?? '';
 
             return (
-              <TabsContent key={invite.id} value={supplierId} className="space-y-4">
+              <TabsContent key={invite.id} value={supplierId} className="space-y-3">
                 <div className="text-xs font-medium text-muted-foreground">
                   Status: {getInviteStatus(invite)}
                 </div>
 
-                {supplierComments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Nog geen berichten.</p>
-                ) : (
-                  <ul className="space-y-3">
-                    {supplierComments.map((comment) => (
-                      <li
-                        key={comment.id}
-                        className={`sempre-message ${
-                          comment.author_type === 'supplier'
-                            ? 'ml-auto max-w-[88%] border-primary/20 bg-primary/10'
-                            : 'border-border bg-muted/45'
-                        }`}
-                      >
-                        <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                          <span>
-                            {comment.author_type === 'supplier'
-                              ? invite.supplier?.name ?? 'Supplier'
-                              : comment.author_email || 'Sempre team'}
-                          </span>
-                          <span>{formatTimestamp(comment.created_at)}</span>
-                        </div>
-                        <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+                  {supplierComments.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Nog geen berichten.</p>
+                  ) : (
+                    <ul className="max-h-[440px] space-y-3 overflow-y-auto pr-1">
+                      {supplierComments.map((comment) => (
+                        <li
+                          key={comment.id}
+                          className={`sempre-message ${
+                            comment.author_type === 'supplier'
+                              ? 'ml-auto max-w-[88%] border-primary/20 bg-primary/10'
+                              : 'border-border bg-muted/45'
+                          }`}
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                            <span>
+                              {comment.author_type === 'supplier'
+                                ? invite.supplier?.name ?? 'Supplier'
+                                : comment.author_email || 'Sempre team'}
+                            </span>
+                            <span>{formatTimestamp(comment.created_at)}</span>
+                          </div>
+                          <p className="whitespace-pre-wrap text-sm">{comment.body}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
 
-                <div className="space-y-3">
-                  <Textarea
+                  <div className="space-y-3 lg:sticky lg:top-4">
+                    <Textarea
                     rows={4}
                     maxLength={2000}
                     value={draftMessage}
@@ -266,6 +267,7 @@ export function RfqSupplierThreads({
                     >
                       {busyAction === `${supplierId}:resend` ? 'Versturen...' : 'Link opnieuw'}
                     </Button>
+                  </div>
                   </div>
                 </div>
               </TabsContent>

@@ -55,6 +55,14 @@ const ACTIONS = [
   'EMAIL_SENT',
 ];
 
+function actionBadgeColor(action: string): string {
+  if (action.endsWith('_REVOKED')) return 'bg-destructive/15 text-destructive';
+  if (action.endsWith('_SENT') || action === 'INVITE_OPENED') return 'bg-primary/15 text-primary';
+  if (action === 'QUOTE_SUBMITTED') return 'bg-chart-2/15 text-chart-2';
+  if (action.endsWith('_UPDATED')) return 'bg-chart-4/15 text-chart-4';
+  return 'bg-muted text-muted-foreground';
+}
+
 function formatActor(log: AuditLog): string {
   if (log.actor_display_name) {
     return `${log.actor_display_name} · ${log.actor_type}`;
@@ -163,7 +171,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
                       <FormattedDate value={log.created_at} locale="en-GB" />
                     </TableCell>
                     <TableCell>
-                      <span className="inline-flex rounded-md bg-primary/10 px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">
+                      <span className={`inline-flex rounded-md px-2 py-0.5 font-mono text-[11px] font-semibold ${actionBadgeColor(log.action)}`}>
                         {log.action}
                       </span>
                     </TableCell>

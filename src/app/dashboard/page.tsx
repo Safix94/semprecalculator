@@ -58,8 +58,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const requestedPage = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1);
   const supabase = await createClient();
 
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
   // Stage A: independent lookups in parallel.
-  const [productTypeResult, supplierOptionsResult, supplierInviteResult] = await Promise.all([
+  const [productTypeResult, supplierOptionsResult, supplierInviteResult, thisMonthCountResult] = await Promise.all([
     getProductTypes(),
     supabase
       .from('suppliers')
@@ -69,7 +73,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     supplierFilter
       ? supabase.from('rfq_invites').select('rfq_id').eq('supplier_id', supplierFilter)
       : Promise.resolve(null),
+    supabase
+      .from('rfqs')
+      .select('id', { count: 'exact', head: true })
+      .gte('created_at', startOfMonth.toISOString()),
   ]);
+
+  const thisMonthCount = thisMonthCountResult.count ?? 0;
 
   const productTypes = 'data' in productTypeResult
     ? productTypeResult.data.map((productType) => productType.name)
@@ -254,8 +264,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
           <div className="h-8 w-px bg-border" />
           <div className="text-right">
-            <div className="sempre-label">Totaal</div>
-            <div className="text-[19px] font-bold">{totalCount}</div>
+            <div className="sempre-label">Deze maand</div>
+            <div className="text-[19px] font-bold">{thisMonthCount}</div>
           </div>
         </div>
       </div>

@@ -149,29 +149,29 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {!isTablesType && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">{labels.material}</dt>
+                  <dt className="sempre-label">{labels.material}</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
                 </div>
               )}
               {isTableTopsType && (
                 <>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">{labels.topFinish}</dt>
+                    <dt className="sempre-label">{labels.topFinish}</dt>
                     <dd className="mt-1 text-sm font-medium">{rfq.finish_top || labels.na}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">{labels.edgeFinish}</dt>
+                    <dt className="sempre-label">{labels.edgeFinish}</dt>
                     <dd className="mt-1 text-sm font-medium">{rfq.finish_edge || labels.na}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs uppercase text-muted-foreground">{labels.colorFinish}</dt>
+                    <dt className="sempre-label">{labels.colorFinish}</dt>
                     <dd className="mt-1 text-sm font-medium">{rfq.finish_color || labels.na}</dd>
                   </div>
                 </>
               )}
               {showTableTop && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">{labels.tableTop}</dt>
+                  <dt className="sempre-label">{labels.tableTop}</dt>
                   <dd className="mt-1 text-sm font-medium">
                     {rfq.material_table_top || labels.na}
                     {rfq.finish_table_top ? ` (${rfq.finish_table_top})` : ''}
@@ -180,7 +180,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
               )}
               {showTableFoot && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">{labels.tableFoot}</dt>
+                  <dt className="sempre-label">{labels.tableFoot}</dt>
                   <dd className="mt-1 text-sm font-medium">
                     {rfq.material_table_foot || labels.na}
                     {rfq.finish_table_foot ? ` (${rfq.finish_table_foot})` : ''}
@@ -188,21 +188,21 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                 </div>
               )}
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">{labels.shape}</dt>
+                <dt className="sempre-label">{labels.shape}</dt>
                 <dd className="mt-1 text-sm font-medium">{rfq.shape}</dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">{labels.use}</dt>
+                <dt className="sempre-label">{labels.use}</dt>
                 <dd className="mt-1 text-sm font-medium">{translateUsageEnvironment(rfq.usage_environment, language) || labels.na}</dd>
               </div>
               {rfq.model && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">{labels.model}</dt>
+                  <dt className="sempre-label">{labels.model}</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.model}</dd>
                 </div>
               )}
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">
+                <dt className="sempre-label">
                   {isRound ? labels.dimensionsRound : labels.dimensionsDefault}
                 </dt>
                 <dd className="mt-1 text-sm font-medium">
@@ -210,18 +210,18 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                 </dd>
               </div>
               <div>
-                <dt className="text-xs uppercase text-muted-foreground">{labels.quantity}</dt>
+                <dt className="sempre-label">{labels.quantity}</dt>
                 <dd className="mt-1 text-sm font-medium">{rfq.quantity}</dd>
               </div>
               {(!isRound || rfq.thickness > 0) && (
                 <div>
-                  <dt className="text-xs uppercase text-muted-foreground">{labels.thicknessTop}</dt>
+                  <dt className="sempre-label">{labels.thicknessTop}</dt>
                   <dd className="mt-1 text-sm font-medium">{rfq.thickness} cm</dd>
                 </div>
               )}
               {rfq.notes && (
                 <div className="sm:col-span-2 lg:col-span-4">
-                  <dt className="text-xs uppercase text-muted-foreground">{labels.notes}</dt>
+                  <dt className="sempre-label">{labels.notes}</dt>
                   <dd className="mt-1 whitespace-pre-wrap text-sm">{rfq.notes}</dd>
                 </div>
               )}

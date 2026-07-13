@@ -56,6 +56,7 @@ function sortProductTypes(productTypes: ProductType[]): ProductType[] {
 function revalidateProductTypeConsumers() {
   revalidatePath('/admin/management');
   revalidatePath('/dashboard');
+  revalidatePath('/dashboard/rfqs/new');
   revalidatePath('/dashboard/history');
 }
 

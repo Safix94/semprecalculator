@@ -131,7 +131,7 @@ function normalizeProductTypeName(productTypeName: string | null | undefined): s
 }
 
 export function RfqCreateWizard() {
-  const [open, setOpen] = useState(true);
+  const open = true;
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<WizardData>(initialData);
@@ -1096,23 +1096,11 @@ export function RfqCreateWizard() {
           }
         }
 
-        setOpen(false);
-        setCurrentStep(0);
-        setData(initialData);
-        setSuppliers([]);
-        setSuppliersError(null);
-        setAttachments([]);
-        setDuplicateWarning({ exact: [], similar: [] });
-        setDuplicateWarningSignature(null);
-        setDuplicateLoading(false);
-        setDuplicateError(null);
-        setAllowDuplicate(false);
-
         if (failedUploads.length > 0) {
           console.error('Some attachments failed to upload:', failedUploads);
         }
 
-        router.push(`/dashboard?rfq=${result.data.id}`);
+        router.push(`/dashboard/rfqs/${result.data.id}`);
         router.refresh();
       }
     } catch (error) {

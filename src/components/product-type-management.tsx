@@ -260,11 +260,20 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
       return;
     }
 
-    setProductTypes((prev) => prev.map((item) => (item.id === result.data.id ? result.data : item)));
+    const preservedDetailSettings = normalizeDetailFieldSettings(
+      detailSettingsById[productType.id] ?? productType.detail_fields,
+      result.data.name
+    );
+    const productTypeWithSettings = {
+      ...result.data,
+      detail_fields: preservedDetailSettings,
+    };
+
+    setProductTypes((prev) => prev.map((item) => (item.id === result.data.id ? productTypeWithSettings : item)));
     setEditName(result.data.name);
     setDetailSettingsById((prev) => ({
       ...prev,
-      [result.data.id]: normalizeDetailFieldSettings(result.data.detail_fields, result.data.name),
+      [result.data.id]: preservedDetailSettings,
     }));
     setSuccess(`Product type saved: ${result.data.name}.`);
     setSavingProductTypeId(null);
@@ -294,7 +303,15 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
       return;
     }
 
-    setProductTypes(result.data);
+    const reorderedProductTypes = result.data.map((productType) => ({
+      ...productType,
+      detail_fields: detailSettingsById[productType.id] ?? normalizeDetailFieldSettings(productType.detail_fields, productType.name),
+    }));
+    setProductTypes(reorderedProductTypes);
+    setDetailSettingsById((prev) => ({
+      ...buildSettingsByProductTypeId(reorderedProductTypes),
+      ...prev,
+    }));
     setSuccess('Product type order saved.');
     setReordering(false);
   };

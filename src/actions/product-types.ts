@@ -194,11 +194,11 @@ async function mergeProductTypeDetailFields(productTypes: ProductType[]): Promis
 export async function getProductTypes(): Promise<{ data: ProductType[] } | { error: string }> {
   const user = await getCurrentUser();
   if (!user) {
-    return { error: 'Je bent niet ingelogd.' };
+    return { error: 'You are not logged in.' };
   }
 
   if (user.role !== 'sales' && user.role !== 'admin') {
-    return { error: 'Je hebt geen rechten om soorten te laden.' };
+    return { error: 'You do not have permission to load product types.' };
   }
 
   try {
@@ -500,7 +500,7 @@ export async function deleteProductType(productTypeId: string) {
     .single();
 
   if (productTypeError || !productType) {
-    return { error: { _form: ['Soort niet gevonden.'] } };
+    return { error: { _form: ['Product type not found.'] } };
   }
 
   const { count, error: usageError } = await supabase
@@ -513,7 +513,7 @@ export async function deleteProductType(productTypeId: string) {
   }
 
   if ((count ?? 0) > 0) {
-    return { error: { _form: ['Deze soort is in gebruik en kan niet verwijderd worden.'] } };
+    return { error: { _form: ['This product type is in use and cannot be deleted.'] } };
   }
 
   const { error: deleteError } = await supabase

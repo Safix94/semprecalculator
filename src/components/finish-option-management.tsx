@@ -82,13 +82,13 @@ function SortableFinishOptionItem({
         type="button"
         className="cursor-grab text-muted-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
         disabled={disabled}
-        aria-label={`Sleep ${finishOption.name} om te herschikken`}
+        aria-label={`Drag ${finishOption.name} to reorder`}
       >
         <GripVertical className="h-4 w-4" />
       </button>
       <div className="min-w-0 flex-1">
         <div className="truncate font-medium">{finishOption.name}</div>
-        <div className="text-xs text-muted-foreground">Sleep om de volgorde van suggesties te bepalen</div>
+        <div className="text-xs text-muted-foreground">Drag to set the suggestion order</div>
       </div>
       <div className="flex items-center gap-2">
         <Button
@@ -299,7 +299,7 @@ export function FinishOptionManagement({ finishOptions: initialFinishOptions }: 
           <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-3">
             <div>
               <h3 className="font-medium">Finish order</h3>
-              <p className="text-sm text-muted-foreground">Sleep om de volgorde van suggesties te bepalen.</p>
+              <p className="text-sm text-muted-foreground">Drag to set the suggestion order.</p>
             </div>
             {reordering && (
               <div className="rounded-full bg-background px-2 py-1 text-xs text-muted-foreground">

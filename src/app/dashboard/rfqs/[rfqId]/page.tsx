@@ -98,7 +98,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
   const typedInvites = (invites as (RfqInvite & { supplier: Supplier | null })[]) ?? [];
   const bestQuote = typedQuotes[0];
   const supplierSummary = bestQuote?.supplier?.name ?? typedInvites[0]?.supplier?.name ?? '-';
-  const leadTimeSummary = bestQuote?.lead_time_days ? `${bestQuote.lead_time_days} dagen` : '-';
+  const leadTimeSummary = bestQuote?.lead_time_days ? `${bestQuote.lead_time_days} days` : '-';
   const quoteVolumeLabel =
     bestQuote && !isAutomaticQuote(bestQuote) && bestQuote.volume_m3
       ? `${parseFloat(Number(bestQuote.volume_m3).toFixed(3))} m³`
@@ -111,7 +111,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
         className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-4" />
-        Terug naar aanvragen
+        Back to requests
       </Link>
 
       <div className="rounded-xl border bg-card">
@@ -126,9 +126,9 @@ export default async function RfqDetailPage({ params }: PageProps) {
               </span>
             </div>
             <p className="mt-1 text-[12.5px] text-muted-foreground">
-              Klant · <span className="font-semibold text-foreground/80">{typedRfq.customer_name || '-'}</span>
-              {' | '}Aangemaakt {new Date(typedRfq.created_at).toLocaleDateString('nl-BE')}
-              {typedRfq.sent_at && ` | Verzonden ${new Date(typedRfq.sent_at).toLocaleDateString('nl-BE')}`}
+              Customer · <span className="font-semibold text-foreground/80">{typedRfq.customer_name || '-'}</span>
+              {' | '}Created {new Date(typedRfq.created_at).toLocaleDateString('en-GB')}
+              {typedRfq.sent_at && ` | Sent ${new Date(typedRfq.sent_at).toLocaleDateString('en-GB')}`}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -150,9 +150,9 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
       {typedInvites.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[12.5px] text-muted-foreground">
-          <span className="sempre-label">Leverancier</span>
+          <span className="sempre-label">Supplier</span>
           <span className="font-semibold text-foreground/80">{supplierSummary}</span>
-          {typedInvites.length > 1 && <span>· {typedInvites.length} leveranciers uitgenodigd</span>}
+          {typedInvites.length > 1 && <span>· {typedInvites.length} suppliers invited</span>}
         </div>
       )}
 
@@ -160,20 +160,20 @@ export default async function RfqDetailPage({ params }: PageProps) {
         <div className="sempre-metric-card-primary">
           <div className="sempre-label text-primary">Retail price</div>
           <div className="sempre-metric-value text-primary">{formatEuro(bestQuote?.final_price_calculated)}</div>
-          <div className="mt-1 text-xs text-primary/80">Klantprijs incl. marge & transport</div>
+          <div className="mt-1 text-xs text-primary/80">Customer price incl. margin & transport</div>
         </div>
         <div className="sempre-metric-card">
-          <div className="sempre-label">Supplier basisprijs</div>
+          <div className="sempre-label">Supplier base price</div>
           <div className="sempre-metric-value">{supplierBasePriceLabel(bestQuote)}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Beste offerte · {supplierSummary}
+            Best quote · {supplierSummary}
             {quoteVolumeLabel && <> · {quoteVolumeLabel}</>}
           </div>
         </div>
         <div className="sempre-metric-card">
-          <div className="sempre-label">Levertijd</div>
+          <div className="sempre-label">Lead time</div>
           <div className="sempre-metric-value">{leadTimeSummary}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Gebaseerd op goedkoopste/actieve offerte</div>
+          <div className="mt-1 text-xs text-muted-foreground">Based on the lowest active quote</div>
         </div>
       </div>
 
@@ -187,7 +187,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Bijlagen</CardTitle>
+              <CardTitle>Attachments</CardTitle>
             </CardHeader>
             <CardContent>
               <RfqAttachmentList
@@ -206,7 +206,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Notities</CardTitle>
+              <CardTitle>Notes</CardTitle>
             </CardHeader>
             <CardContent>
               <RfqNotesEditor

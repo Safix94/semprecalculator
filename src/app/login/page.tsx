@@ -60,24 +60,24 @@ export default function LoginPage() {
               priority
             />
           </div>
-          <p className="mb-6 text-center text-[13.5px] text-muted-foreground">Log in om verder te gaan</p>
+          <p className="mb-6 text-center text-[13.5px] text-muted-foreground">Log in to continue</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs font-semibold text-foreground/80">E-mail</Label>
+              <Label htmlFor="email" className="text-xs font-semibold text-foreground/80">Email</Label>
               <Input
                 id="email"
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="naam@sempre.be"
+                placeholder="name@sempre.be"
                 className="h-[42px] rounded-[9px] text-sm"
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs font-semibold text-foreground/80">Wachtwoord</Label>
+              <Label htmlFor="password" className="text-xs font-semibold text-foreground/80">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -95,11 +95,11 @@ export default function LoginPage() {
             )}
 
             <Button type="submit" disabled={loading} className="mt-1 h-11 w-full rounded-[10px] text-sm font-bold">
-              {loading ? 'Laden...' : 'Log in'}
+              {loading ? 'Loading...' : 'Log in'}
             </Button>
           </form>
         </div>
-        <p className="mt-5 text-center text-xs text-white/75">Sempre pricing · intern platform</p>
+        <p className="mt-5 text-center text-xs text-white/75">Sempre pricing · internal platform</p>
       </div>
     </div>
   );

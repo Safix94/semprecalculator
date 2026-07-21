@@ -90,7 +90,7 @@ export default async function AdminLogsPage({ searchParams }: PageProps) {
     <>
       <div className="mb-[18px]">
         <h1 className="sempre-page-title">Audit logs</h1>
-        <p className="sempre-page-subtitle">Bekijk acties, systeemevents en metadata van RFQ-workflows.</p>
+        <p className="sempre-page-subtitle">View actions, system events, and metadata from RFQ workflows.</p>
       </div>
       <AuditLogTable
         logs={decoratedLogs}

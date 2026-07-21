@@ -151,10 +151,10 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>Details bewerken</CardTitle>
+            <CardTitle>Edit details</CardTitle>
             {canEditRfqDetails && !editing && (
               <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-                Bewerken
+                Edit
               </Button>
             )}
           </div>
@@ -170,7 +170,7 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                   </label>
                 )}
                 <label className="space-y-1">
-                  <span className="sempre-label">{isRound ? 'Diameter (cm)' : 'Lengte (cm)'}</span>
+                  <span className="sempre-label">{isRound ? 'Diameter (cm)' : 'Length (cm)'}</span>
                   <Input
                     type="number"
                     step="any"
@@ -181,7 +181,7 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                 </label>
                 {!isRound && (
                   <label className="space-y-1">
-                    <span className="sempre-label">Breedte (cm)</span>
+                    <span className="sempre-label">Width (cm)</span>
                     <Input
                       type="number"
                       step="any"
@@ -192,7 +192,7 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                   </label>
                 )}
                 <label className="space-y-1">
-                  <span className="sempre-label">Hoogte (cm)</span>
+                  <span className="sempre-label">Height (cm)</span>
                   <Input
                     type="number"
                     step="any"
@@ -202,7 +202,7 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                   />
                 </label>
                 <label className="space-y-1">
-                  <span className="sempre-label">Dikte blad (cm)</span>
+                  <span className="sempre-label">Top thickness (cm)</span>
                   <Input
                     type="number"
                     step="any"
@@ -215,15 +215,15 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
               {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
               <div className="mt-4 flex gap-2">
                 <Button type="button" size="sm" onClick={saveDetails} disabled={saving}>
-                  {saving ? 'Opslaan...' : 'Wijzigingen opslaan'}
+                  {saving ? 'Saving...' : 'Save changes'}
                 </Button>
                 <Button type="button" size="sm" variant="outline" onClick={cancelEdit} disabled={saving}>
-                  Annuleren
+                  Cancel
                 </Button>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">Open bewerkmodus om model of afmetingen aan te passen vóór verzending naar leveranciers.</p>
+            <p className="text-sm text-muted-foreground">Open edit mode to adjust the model or dimensions before sending the request to suppliers.</p>
           )}
 
           {result && <p className="mt-3 text-sm text-chart-2">{result}</p>}

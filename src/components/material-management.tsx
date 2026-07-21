@@ -170,7 +170,7 @@ export function MaterialManagement({
       s.split(',').map((x) => x.trim()).filter((x) => x.length > 0);
 
     if (formData.product_type_ids.length === 0) {
-      setError('Selecteer minstens 1 product type.');
+      setError('Select at least one product type.');
       return;
     }
 

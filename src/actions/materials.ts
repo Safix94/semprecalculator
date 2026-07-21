@@ -164,10 +164,10 @@ export async function getMaterials(): Promise<MaterialWithSuppliers[]> {
 export async function getActiveMaterials(): Promise<{ data: Material[] } | { error: string }> {
   const user = await getCurrentUser();
   if (!user) {
-    return { error: 'Je bent niet ingelogd.' };
+    return { error: 'You are not logged in.' };
   }
   if (user.role !== 'sales' && user.role !== 'admin') {
-    return { error: 'Je hebt geen rechten om materialen te laden.' };
+    return { error: 'You do not have permission to load materials.' };
   }
 
   try {
@@ -185,7 +185,7 @@ export async function getActiveMaterials(): Promise<{ data: Material[] } | { err
 
     if (error) {
       console.error('Failed to fetch active materials:', error.message);
-      return { error: 'Materialen konden niet geladen worden.' };
+      return { error: 'Materials could not be loaded.' };
     }
 
     const normalizedMaterials = ((data ?? []) as MaterialQueryRow[]).map((material) =>
@@ -194,7 +194,7 @@ export async function getActiveMaterials(): Promise<{ data: Material[] } | { err
     return { data: normalizedMaterials };
   } catch (error) {
     console.error('Failed to fetch active materials:', error);
-    return { error: 'Materialen konden niet geladen worden.' };
+    return { error: 'Materials could not be loaded.' };
   }
 }
 
@@ -206,10 +206,10 @@ export async function getSuppliersForMaterial(
 ): Promise<{ data: Supplier[] } | { error: string }> {
   const user = await getCurrentUser();
   if (!user) {
-    return { error: 'Je bent niet ingelogd.' };
+    return { error: 'You are not logged in.' };
   }
   if (user.role !== 'sales' && user.role !== 'admin') {
-    return { error: 'Je hebt geen rechten om leveranciers te laden.' };
+    return { error: 'You do not have permission to load suppliers.' };
   }
 
   try {
@@ -219,13 +219,13 @@ export async function getSuppliersForMaterial(
 
     if (error) {
       console.error('Failed to fetch suppliers for material:', error.message);
-      return { error: 'Leveranciers konden niet geladen worden.' };
+      return { error: 'Suppliers could not be loaded.' };
     }
 
     return { data: (data ?? []) as Supplier[] };
   } catch (error) {
     console.error('Failed to fetch suppliers for material:', error);
-    return { error: 'Leveranciers konden niet geladen worden.' };
+    return { error: 'Suppliers could not be loaded.' };
   }
 }
 

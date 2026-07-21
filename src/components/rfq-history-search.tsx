@@ -92,7 +92,7 @@ function finishSummary(rfq: RfqSearchResponse['results'][number]['rfq']): string
 
 function priceLabel(value: number | null): string {
   if (value === null) return '-';
-  return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(value);
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'EUR' }).format(value);
 }
 
 function supplierBasePriceLabel(result: RfqSearchResponse['results'][number]): string {
@@ -191,24 +191,24 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
           <form onSubmit={submitFilters} className="space-y-4">
             <div className="grid gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="history-q" className="sempre-label">Zoeken</Label>
+                <Label htmlFor="history-q" className="sempre-label">Search</Label>
                 <Input
                   id="history-q"
                   type="search"
                   value={form.q}
                   onChange={(event) => updateField('q', event.target.value)}
-                  placeholder="Klant, leverancier, materiaal…"
+                  placeholder="Customer, supplier, material…"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="sempre-label">Leverancier</Label>
+                <Label className="sempre-label">Supplier</Label>
                 <Select value={form.supplier || 'all'} onValueChange={(value) => updateField('supplier', value === 'all' ? '' : value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Alle leveranciers" />
+                    <SelectValue placeholder="All suppliers" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle leveranciers</SelectItem>
+                    <SelectItem value="all">All suppliers</SelectItem>
                     {suppliers.map((supplier) => (
                       <SelectItem key={supplier.id} value={supplier.id}>
                         {supplier.name}
@@ -219,13 +219,13 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
               </div>
 
               <div className="space-y-1.5">
-                <Label className="sempre-label">Producttype</Label>
+                <Label className="sempre-label">Product type</Label>
                 <Select value={form.productType || 'all'} onValueChange={(value) => updateField('productType', value === 'all' ? '' : value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Alle producttypes" />
+                    <SelectValue placeholder="All product types" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle producttypes</SelectItem>
+                    <SelectItem value="all">All product types</SelectItem>
                     {productTypes.map((productType) => (
                       <SelectItem key={productType} value={productType}>
                         {productType}
@@ -236,12 +236,12 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="history-material" className="sempre-label">Materiaal</Label>
+                <Label htmlFor="history-material" className="sempre-label">Material</Label>
                 <Input id="history-material" value={form.material} onChange={(event) => updateField('material', event.target.value)} placeholder="Material" />
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="history-finish" className="sempre-label">Afwerking</Label>
+                <Label htmlFor="history-finish" className="sempre-label">Finish</Label>
                 <Input id="history-finish" value={form.finish} onChange={(event) => updateField('finish', event.target.value)} placeholder="Finish" />
               </div>
 
@@ -251,7 +251,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="history-shape" className="sempre-label">Vorm</Label>
+                <Label htmlFor="history-shape" className="sempre-label">Shape</Label>
                 <Input id="history-shape" value={form.shape} onChange={(event) => updateField('shape', event.target.value)} placeholder="Round, Rectangular..." />
               </div>
 
@@ -259,10 +259,10 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                 <Label className="sempre-label">Status</Label>
                 <Select value={form.status || 'all'} onValueChange={(value) => updateField('status', value === 'all' ? '' : value)}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Alle statussen" />
+                    <SelectValue placeholder="All statuses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Alle statussen</SelectItem>
+                    <SelectItem value="all">All statuses</SelectItem>
                     {statusOptions.map((status) => (
                       <SelectItem key={status} value={status}>
                         {statusLabels[status].label}
@@ -275,40 +275,40 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
 
             <details className="rounded-lg border p-3">
               <summary className="cursor-pointer text-[13px] font-semibold text-muted-foreground">
-                Datum en afmetingen
+                Date and dimensions
               </summary>
               <div className="mt-3 grid gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="history-created-from" className="sempre-label">Van</Label>
+                  <Label htmlFor="history-created-from" className="sempre-label">From</Label>
                   <Input id="history-created-from" type="date" value={form.createdFrom} onChange={(event) => updateField('createdFrom', event.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="history-created-to" className="sempre-label">Tot</Label>
+                  <Label htmlFor="history-created-to" className="sempre-label">To</Label>
                   <Input id="history-created-to" type="date" value={form.createdTo} onChange={(event) => updateField('createdTo', event.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="history-length" className="sempre-label">Lengte / diameter</Label>
+                  <Label htmlFor="history-length" className="sempre-label">Length / diameter</Label>
                   <Input id="history-length" type="number" step="any" min="0" value={form.length} onChange={(event) => updateField('length', event.target.value)} placeholder="cm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="history-width" className="sempre-label">Breedte</Label>
+                  <Label htmlFor="history-width" className="sempre-label">Width</Label>
                   <Input id="history-width" type="number" step="any" min="0" value={form.width} onChange={(event) => updateField('width', event.target.value)} placeholder="cm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="history-height" className="sempre-label">Hoogte</Label>
+                  <Label htmlFor="history-height" className="sempre-label">Height</Label>
                   <Input id="history-height" type="number" step="any" min="0" value={form.height} onChange={(event) => updateField('height', event.target.value)} placeholder="cm" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="history-thickness" className="sempre-label">Dikte blad</Label>
+                  <Label htmlFor="history-thickness" className="sempre-label">Top thickness</Label>
                   <Input id="history-thickness" type="number" step="any" min="0" value={form.thickness} onChange={(event) => updateField('thickness', event.target.value)} placeholder="cm" />
                 </div>
               </div>
             </details>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="submit">Zoeken</Button>
+              <Button type="submit">Search</Button>
               <Button type="button" variant="outline" onClick={resetFilters}>
-                Filters wissen
+                Clear filters
               </Button>
               <span className="text-sm text-muted-foreground xl:w-full">
                 {search.totalCount} result{search.totalCount === 1 ? '' : 's'} · {activeFilterCount} active filter{activeFilterCount === 1 ? '' : 's'}
@@ -322,24 +322,24 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
         <CardContent className="p-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              {search.totalCount} resultaat{search.totalCount === 1 ? '' : 'en'}
+              {search.totalCount} result{search.totalCount === 1 ? '' : 's'}
             </p>
             <div className="flex items-center gap-2">
-              <Label className="sempre-label hidden sm:block">Sorteren</Label>
+              <Label className="sempre-label hidden sm:block">Sort by</Label>
               <Select
                 value={filters.sortBy || 'created_at'}
                 onValueChange={(value) => changeSort({ sortBy: value === 'created_at' ? '' : value })}
               >
                 <SelectTrigger size="sm" className="w-[168px]">
-                  <SelectValue placeholder="Datum" />
+                  <SelectValue placeholder="Date" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="created_at">Datum</SelectItem>
-                  <SelectItem value="dimensions">Afmetingen (L×B×H)</SelectItem>
-                  <SelectItem value="length">Lengte / diameter</SelectItem>
-                  <SelectItem value="width">Breedte</SelectItem>
-                  <SelectItem value="height">Hoogte</SelectItem>
-                  <SelectItem value="thickness">Dikte blad</SelectItem>
+                  <SelectItem value="created_at">Date</SelectItem>
+                  <SelectItem value="dimensions">Dimensions (L×W×H)</SelectItem>
+                  <SelectItem value="length">Length / diameter</SelectItem>
+                  <SelectItem value="width">Width</SelectItem>
+                  <SelectItem value="height">Height</SelectItem>
+                  <SelectItem value="thickness">Top thickness</SelectItem>
                 </SelectContent>
               </Select>
               <Select
@@ -347,11 +347,11 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                 onValueChange={(value) => changeSort({ sortDirection: value === 'desc' ? '' : value })}
               >
                 <SelectTrigger size="sm" className="w-[128px]">
-                  <SelectValue placeholder="Aflopend" />
+                  <SelectValue placeholder="Descending" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="desc">Nieuwste eerst</SelectItem>
-                  <SelectItem value="asc">Oudste eerst</SelectItem>
+                  <SelectItem value="desc">Newest first</SelectItem>
+                  <SelectItem value="asc">Oldest first</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -359,7 +359,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
 
           {search.results.length === 0 ? (
             <p className="px-4 py-12 text-center text-sm text-muted-foreground">
-              Geen RFQ&apos;s gevonden voor deze filters.
+              No RFQs found for these filters.
             </p>
           ) : (
             <div className="divide-y">
@@ -387,7 +387,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                         {rfq.model && <span className="truncate text-xs text-muted-foreground">· {rfq.model}</span>}
                       </div>
                       <div className="truncate text-[13px] text-muted-foreground">
-                        {rfq.customer_name || 'Onbekende klant'}
+                        {rfq.customer_name || 'Unknown customer'}
                         {material !== '-' && <> · {material}</>}
                         {finish !== '-' && <span className="text-muted-foreground/80"> · {finish}</span>}
                       </div>
@@ -397,10 +397,10 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                     </div>
 
                     <div className="min-w-0 text-[13px]">
-                      <div className="sempre-label">Leverancier</div>
+                      <div className="sempre-label">Supplier</div>
                       <div className="truncate text-foreground/80" title={suppliersLabel}>{suppliersLabel}</div>
                       {supplierBasePrices !== '-' && (
-                        <div className="truncate text-xs text-muted-foreground">Basis: {supplierBasePrices}</div>
+                        <div className="truncate text-xs text-muted-foreground">Base: {supplierBasePrices}</div>
                       )}
                     </div>
 
@@ -419,14 +419,14 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3">
             <p className="text-sm text-muted-foreground">
-              Pagina {search.currentPage} van {search.totalPages}
+              Page {search.currentPage} of {search.totalPages}
             </p>
             <div className="flex gap-2">
               <Button type="button" variant="outline" size="sm" onClick={() => goToPage(search.currentPage - 1)} disabled={search.currentPage <= 1}>
-                Vorige
+                Previous
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={() => goToPage(search.currentPage + 1)} disabled={search.currentPage >= search.totalPages}>
-                Volgende
+                Next
               </Button>
             </div>
           </div>

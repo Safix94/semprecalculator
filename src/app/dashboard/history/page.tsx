@@ -62,9 +62,9 @@ export default async function RfqHistoryPage({ searchParams }: HistoryPageProps)
   return (
     <div className="min-w-0 space-y-[18px]">
       <div>
-        <h1 className="sempre-page-title">RFQ-historiek</h1>
+        <h1 className="sempre-page-title">RFQ history</h1>
         <p className="sempre-page-subtitle">
-          Doorzoek alle vroegere aanvragen en offertes op leverancier, materiaal, afwerking, afmetingen, datum en status.
+          Search all previous requests and quotes by supplier, material, finish, dimensions, date, and status.
         </p>
       </div>
 

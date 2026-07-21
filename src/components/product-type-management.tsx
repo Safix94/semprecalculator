@@ -117,7 +117,7 @@ function SortableProductTypeItem({
         type="button"
         className="flex cursor-grab items-center px-2 text-muted-foreground active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50"
         disabled={disabled}
-        aria-label={`Sleep ${productType.name} om te herschikken`}
+        aria-label={`Drag ${productType.name} to reorder`}
       >
         <GripVertical className="h-4 w-4" />
       </button>
@@ -130,7 +130,7 @@ function SortableProductTypeItem({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="truncate font-medium">{productType.name}</div>
-            <div className="text-xs text-muted-foreground">Sleep om te herschikken</div>
+            <div className="text-xs text-muted-foreground">Drag to reorder</div>
           </div>
           <div className="shrink-0 rounded-full bg-muted px-2 py-1 text-xs text-muted-foreground">
             {counts.enabled}/{PRODUCT_TYPE_DETAIL_FIELD_KEYS.length}
@@ -432,7 +432,7 @@ export function ProductTypeManagement({ productTypes: initialProductTypes }: Pro
                 <div>
                   <h3 className="font-semibold">All product types</h3>
                   <p className="text-sm text-muted-foreground">
-                    {sortedProductTypes.length} total · sleep aan het handvat om te herschikken
+                    {sortedProductTypes.length} total · drag the handle to reorder
                   </p>
                 </div>
                 {reordering && (

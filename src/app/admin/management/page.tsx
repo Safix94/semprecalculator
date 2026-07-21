@@ -29,20 +29,20 @@ export default async function ManagementPage() {
   return (
     <>
       <div className="mb-[18px]">
-        <h1 className="sempre-page-title">Beheer</h1>
+        <h1 className="sempre-page-title">Management</h1>
         <p className="sempre-page-subtitle">
-          Beheer pricing, materialen, afwerkingen, leveranciers, producttypes en gebruikersrollen.
+          Manage pricing, materials, finishes, suppliers, product types, and user roles.
         </p>
       </div>
 
       <Tabs defaultValue="pricing" className="gap-[18px]">
         <TabsList variant="line" className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
-          <TabsTrigger value="materials">Materialen</TabsTrigger>
-          <TabsTrigger value="finishes">Afwerkingen</TabsTrigger>
-          <TabsTrigger value="suppliers">Leveranciers</TabsTrigger>
-          <TabsTrigger value="product-types">Producttypes</TabsTrigger>
-          {currentUser.role === 'admin' && <TabsTrigger value="users">Gebruikers</TabsTrigger>}
+          <TabsTrigger value="materials">Materials</TabsTrigger>
+          <TabsTrigger value="finishes">Finishes</TabsTrigger>
+          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
+          <TabsTrigger value="product-types">Product types</TabsTrigger>
+          {currentUser.role === 'admin' && <TabsTrigger value="users">Users</TabsTrigger>}
         </TabsList>
         <TabsContent value="pricing">
           <PricingSettingsManagement settings={pricingSettings} />

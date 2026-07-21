@@ -141,7 +141,7 @@ export function AppSidebarLayout({ user, children }: AppSidebarLayoutProps) {
               <Button asChild size="sm">
                 <Link href="/dashboard/rfqs/new">
                   <Plus className="size-[15px]" />
-                  Nieuwe aanvraag
+                  New request
                 </Link>
               </Button>
               <LogoutButton />

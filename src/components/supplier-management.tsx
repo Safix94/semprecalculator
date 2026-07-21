@@ -87,10 +87,10 @@ const initialFormData: SupplierFormData = {
   pricing_profile: defaultPricingProfileFormData,
 };
 
-function formatTransportMode(mode: TransportMode) {
-  if (mode === 'none') return 'Geen transport';
+function formatTransportMode(mode: TransportMode): string {
+  if (mode === 'none') return 'No transport';
   if (mode === 'container') return 'Container';
-  return 'Camion';
+  return 'Truck';
 }
 
 function toPricingProfileFormData(profile?: SupplierPricingProfile | null): SupplierPricingProfileFormData {
@@ -428,14 +428,14 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                           Margin {Number(supplier.pricing_profile.product_margin_factor).toFixed(3)} · Retail ×{Number(supplier.pricing_profile.retail_multiplier_factor).toFixed(3)}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          Basisprijs: {supplier.quote_price_currency === 'EUR' ? 'EUR' : `${supplier.quote_price_currency} → EUR`}
+                          Base price: {supplier.quote_price_currency === 'EUR' ? 'EUR' : `${supplier.quote_price_currency} → EUR`}
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-0.5 text-sm">
                         <div>Default container</div>
                         <div className="text-xs text-muted-foreground">
-                          Basisprijs: {supplier.quote_price_currency === 'EUR' ? 'EUR' : `${supplier.quote_price_currency} → EUR`}
+                          Base price: {supplier.quote_price_currency === 'EUR' ? 'EUR' : `${supplier.quote_price_currency} → EUR`}
                         </div>
                       </div>
                     )}
@@ -652,7 +652,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="supplier-quote-price-currency">Basisprijs valuta *</Label>
+                <Label htmlFor="supplier-quote-price-currency">Base price currency *</Label>
                 <Select
                   value={formData.quote_price_currency}
                   onValueChange={(value) =>
@@ -660,7 +660,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                   }
                 >
                   <SelectTrigger id="supplier-quote-price-currency" className="w-full">
-                    <SelectValue placeholder="Kies valuta" />
+                    <SelectValue placeholder="Select currency" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EUR">{QUOTE_PRICE_CURRENCY_LABELS.EUR}</SelectItem>
@@ -669,7 +669,7 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  De supplier vult zijn basisprijs in deze valuta in. De app rekent automatisch om naar EUR voor de berekening.
+                  The supplier enters their base price in this currency. The app automatically converts it to EUR for the calculation.
                 </p>
               </div>
 
@@ -683,9 +683,9 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                     <SelectValue placeholder="Select transport calculation" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Geen transport</SelectItem>
+                    <SelectItem value="none">No transport</SelectItem>
                     <SelectItem value="container">Container</SelectItem>
-                    <SelectItem value="truck">Camion / vrachtwagen</SelectItem>
+                    <SelectItem value="truck">Truck</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

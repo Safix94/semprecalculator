@@ -85,7 +85,7 @@ export function RfqAttachmentList({
   }
 
   if (attachments.length === 0) {
-    return <p className="text-sm text-muted-foreground">Geen bijlagen.</p>;
+    return <p className="text-sm text-muted-foreground">No attachments.</p>;
   }
 
   return (
@@ -123,7 +123,7 @@ export function RfqAttachmentList({
                   disabled={isDeleting || isOpening}
                   onClick={() => handleDeleteAttachment(attachment)}
                 >
-                  {isDeleting ? 'Verwijderen...' : 'Verwijder'}
+                  {isDeleting ? 'Removing...' : 'Remove'}
                 </Button>
               )}
             </li>

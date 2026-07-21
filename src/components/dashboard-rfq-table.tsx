@@ -184,7 +184,7 @@ export function DashboardRfqTable({
           <form onSubmit={handleSearchSubmit} className="flex items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="customer-search" className="sempre-label">
-                Klant
+                Customer
               </Label>
               <Input
                 key={`search-${searchQuery ?? ''}`}
@@ -193,13 +193,13 @@ export function DashboardRfqTable({
                 type="search"
                 name="search"
                 defaultValue={searchQuery ?? ''}
-                placeholder="Zoek op klant…"
+                placeholder="Search by customer…"
                 className="w-[190px]"
                 aria-label="Search by customer"
               />
             </div>
             <Button type="submit" variant="secondary" size="sm">
-              Zoeken
+              Search
             </Button>
           </form>
 
@@ -210,7 +210,7 @@ export function DashboardRfqTable({
                 <SelectValue placeholder="All types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle producttypes</SelectItem>
+                <SelectItem value="all">All product types</SelectItem>
                 {productTypes.map((type) => (
                   <SelectItem key={type} value={type}>
                     {type}
@@ -221,13 +221,13 @@ export function DashboardRfqTable({
           </div>
 
           <div className="space-y-1">
-            <Label className="sempre-label">Leverancier</Label>
+            <Label className="sempre-label">Supplier</Label>
             <Select value={selectedSupplierValue} onValueChange={(value) => setFilter('supplier', value)}>
               <SelectTrigger className="w-[220px]">
                 <SelectValue placeholder="All suppliers" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle leveranciers</SelectItem>
+                <SelectItem value="all">All suppliers</SelectItem>
                 {supplierOptions.map((supplier) => (
                   <SelectItem key={supplier.id} value={supplier.id}>
                     {supplier.name}
@@ -244,7 +244,7 @@ export function DashboardRfqTable({
                 <SelectValue placeholder="All statuses" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Alle statussen</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 {statusOptions.map((status) => (
                   <SelectItem key={status} value={status}>
                     {statusLabels[status]?.label ?? status}
@@ -255,11 +255,11 @@ export function DashboardRfqTable({
           </div>
 
           <Button type="button" variant="outline" size="sm" onClick={resetFilters}>
-            Filters wissen
+            Clear filters
           </Button>
 
           <span className="pb-2 text-sm text-muted-foreground">
-            Pagina {currentPage} van {totalPages}
+            Page {currentPage} of {totalPages}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -270,7 +270,7 @@ export function DashboardRfqTable({
             onClick={() => goToPage(currentPage - 1)}
             disabled={currentPage <= 1}
           >
-            Vorige
+            Previous
           </Button>
           <Button
             type="button"
@@ -279,7 +279,7 @@ export function DashboardRfqTable({
             onClick={() => goToPage(currentPage + 1)}
             disabled={currentPage >= totalPages}
           >
-            Volgende
+            Next
           </Button>
         </div>
       </div>
@@ -287,14 +287,14 @@ export function DashboardRfqTable({
       <Table className="table-fixed">
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead className="w-[17%]">Aanvraag</TableHead>
-            <TableHead className="w-[18%]">Materiaal / afwerking</TableHead>
-            <TableHead className="w-[13%]">Afmetingen</TableHead>
-            <TableHead className="w-[18%]">Leverancier(s)</TableHead>
-            <TableHead className="w-[11%]">Klant</TableHead>
-            <TableHead className="w-[9%]">Aangevraagd door</TableHead>
+            <TableHead className="w-[17%]">Request</TableHead>
+            <TableHead className="w-[18%]">Material / finish</TableHead>
+            <TableHead className="w-[13%]">Dimensions</TableHead>
+            <TableHead className="w-[18%]">Supplier(s)</TableHead>
+            <TableHead className="w-[11%]">Customer</TableHead>
+            <TableHead className="w-[9%]">Requested by</TableHead>
             <TableHead className="w-[8%]">Status</TableHead>
-            <TableHead className="w-[6%]">Datum</TableHead>
+            <TableHead className="w-[6%]">Date</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -346,7 +346,7 @@ export function DashboardRfqTable({
                   </TableCell>
                   <TableCell className="text-muted-foreground" title={dimensions}>
                     <div className="truncate">{dimensions}</div>
-                    <div className="text-xs text-muted-foreground">Aantal: {rfq.quantity}</div>
+                    <div className="text-xs text-muted-foreground">Quantity: {rfq.quantity}</div>
                   </TableCell>
                   <TableCell className="truncate font-medium text-primary" title={supplierLabel}>
                     {supplierLabel}
@@ -365,7 +365,7 @@ export function DashboardRfqTable({
                   <TableCell className="truncate text-muted-foreground">
                     <FormattedDate
                       value={rfq.created_at}
-                      locale="nl-NL"
+                      locale="en-GB"
                       dateStyle="short"
                     />
                   </TableCell>

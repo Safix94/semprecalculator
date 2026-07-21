@@ -150,10 +150,10 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>Tijdstip</TableHead>
-                <TableHead>Actie</TableHead>
+                <TableHead>Timestamp</TableHead>
+                <TableHead>Action</TableHead>
                 <TableHead>Actor</TableHead>
-                <TableHead>Entiteit</TableHead>
+                <TableHead>Entity</TableHead>
                 <TableHead>Metadata</TableHead>
               </TableRow>
             </TableHeader>
@@ -161,7 +161,7 @@ export function AuditLogTable({ logs, currentPage, totalPages, filters }: AuditL
               {logs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
-                    Geen logs gevonden.
+                    No logs found.
                   </TableCell>
                 </TableRow>
               ) : (

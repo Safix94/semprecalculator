@@ -42,7 +42,7 @@ function formatIsoDate(
 }
 
 export function useFormattedDate(isoString: string, options?: UseFormattedDateOptions) {
-  const locale = options?.locale ?? 'nl-NL';
+  const locale = options?.locale ?? 'en-GB';
   const dateStyle = options?.dateStyle;
   const timeStyle = options?.timeStyle;
   const isHydrated = useSyncExternalStore(subscribe, () => true, () => false);

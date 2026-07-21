@@ -71,12 +71,12 @@ export function RfqDuplicateWarning({ warning, loading, error }: RfqDuplicateWar
   }
 
   const title = loading
-    ? 'Controle op dubbele aanvragen'
+    ? 'Checking for duplicate requests'
     : error
-      ? 'Dubbelcontrole niet gelukt'
+      ? 'Duplicate check failed'
       : warning.exact.length > 0
-        ? 'Mogelijke dubbele aanvraag gevonden'
-        : 'Gelijkaardige aanvragen gevonden';
+        ? 'Possible duplicate request found'
+        : 'Similar requests found';
 
   return (
     <Alert className="border-amber-500/50 bg-amber-500/10">
@@ -86,7 +86,7 @@ export function RfqDuplicateWarning({ warning, loading, error }: RfqDuplicateWar
         {error && <p className="text-destructive">{error}</p>}
         {warning.exact.length > 0 && (
           <p>
-            Deze combinatie werd al eerder aangevraagd. Controleer de bestaande request voordat je opnieuw aanmaakt.
+            This combination has been requested before. Review the existing request before creating another one.
           </p>
         )}
         {warning.exact.map((match) => (
@@ -94,7 +94,7 @@ export function RfqDuplicateWarning({ warning, loading, error }: RfqDuplicateWar
         ))}
         {warning.similar.length > 0 && (
           <div className="space-y-2">
-            <p className="font-medium">Gelijkaardige requests</p>
+            <p className="font-medium">Similar requests</p>
             {warning.similar.map((match) => (
               <MatchRow key={`similar-${match.rfq.id}`} match={match} />
             ))}

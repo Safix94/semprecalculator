@@ -1121,7 +1121,7 @@ export async function sendRfq(rfqId: string) {
   if (sentCount === 0) {
     return {
       error:
-        'Geen enkele e-mail kon worden verzonden. Controleer BREVO_API_KEY, afzender-instellingen en audit logs.',
+        'No emails could be sent. Check BREVO_API_KEY, sender settings, and the audit logs.',
     };
   }
 
@@ -1135,7 +1135,7 @@ export async function sendRfq(rfqId: string) {
 
   if (statusUpdateError) {
     return {
-      error: `E-mails zijn verstuurd naar ${sentCount}/${totalCount} leveranciers, maar de RFQ-status kon niet worden bijgewerkt: ${statusUpdateError.message}`,
+      error: `Emails were sent to ${sentCount}/${totalCount} suppliers, but the RFQ status could not be updated: ${statusUpdateError.message}`,
     };
   }
 

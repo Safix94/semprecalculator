@@ -40,7 +40,7 @@ interface CreatedUserResult {
 function getRoleLabel(role: UserRole | null) {
   if (role === 'admin') return 'Admin';
   if (role === 'sales') return 'Sales';
-  return 'Geen rol';
+  return 'No role';
 }
 
 function getActionErrorMessage(error: unknown) {
@@ -204,8 +204,8 @@ export function UserRoleManagement({
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead>Email</TableHead>
-                <TableHead>Rol</TableHead>
-                <TableHead>Actie</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -218,7 +218,7 @@ export function UserRoleManagement({
                 return (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
-                      {user.email ?? 'Geen e-mailadres'}
+                      {user.email ?? 'No email address'}
                     </TableCell>
                     <TableCell>
                       <span
@@ -256,11 +256,11 @@ export function UserRoleManagement({
                           onClick={() => handleSaveRole(user.id)}
                           disabled={isOwnAccount || isLoading || !hasChanges}
                         >
-                          {isLoading ? 'Opslaan...' : 'Opslaan'}
+                          {isLoading ? 'Saving...' : 'Save'}
                         </Button>
                         {isOwnAccount && (
                           <span className="text-muted-foreground text-xs">
-                            Eigen rol kan niet gewijzigd worden
+                            You cannot change your own role
                           </span>
                         )}
                       </div>
@@ -271,7 +271,7 @@ export function UserRoleManagement({
               {users.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={3} className="text-muted-foreground py-8 text-center">
-                    Geen gebruikers gevonden.
+                    No users found.
                   </TableCell>
                 </TableRow>
               )}

@@ -234,18 +234,18 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {adminRequired && (
         <Alert variant="default" className="mb-6 border-amber-500/50 bg-amber-500/10">
           <AlertDescription>
-            Je hebt geen adminrechten voor Audit Logs en Users-beheer. Jouw rol is nu{' '}
-            <strong>{user.role === 'sales' ? 'Sales' : user.role ?? 'onbekend'}</strong>. Vraag een
-            beheerder om je rol onder Management → Users te wijzigen, of zet in Supabase in de
-            tabel <code className="rounded bg-muted px-1">user_roles</code> je <code className="rounded bg-muted px-1">user_id</code> op{' '}
+            You do not have admin access to Audit Logs and user management. Your current role is{' '}
+            <strong>{user.role === 'sales' ? 'Sales' : user.role ?? 'unknown'}</strong>. Ask an
+            administrator to change your role under Management → Users, or set your <code className="rounded bg-muted px-1">user_id</code> in the Supabase{' '}
+            <code className="rounded bg-muted px-1">user_roles</code> table to{' '}
             <code className="rounded bg-muted px-1">role = &apos;admin&apos;</code>.
           </AlertDescription>
         </Alert>
       )}
       <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="sempre-page-title">Prijsaanvragen</h1>
-          <p className="sempre-page-subtitle">Overzicht van alle RFQ&apos;s · elke aanvraag gaat naar één leverancier</p>
+          <h1 className="sempre-page-title">Price requests</h1>
+          <p className="sempre-page-subtitle">Overview of all RFQs · each request is sent to one supplier</p>
         </div>
         <div className="flex items-end gap-3">
           <div className="text-right">
@@ -256,14 +256,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
           <div className="h-8 w-px bg-border" />
           <div className="text-right">
-            <div className="sempre-label">Wacht op offerte</div>
+            <div className="sempre-label">Awaiting quote</div>
             <div className="text-[19px] font-bold">
               {rfqs.filter((rfq) => rfq.status === 'sent_to_supplier' || rfq.status === 'supplier_replied').length}
             </div>
           </div>
           <div className="h-8 w-px bg-border" />
           <div className="text-right">
-            <div className="sempre-label">Deze maand</div>
+            <div className="sempre-label">This month</div>
             <div className="text-[19px] font-bold">{thisMonthCount}</div>
           </div>
         </div>

@@ -37,9 +37,10 @@ function isAutomaticQuote(quote: RfqQuote | undefined) {
   return quote?.pricing_formula_version === 'sanne_vos_bluestone_v1';
 }
 
+// Automatic (Sanne Vos) quotes have no supplier input; their base_price is the
+// calculated purchase price, shown like any other supplier's base price.
 function supplierBasePriceLabel(quote: RfqQuote | undefined) {
   if (!quote) return '-';
-  if (isAutomaticQuote(quote)) return 'Automatic';
   if (quote.supplier_input_currency && quote.supplier_input_currency !== 'EUR' && quote.supplier_input_price) {
     return formatSupplierInputAmount(quote.supplier_input_price, quote.supplier_input_currency);
   }

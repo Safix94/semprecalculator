@@ -265,10 +265,9 @@ function rowToResult(row: RfqSearchRow): RfqSearchResult {
   const supplierBasePrices = quotes
     .map((quote) => {
       const isAutomatic = quote.pricing_formula_version === 'sanne_vos_bluestone_v1';
+      // Automatic quotes have no supplier input; their base price is the calculated purchase price.
       const supplierInputPrice = quote.supplier_input_price === null || quote.supplier_input_price === undefined
-        ? isAutomatic
-          ? null
-          : Number(quote.base_price)
+        ? Number(quote.base_price)
         : Number(quote.supplier_input_price);
 
       return {

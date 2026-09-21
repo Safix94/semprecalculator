@@ -99,10 +99,7 @@ function supplierBasePriceLabel(result: RfqSearchResponse['results'][number]): s
   if (result.supplierBasePrices.length === 0) return '-';
 
   return result.supplierBasePrices
-    .map((price) => price.isAutomatic
-      ? 'Automatic'
-      : formatSupplierInputAmount(price.supplierInputPrice, price.supplierInputCurrency)
-    )
+    .map((price) => formatSupplierInputAmount(price.supplierInputPrice, price.supplierInputCurrency))
     .join(' / ');
 }
 

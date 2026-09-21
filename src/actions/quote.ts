@@ -17,12 +17,15 @@ import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
 import {
   SANNE_VOS_BLUESTONE_FORMULA_VERSION,
   calculateSanneVosBluestonePricing,
+  composeSanneVosFinishCodes,
   isSanneVosBluestoneAutoPricingCandidate,
+  isSanneVosNeutralFinishPart,
   resolveSanneVosShapeKind,
   resolveSanneVosSurfaceType,
   type SanneVosBluestoneRate,
   type SanneVosFinishFormula,
 } from '@/lib/sanne-vos-pricing';
+import { isTableTopsProductType } from '@/lib/rfq-format';
 import { logAuditEvent } from './audit';
 import type { SubmitAutomaticQuoteInput, SubmitQuoteInput } from '@/lib/validation';
 import type {
@@ -540,6 +543,123 @@ export async function submitQuote(
   return { data: { id: savedQuote.id } };
 }
 
+type FinishOptionRow = Pick<SanneVosFinishFormula, 'name' | 'abbreviation' | 'formula_percentage'>;
+type SanneVosFinishResolution =
+  | { finishOption: FinishOptionRow; finishCode: string | null }
+  | { error: string };
+
+const FINISH_OPTION_COLUMNS = 'name, abbreviation, formula_percentage';
+
+/**
+ * Finds the finish master-list row that drives Sanne Vos Bluestone pricing.
+ *
+ * Table tops carry three partial finishes (top, edge, color). Their master-list
+ * abbreviations are combined into one code in the order top + color + edge
+ * (e.g. Antique + Fumé + Rocky → "AFR"); Regular / N.v.t. parts add nothing.
+ * Other product types keep a single finish name that is looked up directly.
+ */
+async function resolveSanneVosFinishOption(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  rfq: {
+    product_type: string | null;
+    finish: string | null;
+    finish_top: string | null;
+    finish_edge: string | null;
+    finish_color: string | null;
+  }
+): Promise<SanneVosFinishResolution> {
+  if (!isTableTopsProductType(rfq.product_type)) {
+    if (isSanneVosNeutralFinishPart(rfq.finish)) {
+      return resolveRegularFinishOption(supabase);
+    }
+
+    const { data: finishOption, error } = await supabase
+      .from('finish_options')
+      .select(FINISH_OPTION_COLUMNS)
+      .ilike('name', rfq.finish ?? '')
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error || !finishOption) {
+      return { error: `Finish "${rfq.finish}" is not configured in the finish master list.` };
+    }
+
+    return { finishOption, finishCode: finishOption.abbreviation };
+  }
+
+  // Canonical order for the composed code: top, color, edge.
+  const orderedParts = [rfq.finish_top, rfq.finish_color, rfq.finish_edge];
+  const relevantParts = orderedParts.filter((part): part is string => !isSanneVosNeutralFinishPart(part));
+  const combinationLabel = `${rfq.finish_top ?? '-'} / ${rfq.finish_edge ?? '-'} / ${rfq.finish_color ?? '-'}`;
+
+  if (relevantParts.length === 0) {
+    return resolveRegularFinishOption(supabase);
+  }
+
+  const { data: partRows, error: partsError } = await supabase
+    .from('finish_options')
+    .select(FINISH_OPTION_COLUMNS)
+    .in('name', relevantParts)
+    .eq('is_active', true);
+
+  if (partsError) {
+    return { error: `Failed to load finish options: ${partsError.message}` };
+  }
+
+  const abbreviationByName = new Map(
+    (partRows ?? []).map((row) => [row.name.trim().toLowerCase(), row.abbreviation as string | null])
+  );
+  const partCodes = relevantParts.map((part) => abbreviationByName.get(part.trim().toLowerCase()) ?? null);
+  const missingPart = relevantParts.find((_, index) => !partCodes[index]);
+  if (missingPart) {
+    return {
+      error: `Finish "${missingPart}" has no abbreviation in the finish master list, so the combination "${combinationLabel}" cannot be priced.`,
+    };
+  }
+
+  const candidates = composeSanneVosFinishCodes(partCodes);
+  const { data: candidateRows, error: candidatesError } = await supabase
+    .from('finish_options')
+    .select(FINISH_OPTION_COLUMNS)
+    .in('abbreviation', candidates)
+    .eq('is_active', true);
+
+  if (candidatesError) {
+    return { error: `Failed to load finish options: ${candidatesError.message}` };
+  }
+
+  const rowByCode = new Map(
+    (candidateRows ?? []).map((row) => [String(row.abbreviation ?? '').toUpperCase(), row])
+  );
+  const matchedCode = candidates.find((candidate) => rowByCode.has(candidate));
+  const matchedRow = matchedCode ? rowByCode.get(matchedCode) : undefined;
+  if (!matchedCode || !matchedRow) {
+    return {
+      error: `Finish combination "${combinationLabel}" (code ${candidates[0]}) is not configured in the finish master list.`,
+    };
+  }
+
+  return { finishOption: matchedRow, finishCode: matchedCode };
+}
+
+async function resolveRegularFinishOption(
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<SanneVosFinishResolution> {
+  const { data: regular, error } = await supabase
+    .from('finish_options')
+    .select(FINISH_OPTION_COLUMNS)
+    .ilike('name', 'Regular')
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error || !regular) {
+    return { error: 'Finish "Regular" is not configured in the finish master list.' };
+  }
+
+  // Regular carries no code: no finish surcharge and the default margin.
+  return { finishOption: regular, finishCode: null };
+}
+
 export async function submitAutomaticSanneVosQuote(
   rfqId: string,
   token: string,
@@ -641,18 +761,14 @@ export async function submitAutomaticSanneVosQuote(
     return { error: 'Bluestone material configuration was not found.' };
   }
 
-  const { data: finishOption, error: finishError } = await supabase
-    .from('finish_options')
-    .select('name, abbreviation, formula_percentage')
-    .ilike('name', rfqForPricing.finish)
-    .maybeSingle();
-
-  if (finishError || !finishOption) {
-    return { error: `Finish "${rfqForPricing.finish}" is not configured in the finish master list.` };
+  const finishResolution = await resolveSanneVosFinishOption(supabase, rfqForPricing);
+  if ('error' in finishResolution) {
+    return { error: finishResolution.error };
   }
+  const { finishOption, finishCode } = finishResolution;
 
   const shapeKind = resolveSanneVosShapeKind(rfqForPricing.shape);
-  const surfaceType = resolveSanneVosSurfaceType(finishOption.abbreviation);
+  const surfaceType = resolveSanneVosSurfaceType(finishCode);
   const thicknessCm = Number(rfqForPricing.thickness);
   const baseRateQuery = () => supabase
     .from('supplier_special_pricing_bluestone_rates')
@@ -683,7 +799,8 @@ export async function submitAutomaticSanneVosQuote(
     automaticPricing = calculateSanneVosBluestonePricing({
       rfq: rfqForPricing,
       rate: rate as SanneVosBluestoneRate,
-      finish: finishOption as SanneVosFinishFormula,
+      finish: finishOption,
+      finishCode,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Automatic pricing could not be calculated.';

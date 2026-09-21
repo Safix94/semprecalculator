@@ -12,6 +12,10 @@ export type SanneVosSurfaceType = 'sanded' | 'saw_cut';
 export interface SanneVosRfqInput {
   material: string | null;
   finish: string | null;
+  product_type?: string | null;
+  finish_top?: string | null;
+  finish_edge?: string | null;
+  finish_color?: string | null;
   length: number | string | null;
   width: number | string | null;
   thickness: number | string | null;
@@ -87,8 +91,13 @@ export function isSanneVosBluestoneAutoPricingCandidate(
   return isSanneVosSupplierName(supplierName) && isBluestoneMaterialName(rfq.material);
 }
 
+export function isSanneVosRoundLikeShape(shape: string | null | undefined): boolean {
+  return isRoundShape(shape) || normalizeText(shape) === 'oval';
+}
+
+// Round and oval tops share the round m² rate in the Sanne Vos price list.
 export function resolveSanneVosShapeKind(shape: string | null | undefined): SanneVosShapeKind {
-  return isRoundShape(shape) ? 'round' : 'straight';
+  return isSanneVosRoundLikeShape(shape) ? 'round' : 'straight';
 }
 
 export function resolveSanneVosSurfaceType(abbreviation: string | null | undefined): SanneVosSurfaceType {
@@ -96,15 +105,15 @@ export function resolveSanneVosSurfaceType(abbreviation: string | null | undefin
   return code.includes('SC') ? 'saw_cut' : 'sanded';
 }
 
+// The Sanne Vos sheet prices every top on its bounding box (L × W), so a round top
+// is charged as diameter × diameter and an oval as length × width.
 export function calculateSanneVosAreaM2(rfq: Pick<SanneVosRfqInput, 'shape' | 'length' | 'width'>): number {
   const lengthCm = toPositiveNumber(rfq.length, 'Length');
+  const hasWidth = rfq.width !== null && rfq.width !== undefined && rfq.width !== '';
+  const widthCm = isSanneVosRoundLikeShape(rfq.shape) && !hasWidth
+    ? lengthCm
+    : toPositiveNumber(rfq.width, 'Width');
 
-  if (isRoundShape(rfq.shape)) {
-    const diameterM = lengthCm / 100;
-    return roundTo(Math.PI * (diameterM / 2) ** 2, 3);
-  }
-
-  const widthCm = toPositiveNumber(rfq.width, 'Width');
   return roundTo((lengthCm / 100) * (widthCm / 100), 3);
 }
 
@@ -121,32 +130,71 @@ export function percentageToMultiplier(value: number | string | null | undefined
   return roundTo(1 + percentage / 100, 4);
 }
 
+// Margin rule confirmed 2026-09: always 1.9, except 2.1 when the finish code
+// contains FE (Ferrara), T (Tiré) or V (Vintage). Regular (no code) is 1.9.
 export function resolveFinishMargin(abbreviation: string | null | undefined): number {
   const code = normalizeCode(abbreviation);
-  if (!code) {
-    throw new Error('No abbreviation configured for this finish.');
-  }
-
-  // Highest-risk/highest-margin group wins when a code overlaps, e.g. AT contains A and T.
   if (code.includes('FE') || code.includes('T') || code.includes('V')) {
     return 2.1;
   }
 
-  if (code.includes('SC') || code.includes('SL') || code.includes('B') || code.includes('L') || code.includes('A')) {
-    return 1.7;
+  return 1.9;
+}
+
+const NEUTRAL_FINISH_PARTS = new Set(['', 'regular', 'n.v.t.', 'nvt', 'n/a']);
+
+// Regular / N.v.t. add nothing to a Table tops finish code.
+export function isSanneVosNeutralFinishPart(value: string | null | undefined): boolean {
+  return NEUTRAL_FINISH_PARTS.has(normalizeText(value));
+}
+
+function permutations<T>(items: T[]): T[][] {
+  if (items.length <= 1) {
+    return [items];
   }
 
-  return 1.9;
+  return items.flatMap((item, index) =>
+    permutations([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [item, ...rest])
+  );
+}
+
+/**
+ * Builds candidate finish codes for a Table tops request from the abbreviations of
+ * its parts, given in canonical order: top, color, edge (e.g. A + F + R → "AFR").
+ * The canonical concatenation comes first; the other unit permutations follow as
+ * fallbacks because the master list sometimes stores a combination in another
+ * order (e.g. "PEF" for Pebbles fumé). Empty codes are ignored.
+ */
+export function composeSanneVosFinishCodes(codes: Array<string | null | undefined>): string[] {
+  const units = codes.map((code) => normalizeCode(code)).filter((code) => code.length > 0);
+  if (units.length === 0) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const order of permutations(units)) {
+    const candidate = order.join('');
+    if (!seen.has(candidate)) {
+      seen.add(candidate);
+      candidates.push(candidate);
+    }
+  }
+
+  return candidates;
 }
 
 export function calculateSanneVosBluestonePricing({
   rfq,
   rate,
   finish,
+  finishCode,
 }: {
   rfq: SanneVosRfqInput;
   rate: SanneVosBluestoneRate;
   finish: SanneVosFinishFormula;
+  /** Composed Table tops code that matched the master list; defaults to the finish abbreviation. */
+  finishCode?: string | null;
 }): SanneVosBluestonePricingResult {
   if (!isBluestoneMaterialName(rfq.material)) {
     throw new Error('Automatic Sanne Vos pricing is only configured for Bluestone.');
@@ -160,8 +208,9 @@ export function calculateSanneVosBluestonePricing({
   const quantity = toPositiveNumber(rfq.quantity ?? 1, 'Quantity');
   const areaM2PerPiece = calculateSanneVosAreaM2(rfq);
   const totalAreaM2 = roundTo(areaM2PerPiece * quantity, 3);
+  const resolvedFinishCode = normalizeCode(finishCode ?? finish.abbreviation) || null;
   const finishPercentageMultiplier = percentageToMultiplier(finish.formula_percentage);
-  const finishMargin = resolveFinishMargin(finish.abbreviation);
+  const finishMargin = resolveFinishMargin(resolvedFinishCode);
   const basePriceBeforeLoss = roundTo(totalAreaM2 * netPricePerM2 * finishPercentageMultiplier, 2);
   const lossAdjustedBasePrice = roundTo(basePriceBeforeLoss * SANNE_VOS_LOSS_RECOVERY_MULTIPLIER, 2);
   const productPriceAfterMargin = roundTo(lossAdjustedBasePrice * finishMargin, 2);
@@ -195,6 +244,12 @@ export function calculateSanneVosBluestonePricing({
       netPricePerM2Eur: netPricePerM2,
       finishName: finish.name,
       finishAbbreviation: finish.abbreviation,
+      finishCode: resolvedFinishCode,
+      finishParts: {
+        top: rfq.finish_top ?? null,
+        edge: rfq.finish_edge ?? null,
+        color: rfq.finish_color ?? null,
+      },
       finishFormulaPercentage: Number(finish.formula_percentage),
       finishPercentageMultiplier,
       lossRecoveryMultiplier: SANNE_VOS_LOSS_RECOVERY_MULTIPLIER,

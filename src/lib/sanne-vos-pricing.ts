@@ -114,7 +114,9 @@ export function calculateSanneVosAreaM2(rfq: Pick<SanneVosRfqInput, 'shape' | 'l
     ? lengthCm
     : toPositiveNumber(rfq.width, 'Width');
 
-  return roundTo((lengthCm / 100) * (widthCm / 100), 3);
+  // Keep full precision here: the Sanne Vos sheet never rounds the area, and rounding
+  // 0.0625 m² to 0.063 already shifts a small top by almost 1 %.
+  return roundTo((lengthCm / 100) * (widthCm / 100), 6);
 }
 
 export function percentageToMultiplier(value: number | string | null | undefined): number {
@@ -207,7 +209,7 @@ export function calculateSanneVosBluestonePricing({
   const netPricePerM2 = toPositiveNumber(rate.net_price_per_m2_eur, 'Net price per m²');
   const quantity = toPositiveNumber(rfq.quantity ?? 1, 'Quantity');
   const areaM2PerPiece = calculateSanneVosAreaM2(rfq);
-  const totalAreaM2 = roundTo(areaM2PerPiece * quantity, 3);
+  const totalAreaM2 = roundTo(areaM2PerPiece * quantity, 6);
   const resolvedFinishCode = normalizeCode(finishCode ?? finish.abbreviation) || null;
   const finishPercentageMultiplier = percentageToMultiplier(finish.formula_percentage);
   const finishMargin = resolveFinishMargin(resolvedFinishCode);

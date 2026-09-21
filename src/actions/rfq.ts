@@ -25,6 +25,8 @@ import {
 } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { INVITE_EXPIRATION_MS } from '@/lib/supplier-invite';
+import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
+import { autoQuoteSanneVosInvites, runSanneVosAutomaticQuoteForInvite } from '@/lib/sanne-vos-auto-quote';
 import {
   formatRfqDimensionsWithOptions,
   isTableTopsProductType,
@@ -398,6 +400,36 @@ export async function createRfq(input: CreateRfqInput) {
           },
         };
       }
+
+      // Sanne Vos + Bluestone is priced immediately; nothing is emailed to her.
+      const automatic = await autoQuoteSanneVosInvites({
+        rfqId: rfq.id,
+        actor: { type: user.role, id: user.id },
+        mode: 'create',
+      });
+      const everyInvitePricedAutomatically =
+        automatic.results.length > 0 &&
+        automatic.results.length === automatic.inviteCount &&
+        automatic.results.every((result) => result.success);
+
+      if (everyInvitePricedAutomatically) {
+        // Every supplier already answered, so there is nothing left to send.
+        const { data: quotedRfq, error: quotedStatusError } = await supabase
+          .from('rfqs')
+          .update({ status: 'quotes_received', sent_at: new Date().toISOString() })
+          .eq('id', rfq.id)
+          .select()
+          .single();
+
+        if (quotedStatusError) {
+          console.warn('Automatic quotes stored but RFQ status could not be updated.', {
+            rfqId: rfq.id,
+            error: quotedStatusError.message,
+          });
+        } else if (quotedRfq) {
+          rfq = quotedRfq;
+        }
+      }
     }
 
     revalidatePath('/dashboard');
@@ -526,6 +558,9 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
     entityId: rfqId,
   });
 
+  // Keep an existing Sanne Vos automatic quote in step with the edited request.
+  await autoQuoteSanneVosInvites({ rfqId, actor: { type: user.role, id: user.id }, mode: 'refresh' });
+
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
   return { data: rfq };
 }
@@ -598,6 +633,9 @@ export async function updateRfqDetails(rfqId: string, input: UpdateRfqDetailsInp
       fields: Object.keys(updateData),
     },
   });
+
+  // Keep an existing Sanne Vos automatic quote in step with the edited dimensions.
+  await autoQuoteSanneVosInvites({ rfqId, actor: { type: user.role, id: user.id }, mode: 'refresh' });
 
   revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
@@ -990,7 +1028,7 @@ export async function sendRfq(rfqId: string) {
   }
 
   // Send emails to all suppliers with invites
-  const results: { supplier: string; success: boolean; error?: string }[] = [];
+  const results: { supplier: string; success: boolean; error?: string; automatic?: boolean }[] = [];
   const dimensionsText = formatRfqDimensionsWithOptions(
     {
       shape: rfq.shape,
@@ -1006,9 +1044,22 @@ export async function sendRfq(rfqId: string) {
   // Refresh tokens and send invite emails per supplier concurrently — result
   // semantics per supplier stay identical to the previous sequential loop.
   const inviteResults = await Promise.all(
-    invites.map(async (invite): Promise<{ supplier: string; success: boolean; error?: string }> => {
+    invites.map(async (invite): Promise<{ supplier: string; success: boolean; error?: string; automatic?: boolean }> => {
       if (!invite.supplier) {
         return { supplier: 'Unknown', success: false, error: 'Supplier not found' };
+      }
+
+      // Sanne Vos + Bluestone: price it here instead of emailing a quote link.
+      if (isSanneVosBluestoneAutoPricingCandidate(invite.supplier.name, { material: rfq.material })) {
+        const automatic = await runSanneVosAutomaticQuoteForInvite({
+          rfqId,
+          invite: { id: invite.id, supplier_id: invite.supplier.id },
+          supplierName: invite.supplier.name,
+          actor: { type: user.role, id: user.id },
+        });
+        return automatic.success
+          ? { supplier: invite.supplier.name, success: true, automatic: true }
+          : { supplier: invite.supplier.name, success: false, error: `Automatic pricing failed: ${automatic.error}` };
       }
 
       try {
@@ -1116,6 +1167,7 @@ export async function sendRfq(rfqId: string) {
   results.push(...inviteResults);
 
   const sentCount = results.filter((r) => r.success).length;
+  const automaticCount = results.filter((r) => r.success && r.automatic).length;
   const totalCount = results.length;
 
   if (sentCount === 0) {
@@ -1125,10 +1177,12 @@ export async function sendRfq(rfqId: string) {
     };
   }
 
-  // Update RFQ status to sent_to_supplier and refresh sent_at (also on resend)
+  // Update RFQ status and refresh sent_at (also on resend). An automatic quote
+  // already counts as a received quote, so the RFQ skips straight to that state.
+  const nextStatus = automaticCount > 0 ? 'quotes_received' : 'sent_to_supplier';
   const { error: statusUpdateError } = await supabase
     .from('rfqs')
-    .update({ status: 'sent_to_supplier', sent_at: new Date().toISOString() })
+    .update({ status: nextStatus, sent_at: new Date().toISOString() })
     .eq('id', rfqId)
     .select('id')
     .single();
@@ -1145,12 +1199,12 @@ export async function sendRfq(rfqId: string) {
     action: 'RFQ_SENT',
     entityType: 'rfq',
     entityId: rfqId,
-    metadata: { supplierCount: invites.length, results },
+    metadata: { supplierCount: invites.length, automaticCount, results },
   });
 
     revalidatePath('/dashboard');
     revalidatePath(`/dashboard/rfqs/${rfqId}`);
-    return { data: { sent: sentCount, total: totalCount, results } };
+    return { data: { sent: sentCount, total: totalCount, automatic: automaticCount, results } };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unexpected error';
     console.error('sendRfq: unexpected error', { rfqId, message });

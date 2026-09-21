@@ -14,18 +14,7 @@ import { getFxRates } from '@/lib/fx-rates';
 import { sendSalesQuoteReceivedEmail, sendSupplierQuoteConfirmationEmail } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
-import {
-  SANNE_VOS_BLUESTONE_FORMULA_VERSION,
-  calculateSanneVosBluestonePricing,
-  composeSanneVosFinishCodes,
-  isSanneVosBluestoneAutoPricingCandidate,
-  isSanneVosNeutralFinishPart,
-  resolveSanneVosShapeKind,
-  resolveSanneVosSurfaceType,
-  type SanneVosBluestoneRate,
-  type SanneVosFinishFormula,
-} from '@/lib/sanne-vos-pricing';
-import { isTableTopsProductType } from '@/lib/rfq-format';
+import { generateSanneVosAutomaticQuote } from '@/lib/sanne-vos-auto-quote';
 import { logAuditEvent } from './audit';
 import type { SubmitAutomaticQuoteInput, SubmitQuoteInput } from '@/lib/validation';
 import type {
@@ -543,123 +532,6 @@ export async function submitQuote(
   return { data: { id: savedQuote.id } };
 }
 
-type FinishOptionRow = Pick<SanneVosFinishFormula, 'name' | 'abbreviation' | 'formula_percentage'>;
-type SanneVosFinishResolution =
-  | { finishOption: FinishOptionRow; finishCode: string | null }
-  | { error: string };
-
-const FINISH_OPTION_COLUMNS = 'name, abbreviation, formula_percentage';
-
-/**
- * Finds the finish master-list row that drives Sanne Vos Bluestone pricing.
- *
- * Table tops carry three partial finishes (top, edge, color). Their master-list
- * abbreviations are combined into one code in the order top + color + edge
- * (e.g. Antique + Fumé + Rocky → "AFR"); Regular / N.v.t. parts add nothing.
- * Other product types keep a single finish name that is looked up directly.
- */
-async function resolveSanneVosFinishOption(
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  rfq: {
-    product_type: string | null;
-    finish: string | null;
-    finish_top: string | null;
-    finish_edge: string | null;
-    finish_color: string | null;
-  }
-): Promise<SanneVosFinishResolution> {
-  if (!isTableTopsProductType(rfq.product_type)) {
-    if (isSanneVosNeutralFinishPart(rfq.finish)) {
-      return resolveRegularFinishOption(supabase);
-    }
-
-    const { data: finishOption, error } = await supabase
-      .from('finish_options')
-      .select(FINISH_OPTION_COLUMNS)
-      .ilike('name', rfq.finish ?? '')
-      .eq('is_active', true)
-      .maybeSingle();
-
-    if (error || !finishOption) {
-      return { error: `Finish "${rfq.finish}" is not configured in the finish master list.` };
-    }
-
-    return { finishOption, finishCode: finishOption.abbreviation };
-  }
-
-  // Canonical order for the composed code: top, color, edge.
-  const orderedParts = [rfq.finish_top, rfq.finish_color, rfq.finish_edge];
-  const relevantParts = orderedParts.filter((part): part is string => !isSanneVosNeutralFinishPart(part));
-  const combinationLabel = `${rfq.finish_top ?? '-'} / ${rfq.finish_edge ?? '-'} / ${rfq.finish_color ?? '-'}`;
-
-  if (relevantParts.length === 0) {
-    return resolveRegularFinishOption(supabase);
-  }
-
-  const { data: partRows, error: partsError } = await supabase
-    .from('finish_options')
-    .select(FINISH_OPTION_COLUMNS)
-    .in('name', relevantParts)
-    .eq('is_active', true);
-
-  if (partsError) {
-    return { error: `Failed to load finish options: ${partsError.message}` };
-  }
-
-  const abbreviationByName = new Map(
-    (partRows ?? []).map((row) => [row.name.trim().toLowerCase(), row.abbreviation as string | null])
-  );
-  const partCodes = relevantParts.map((part) => abbreviationByName.get(part.trim().toLowerCase()) ?? null);
-  const missingPart = relevantParts.find((_, index) => !partCodes[index]);
-  if (missingPart) {
-    return {
-      error: `Finish "${missingPart}" has no abbreviation in the finish master list, so the combination "${combinationLabel}" cannot be priced.`,
-    };
-  }
-
-  const candidates = composeSanneVosFinishCodes(partCodes);
-  const { data: candidateRows, error: candidatesError } = await supabase
-    .from('finish_options')
-    .select(FINISH_OPTION_COLUMNS)
-    .in('abbreviation', candidates)
-    .eq('is_active', true);
-
-  if (candidatesError) {
-    return { error: `Failed to load finish options: ${candidatesError.message}` };
-  }
-
-  const rowByCode = new Map(
-    (candidateRows ?? []).map((row) => [String(row.abbreviation ?? '').toUpperCase(), row])
-  );
-  const matchedCode = candidates.find((candidate) => rowByCode.has(candidate));
-  const matchedRow = matchedCode ? rowByCode.get(matchedCode) : undefined;
-  if (!matchedCode || !matchedRow) {
-    return {
-      error: `Finish combination "${combinationLabel}" (code ${candidates[0]}) is not configured in the finish master list.`,
-    };
-  }
-
-  return { finishOption: matchedRow, finishCode: matchedCode };
-}
-
-async function resolveRegularFinishOption(
-  supabase: ReturnType<typeof createServiceRoleClient>
-): Promise<SanneVosFinishResolution> {
-  const { data: regular, error } = await supabase
-    .from('finish_options')
-    .select(FINISH_OPTION_COLUMNS)
-    .ilike('name', 'Regular')
-    .eq('is_active', true)
-    .maybeSingle();
-
-  if (error || !regular) {
-    return { error: 'Finish "Regular" is not configured in the finish master list.' };
-  }
-
-  // Regular carries no code: no finish surcharge and the default margin.
-  return { finishOption: regular, finishCode: null };
-}
-
 export async function submitAutomaticSanneVosQuote(
   rfqId: string,
   token: string,
@@ -687,58 +559,11 @@ export async function submitAutomaticSanneVosQuote(
   }
 
   const { leadTimeDays, comment } = parsed.data;
-  const { data: rfqForPricing, error: rfqForPricingError } = await supabase
-    .from('rfqs')
-    .select(`
-      created_by,
-      status,
-      product_type,
-      material,
-      material_table_top,
-      material_table_foot,
-      finish,
-      finish_top,
-      finish_edge,
-      finish_color,
-      finish_table_top,
-      finish_table_foot,
-      length,
-      width,
-      height,
-      thickness,
-      quantity,
-      shape,
-      model,
-      usage_environment,
-      notes,
-      attachments:rfq_attachments(file_name)
-    `)
-    .eq('id', rfqId)
-    .single();
-
-  if (rfqForPricingError || !rfqForPricing) {
-    return { error: 'Request not found' };
-  }
-
   const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
-
-  // Closed requests no longer accept quotes, even while the link is valid.
-  if (rfqForPricing.status === 'closed') {
-    const labels = getSupplierTranslations(normalizeSupplierLanguage(inviteSupplier?.preferred_language));
-    return { error: labels.requestClosedSubmitError };
-  }
-
-  if (!isSanneVosBluestoneAutoPricingCandidate(inviteSupplier?.name, rfqForPricing)) {
-    return { error: 'Automatic pricing is only configured for Sanne Vos + Bluestone requests.' };
-  }
-
-  if (!rfqForPricing.finish) {
-    return { error: 'No finish selected for this Bluestone request.' };
-  }
 
   const { data: existingQuote, error: existingQuoteError } = await supabase
     .from('rfq_quotes')
-    .select('*')
+    .select('id')
     .eq('rfq_id', rfqId)
     .eq('supplier_id', invite.supplier_id)
     .maybeSingle();
@@ -751,201 +576,38 @@ export async function submitAutomaticSanneVosQuote(
     return { error: 'This quote link was already used and no editable quote was found' };
   }
 
-  const { data: material, error: materialError } = await supabase
-    .from('materials')
-    .select('id, name')
-    .ilike('name', 'Bluestone')
-    .maybeSingle();
-
-  if (materialError || !material) {
-    return { error: 'Bluestone material configuration was not found.' };
-  }
-
-  const finishResolution = await resolveSanneVosFinishOption(supabase, rfqForPricing);
-  if ('error' in finishResolution) {
-    return { error: finishResolution.error };
-  }
-  const { finishOption, finishCode } = finishResolution;
-
-  const shapeKind = resolveSanneVosShapeKind(rfqForPricing.shape);
-  const surfaceType = resolveSanneVosSurfaceType(finishCode);
-  const thicknessCm = Number(rfqForPricing.thickness);
-  const baseRateQuery = () => supabase
-    .from('supplier_special_pricing_bluestone_rates')
-    .select('shape_kind, thickness_cm, surface_type, base_price_per_m2_eur, discount_percentage, net_price_per_m2_eur, is_supported, unsupported_reason')
-    .eq('supplier_id', invite.supplier_id)
-    .eq('material_id', material.id)
-    .eq('shape_kind', shapeKind)
-    .eq('thickness_cm', thicknessCm);
-
-  let { data: rate, error: rateError } = await baseRateQuery()
-    .eq('surface_type', surfaceType)
-    .maybeSingle();
-
-  if (!rate && surfaceType === 'saw_cut') {
-    const fallback = await baseRateQuery()
-      .eq('surface_type', 'sanded')
-      .maybeSingle();
-    rate = fallback.data;
-    rateError = fallback.error;
-  }
-
-  if (rateError || !rate) {
-    return { error: `No Sanne Vos Bluestone rate found for ${shapeKind} ${thicknessCm} cm.` };
-  }
-
-  let automaticPricing;
-  try {
-    automaticPricing = calculateSanneVosBluestonePricing({
-      rfq: rfqForPricing,
-      rate: rate as SanneVosBluestoneRate,
-      finish: finishOption,
-      finishCode,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Automatic pricing could not be calculated.';
-    console.error('Automatic quote submission blocked: Sanne Vos pricing calculation failed.', {
-      rfqId,
-      supplierId: invite.supplier_id,
-      message,
-    });
-    return { error: message };
-  }
-
-  const quotePricingPayload = {
-    shipping_cost_calculated: 0,
-    transport_cost_calculated: 0,
-    product_price_after_margin: automaticPricing.productPriceAfterMargin,
-    cost_including_transport: automaticPricing.lossAdjustedBasePrice,
-    transport_adjusted_base_price: null,
-    truck_multiplier_factor: null,
-    final_price_calculated: automaticPricing.finalPriceCalculated,
-    pricing_method: 'none',
-    pricing_formula_version: SANNE_VOS_BLUESTONE_FORMULA_VERSION,
-    retail_multiplier_factor: 2.95,
-    pricing_settings_snapshot: automaticPricing.pricingSettingsSnapshot,
-    currency: 'EUR',
-    supplier_input_price: null,
-    supplier_input_currency: 'EUR',
-    supplier_input_exchange_rate_per_eur: null,
-    supplier_input_exchange_rate_idr_per_eur: null,
-    supplier_input_converted_at: null,
-  };
-
-  let quote: RfqQuote | null = null;
-  let isQuoteUpdate = false;
-
-  if (existingQuote) {
-    const { data: updatedQuote, error: updateQuoteError } = await supabase
-      .from('rfq_quotes')
-      .update({
-        base_price: automaticPricing.basePriceBeforeLoss,
-        area_m2: automaticPricing.totalAreaM2,
-        volume_m3: 0,
-        ...quotePricingPayload,
-        lead_time_days: leadTimeDays ?? null,
-        comment: comment ?? null,
-        submitted_at: new Date().toISOString(),
-      })
-      .eq('id', existingQuote.id)
-      .select()
-      .single();
-
-    if (updateQuoteError || !updatedQuote) {
-      return { error: `Failed to update quote: ${updateQuoteError?.message ?? 'Unknown error'}` };
-    }
-
-    quote = updatedQuote as RfqQuote;
-    isQuoteUpdate = true;
-  } else {
-    const { data: insertedQuote, error: quoteError } = await supabase
-      .from('rfq_quotes')
-      .insert({
-        rfq_id: rfqId,
-        supplier_id: invite.supplier_id,
-        base_price: automaticPricing.basePriceBeforeLoss,
-        area_m2: automaticPricing.totalAreaM2,
-        volume_m3: 0,
-        ...quotePricingPayload,
-        lead_time_days: leadTimeDays ?? null,
-        comment: comment ?? null,
-      })
-      .select()
-      .single();
-
-    if (quoteError || !insertedQuote) {
-      if (quoteError?.code === '23505') {
-        return { error: 'A quote has already been submitted for this request' };
-      }
-      return { error: `Failed to save quote: ${quoteError?.message ?? 'Unknown error'}` };
-    }
-
-    quote = insertedQuote as RfqQuote;
-  }
-
-  const savedQuote = quote;
-
-  const { error: markInviteUsedError } = await supabase
-    .from('rfq_invites')
-    .update({ used_at: new Date().toISOString() })
-    .eq('id', invite.id);
-
-  if (markInviteUsedError) {
-    console.warn('Failed to mark invite as used after automatic quote submission.', {
-      rfqId,
-      inviteId: invite.id,
-      quoteId: savedQuote.id,
-      error: markInviteUsedError.message,
-    });
-  }
-
-  if (rfqForPricing.status === 'sent_to_supplier' || rfqForPricing.status === 'supplier_replied') {
-    const { error: rfqStatusError } = await supabase
-      .from('rfqs')
-      .update({ status: 'quotes_received' })
-      .eq('id', rfqId)
-      .in('status', ['sent_to_supplier', 'supplier_replied']);
-
-    if (rfqStatusError) {
-      console.warn('Failed to update RFQ status to quotes_received after automatic quote submission.', {
-        rfqId,
-        quoteId: quote.id,
-        error: rfqStatusError.message,
-      });
-    }
-  }
-
-  await logAuditEvent({
-    actorType: 'supplier_link',
-    actorId: invite.supplier_id,
-    action: isQuoteUpdate ? 'QUOTE_UPDATED' : 'QUOTE_SUBMITTED',
-    entityType: 'rfq_quote',
-    entityId: quote.id,
-    metadata: {
-      rfqId,
-      automaticPricing: true,
-      pricingFormulaVersion: SANNE_VOS_BLUESTONE_FORMULA_VERSION,
-      areaM2: automaticPricing.totalAreaM2,
-      basePriceEur: automaticPricing.basePriceBeforeLoss,
-      lossAdjustedBasePrice: automaticPricing.lossAdjustedBasePrice,
-      productPriceAfterMargin: automaticPricing.productPriceAfterMargin,
-      finalPriceCalculated: automaticPricing.finalPriceCalculated,
-      finishMargin: automaticPricing.finishMargin,
-      finishPercentageMultiplier: automaticPricing.finishPercentageMultiplier,
-      retailMultiplierFactor: 2.95,
-    },
-    ip: requestContext.ip,
-    userAgent: requestContext.userAgent,
+  // The link path only adds lead time / comment; pricing itself is shared with
+  // the internal flow that quotes Sanne Vos requests at creation time.
+  const result = await generateSanneVosAutomaticQuote({
+    supabase,
+    rfqId,
+    inviteId: invite.id,
+    supplierId: invite.supplier_id,
+    supplierName: inviteSupplier?.name,
+    leadTimeDays: leadTimeDays ?? null,
+    comment: comment ?? null,
+    actor: { type: 'supplier_link', id: invite.supplier_id },
+    requestContext: { ip: requestContext.ip, userAgent: requestContext.userAgent },
   });
 
-  // Sales notification doesn't affect the supplier's result — send it after
-  // the response so the submit button resolves without waiting on Brevo.
+  if ('error' in result) {
+    if (result.code === 'closed') {
+      const labels = getSupplierTranslations(normalizeSupplierLanguage(inviteSupplier?.preferred_language));
+      return { error: labels.requestClosedSubmitError };
+    }
+    return { error: result.error };
+  }
+
+  const savedQuote = result.data.quote;
+  const automaticPricing = result.data.pricing;
+  const createdBy = result.data.createdBy;
+
   after(async () => {
-    if (!rfqForPricing.created_by) {
+    if (!createdBy) {
       return;
     }
 
-    const { data: salesUser } = await supabase.auth.admin.getUserById(rfqForPricing.created_by);
+    const { data: salesUser } = await supabase.auth.admin.getUserById(createdBy);
 
     if (salesUser?.user?.email && inviteSupplier?.name) {
       const emailResult = await sendSalesQuoteReceivedEmail({

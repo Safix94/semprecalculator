@@ -28,6 +28,7 @@ export type AuditAction =
   | 'INTERNAL_COMMENT_ADDED'
   | 'SUPPLIER_LINK_SENT'
   | 'EMAIL_SENT'
+  | 'AUTOMATIC_QUOTE_FAILED'
   | 'USER_CREATED';
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';

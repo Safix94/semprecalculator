@@ -213,3 +213,38 @@ describe('calculateSanneVosBluestonePricing', () => {
     ).toThrow('Not supported');
   });
 });
+
+describe('golden rows from the Sanne Vos price sheet ("B - vos CHD")', () => {
+  // Real rows from the sheet, priced with the sheet's own m² price so the formula
+  // itself is verified. Column T ("PRIJS VOOR AFRONDING") is the expected result.
+  const sheetRows = [
+    { row: 1327, shape: 'Rectangular', thickness: 5, length: 250, width: 110, m2Price: 199, code: '', pct: 0, expected: 3220.7 },
+    { row: 1239, shape: 'Rectangular', thickness: 5, length: 240, width: 110, m2Price: 199, code: 'L', pct: 11, expected: 3431.98 },
+    { row: 1096, shape: 'Rectangular', thickness: 3, length: 211, width: 91, m2Price: 134, code: 'AR', pct: 28, expected: 1938.22 },
+    { row: 783, shape: 'Rectangular', thickness: 2, length: 160, width: 74, m2Price: 91, code: 'F', pct: 23, expected: 779.94 },
+    { row: 1085, shape: 'Rectangular', thickness: 4, length: 210, width: 90, m2Price: 199, code: 'BFR', pct: 58, expected: 3497.33 },
+    { row: 1230, shape: 'Rectangular', thickness: 5, length: 240, width: 100, m2Price: 199, code: 'TR', pct: 72, expected: 5343.47 },
+    { row: 673, shape: 'Round', thickness: 5, length: 145, width: null, m2Price: 288, code: 'A', pct: 11, expected: 3955.64 },
+    { row: 1629, shape: 'Oval', thickness: 5, length: 300, width: 100, m2Price: 288, code: 'FEK', pct: 69, expected: 9497.98 },
+  ];
+
+  it.each(sheetRows)('row $row ($shape $thickness cm, code "$code") matches the sheet within 5 cents', (r) => {
+    const result = calculateSanneVosBluestonePricing({
+      rfq: { material: 'Bluestone', finish: r.code || 'Regular', length: r.length, width: r.width, thickness: r.thickness, quantity: 1, shape: r.shape },
+      rate: {
+        shape_kind: resolveSanneVosShapeKind(r.shape),
+        thickness_cm: r.thickness,
+        surface_type: 'sanded',
+        base_price_per_m2_eur: r.m2Price,
+        discount_percentage: 0,
+        net_price_per_m2_eur: r.m2Price,
+        is_supported: true,
+        unsupported_reason: null,
+      },
+      finish: { name: r.code || 'Regular', abbreviation: r.code || null, formula_percentage: r.pct },
+    });
+
+    const diffInCents = Math.round(Math.abs(result.finalPriceCalculated - r.expected) * 100);
+    expect(diffInCents).toBeLessThanOrEqual(5);
+  });
+});

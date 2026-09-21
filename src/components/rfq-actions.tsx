@@ -31,6 +31,19 @@ interface RfqActionsProps {
   onMutated?: () => void;
 }
 
+function formatSendResult(data: {
+  sent: number;
+  total: number;
+  automatic?: number;
+  results: Array<{ error?: string }>;
+}): string {
+  const failedRecipients = data.results.filter((item) => item.error).length;
+  const automaticNote = data.automatic ? ` (${data.automatic} priced automatically, no email sent)` : '';
+  return failedRecipients > 0
+    ? `Sent to ${data.sent}/${data.total} suppliers${automaticNote}, but ${failedRecipients} supplier(s) had warnings. Check audit logs.`
+    : `Sent to ${data.sent}/${data.total} suppliers${automaticNote}`;
+}
+
 export function RfqActions({
   rfqId,
   status,
@@ -240,12 +253,7 @@ export function RfqActions({
           setResult(`Error: ${errorMessage}`);
         }
       } else if ('data' in res) {
-        const failedRecipients = res.data.results.filter((item) => item.error).length;
-        setResult(
-          failedRecipients > 0
-            ? `Sent to ${res.data.sent}/${res.data.total} suppliers, but ${failedRecipients} supplier(s) had recipient email warnings. Check audit logs.`
-            : `Sent to ${res.data.sent}/${res.data.total} suppliers`
-        );
+        setResult(formatSendResult(res.data));
         router.refresh();
         onMutated?.();
       }
@@ -297,12 +305,7 @@ export function RfqActions({
         return;
       }
 
-      const failedRecipients = sendResult.data.results.filter((item) => item.error).length;
-      setResult(
-        failedRecipients > 0
-          ? `Sent to ${sendResult.data.sent}/${sendResult.data.total} suppliers, but ${failedRecipients} supplier(s) had recipient email warnings. Check audit logs.`
-          : `Sent to ${sendResult.data.sent}/${sendResult.data.total} suppliers`
-      );
+      setResult(formatSendResult(sendResult.data));
       setPickerOpen(false);
       router.refresh();
       onMutated?.();

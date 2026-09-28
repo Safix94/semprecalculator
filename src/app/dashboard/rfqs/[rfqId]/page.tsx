@@ -4,14 +4,18 @@ import { notFound } from 'next/navigation';
 import { requireAuth } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { RfqActions } from '@/components/rfq-actions';
+import { RfqDeleteButton, RfqRestoreButton } from '@/components/rfq-delete-controls';
+import { RfqInternalChat } from '@/components/rfq-internal-chat';
 import { RfqNotesEditor } from '@/components/rfq-notes-editor';
 import { RfqSupplierThreads } from '@/components/rfq-supplier-threads';
 import { AttachmentUpload } from '@/components/attachment-upload';
 import { RfqAttachmentList } from '@/components/rfq-attachment-list';
 import { RfqDirectDetailsCard } from '@/components/rfq-direct-details-card';
-import type { Rfq, RfqAttachment, RfqComment, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
+import type { Rfq, RfqAttachment, RfqComment, RfqInternalMessage, RfqQuote, Supplier, RfqInvite, RfqStatus } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatSupplierInputAmount } from '@/lib/currency';
+import { isVolumelessQuoteFormula } from '@/lib/natuursteen-vos-pricing';
 
 interface PageProps {
   params: Promise<{ rfqId: string }>;
@@ -33,8 +37,9 @@ function formatEuro(value: number | string | null | undefined) {
   return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(Number(value));
 }
 
-function isAutomaticQuote(quote: RfqQuote | undefined) {
-  return quote?.pricing_formula_version === 'sanne_vos_bluestone_v1';
+// Vos-chain quotes (Sanne Vos automatic, Natuursteen Vos price-only) store no supplier volume.
+function hasSupplierVolume(quote: RfqQuote | undefined) {
+  return Boolean(quote) && !isVolumelessQuoteFormula(quote?.pricing_formula_version);
 }
 
 // Automatic (Sanne Vos) quotes have no supplier input; their base_price is the
@@ -59,12 +64,16 @@ export default async function RfqDetailPage({ params }: PageProps) {
     .single();
 
   if (error || !rfq) notFound();
+  // Soft-deleted requests are only reachable for admins (to restore them).
+  if (rfq.deleted_at && user.role !== 'admin') notFound();
 
   const [
     { data: attachments },
     { data: invites },
     { data: quotes },
     { data: comments },
+    { data: internalMessages, error: internalMessagesError },
+    { data: internalRead },
   ] = await Promise.all([
     supabase
       .from('rfq_attachments')
@@ -86,10 +95,35 @@ export default async function RfqDetailPage({ params }: PageProps) {
       .select('*')
       .eq('rfq_id', rfqId)
       .order('created_at', { ascending: true }),
+    supabase
+      .from('rfq_internal_messages')
+      .select('*')
+      .eq('rfq_id', rfqId)
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('rfq_internal_message_reads')
+      .select('last_read_at')
+      .eq('rfq_id', rfqId)
+      .eq('user_id', user.id)
+      .maybeSingle(),
   ]);
+
+  if (internalMessagesError) {
+    console.error('Failed to fetch internal messages:', internalMessagesError.message);
+  }
 
   const typedRfq = rfq as Rfq;
   const canManageRfq = user.role === 'admin' || user.role === 'sales';
+  const typedInternalMessages = (internalMessages as RfqInternalMessage[]) ?? [];
+  const typedComments = (comments as RfqComment[]) ?? [];
+  const typedAttachments = (attachments as RfqAttachment[]) ?? [];
+  const lastInternalReadAt = internalRead?.last_read_at ? new Date(internalRead.last_read_at) : null;
+  const unreadInternalCount = typedInternalMessages.filter(
+    (message) =>
+      message.author_id !== user.id && (!lastInternalReadAt || new Date(message.created_at) > lastInternalReadAt)
+  ).length;
+  const canDeleteRfq = user.role === 'admin' || typedRfq.created_by === user.id;
+  const isDeleted = Boolean(typedRfq.deleted_at);
   const requestTitle = [typedRfq.product_type, typedRfq.material, typedRfq.shape].filter(Boolean).join(' - ');
   const status = statusLabels[typedRfq.status] ?? {
     label: typedRfq.status,
@@ -99,9 +133,8 @@ export default async function RfqDetailPage({ params }: PageProps) {
   const typedInvites = (invites as (RfqInvite & { supplier: Supplier | null })[]) ?? [];
   const bestQuote = typedQuotes[0];
   const supplierSummary = bestQuote?.supplier?.name ?? typedInvites[0]?.supplier?.name ?? '-';
-  const leadTimeSummary = bestQuote?.lead_time_days ? `${bestQuote.lead_time_days} days` : '-';
   const quoteVolumeLabel =
-    bestQuote && !isAutomaticQuote(bestQuote) && bestQuote.volume_m3
+    bestQuote && hasSupplierVolume(bestQuote) && bestQuote.volume_m3
       ? `${parseFloat(Number(bestQuote.volume_m3).toFixed(3))} m³`
       : null;
 
@@ -114,6 +147,16 @@ export default async function RfqDetailPage({ params }: PageProps) {
         <ChevronLeft className="size-4" />
         Back to requests
       </Link>
+
+      {isDeleted && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm">
+          <span>
+            This request was deleted on {new Date(typedRfq.deleted_at as string).toLocaleDateString('en-GB')} and is
+            hidden from all lists.
+          </span>
+          <RfqRestoreButton rfqId={rfqId} />
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card">
         <div className="flex flex-wrap items-center justify-between gap-4 border-b px-6 py-4">
@@ -145,19 +188,12 @@ export default async function RfqDetailPage({ params }: PageProps) {
               materialIdTableTop={typedRfq.material_id_table_top}
               materialIdTableFoot={typedRfq.material_id_table_foot}
             />
+            {canDeleteRfq && !isDeleted && <RfqDeleteButton rfqId={rfqId} />}
           </div>
         </div>
       </div>
 
-      {typedInvites.length > 0 && (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 text-[12.5px] text-muted-foreground">
-          <span className="sempre-label">Supplier</span>
-          <span className="font-semibold text-foreground/80">{supplierSummary}</span>
-          {typedInvites.length > 1 && <span>· {typedInvites.length} suppliers invited</span>}
-        </div>
-      )}
-
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-3">
         <div className="sempre-metric-card-primary">
           <div className="sempre-label text-primary">Retail price</div>
           <div className="sempre-metric-value text-primary">{formatEuro(bestQuote?.final_price_calculated)}</div>
@@ -167,69 +203,109 @@ export default async function RfqDetailPage({ params }: PageProps) {
           <div className="sempre-label">Supplier base price</div>
           <div className="sempre-metric-value">{supplierBasePriceLabel(bestQuote)}</div>
           <div className="mt-1 text-xs text-muted-foreground">
-            Best quote · {supplierSummary}
+            {bestQuote ? 'Best quote' : 'No quote yet'}
             {quoteVolumeLabel && <> · {quoteVolumeLabel}</>}
           </div>
         </div>
         <div className="sempre-metric-card">
-          <div className="sempre-label">Lead time</div>
-          <div className="sempre-metric-value">{leadTimeSummary}</div>
-          <div className="mt-1 text-xs text-muted-foreground">Based on the lowest active quote</div>
+          <div className="sempre-label">Supplier</div>
+          <div className="truncate text-[17px] font-bold">{supplierSummary}</div>
+          <div className="mt-1 text-xs text-muted-foreground">
+            {typedInvites.length === 1 ? '1 supplier invited' : `${typedInvites.length} suppliers invited`}
+            {' · '}
+            {typedQuotes.length === 1 ? '1 quote' : `${typedQuotes.length} quotes`}
+          </div>
         </div>
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div className="space-y-4">
-          <RfqDirectDetailsCard
-            rfq={typedRfq}
-            userRole={user.role}
-            invites={typedInvites}
-          />
+      <Tabs defaultValue="overview" className="gap-4">
+        <TabsList variant="line" className="w-full justify-start overflow-x-auto">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="supplier">
+            Supplier communication
+            {typedComments.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[11px] font-semibold">{typedComments.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="internal">
+            Internal chat
+            {unreadInternalCount > 0 ? (
+              <span className="ml-1.5 rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                {unreadInternalCount} new
+              </span>
+            ) : (
+              typedInternalMessages.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-muted px-1.5 text-[11px] font-semibold">
+                  {typedInternalMessages.length}
+                </span>
+              )
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Attachments</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RfqAttachmentList
-                rfqId={rfqId}
-                attachments={(attachments as RfqAttachment[]) ?? []}
-                canOpen={canManageRfq}
-                canDelete={canManageRfq && typedRfq.status !== 'closed'}
-              />
-              {typedRfq.status !== 'closed' && (
-                <div className="mt-4">
-                  <AttachmentUpload rfqId={rfqId} />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="overview">
+          <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <RfqDirectDetailsCard rfq={typedRfq} userRole={user.role} invites={typedInvites} />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Notes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <RfqNotesEditor
-                key={`rfq-notes-${rfqId}`}
-                rfqId={rfqId}
-                initialNotes={typedRfq.notes}
-                disabled={typedRfq.status === 'closed'}
-              />
-            </CardContent>
-          </Card>
-        </div>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Internal notes</CardTitle>
+                  <p className="text-xs text-muted-foreground">For Sempre staff only, never shown to the supplier.</p>
+                </CardHeader>
+                <CardContent>
+                  <RfqNotesEditor
+                    key={`rfq-notes-${rfqId}`}
+                    rfqId={rfqId}
+                    initialNotes={typedRfq.notes}
+                    disabled={typedRfq.status === 'closed'}
+                  />
+                </CardContent>
+              </Card>
 
-        <div className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Attachments ({typedAttachments.length})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RfqAttachmentList
+                    rfqId={rfqId}
+                    attachments={typedAttachments}
+                    canOpen={canManageRfq}
+                    canDelete={canManageRfq && typedRfq.status !== 'closed'}
+                  />
+                  {typedRfq.status !== 'closed' && (
+                    <div className="mt-4">
+                      <AttachmentUpload rfqId={rfqId} />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="supplier">
           <RfqSupplierThreads
             key={`rfq-threads-${rfqId}`}
             rfqId={rfqId}
             rfqStatus={typedRfq.status}
             invites={typedInvites}
-            initialComments={(comments as RfqComment[]) ?? []}
+            initialComments={typedComments}
           />
-        </div>
-      </div>
+        </TabsContent>
+
+        <TabsContent value="internal">
+          <div className="max-w-3xl">
+            <RfqInternalChat
+              key={`rfq-internal-chat-${rfqId}`}
+              rfqId={rfqId}
+              currentUserId={user.id}
+              initialMessages={typedInternalMessages}
+            />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -46,7 +46,7 @@ export const PRODUCT_TYPE_DETAIL_FIELD_HELP: Record<ProductTypeDetailFieldKey, s
   height: 'Disabled by default for table tops.',
   thickness: 'Required by default except round non-table-top requests stay optional.',
   quantity: 'Number of pieces.',
-  notes: 'Free-text internal/supplier notes.',
+  notes: 'Free-text internal notes, never shown to the supplier.',
   attachments: 'SKP/PDF/JPG/PNG/DWG upload field.',
 };
 

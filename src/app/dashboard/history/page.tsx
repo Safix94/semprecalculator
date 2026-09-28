@@ -1,4 +1,5 @@
 import { getProductTypes } from '@/actions/product-types';
+import { requireAuth } from '@/lib/auth';
 import { searchRfqs, type SearchRfqsInput } from '@/actions/rfq-search';
 import { getSuppliers } from '@/actions/suppliers';
 import { RfqHistorySearch, type RfqHistoryFilters } from '@/components/rfq-history-search';
@@ -42,6 +43,7 @@ function getPage(params: Record<string, string | string[] | undefined>): number 
 }
 
 export default async function RfqHistoryPage({ searchParams }: HistoryPageProps) {
+  const user = await requireAuth();
   const params = searchParams ? await searchParams : {};
   const filters = getFilters(params);
   const page = getPage(params);
@@ -78,6 +80,7 @@ export default async function RfqHistoryPage({ searchParams }: HistoryPageProps)
           filters={filters}
           productTypes={productTypes}
           suppliers={suppliers.map((supplier) => ({ id: supplier.id, name: supplier.name }))}
+          canViewDeleted={user.role === 'admin'}
         />
       )}
     </div>

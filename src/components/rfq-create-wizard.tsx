@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getFinishOptions } from '@/actions/finish-options';
 import { getActiveMaterials, getSuppliersForMaterial } from '@/actions/materials';
 import { getProductTypes } from '@/actions/product-types';
 import { findSimilarRfqs } from '@/actions/rfq-search';
@@ -29,7 +28,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RfqDuplicateWarning } from '@/components/rfq-duplicate-warning';
 import type { RfqDuplicateWarning as RfqDuplicateWarningData } from '@/lib/rfq-match';
-import type { FinishOption, Material, ProductType, Supplier, UsageEnvironment } from '@/types';
+import type { Material, ProductType, Supplier, UsageEnvironment } from '@/types';
 
 
 interface WizardData {
@@ -150,9 +149,6 @@ export function RfqCreateWizard() {
   const [productTypesLoading, setProductTypesLoading] = useState(false);
   const [productTypesError, setProductTypesError] = useState<string | null>(null);
 
-  const [finishOptions, setFinishOptions] = useState<FinishOption[]>([]);
-  const [finishOptionsLoading, setFinishOptionsLoading] = useState(false);
-  const [finishOptionsError, setFinishOptionsError] = useState<string | null>(null);
 
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
@@ -252,35 +248,16 @@ export function RfqCreateWizard() {
     [availableMaterialsForType, data.material_id_table_foot]
   );
 
-  const finishOptionNames = useMemo(
-    () => normalizeFinishOptions(finishOptions.map((finishOption) => finishOption.name)),
-    [finishOptions]
-  );
-  const buildRequestFinishOptions = useCallback(
-    (material: Material | null): string[] => {
-      const seen = new Set<string>();
-      const options: string[] = [];
-
-      for (const finish of [
-        ...normalizeFinishOptions(material?.finish_options),
-        ...finishOptionNames,
-      ]) {
-        const key = finish.toLowerCase();
-        if (seen.has(key)) {
-          continue;
-        }
-        seen.add(key);
-        options.push(finish);
-      }
-
-      return options;
-    },
-    [finishOptionNames]
-  );
-  const availableFinishOptions = useMemo(
-    () => buildRequestFinishOptions(selectedMaterial),
-    [buildRequestFinishOptions, selectedMaterial]
-  );
+  // Only the finishes configured on the material (Management → Materials) are offered.
+  const availableFinishOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return normalizeFinishOptions(selectedMaterial?.finish_options).filter((finish) => {
+      const key = finish.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [selectedMaterial]);
   const tableTopFinishOptions = normalizeFinishOptions(selectedTableTopMaterial?.finish_options);
   const tableTopMaterialTopOptions = getMaterialFinishOptionsWithFallback(
     selectedTableTopMaterial,
@@ -340,22 +317,6 @@ export function RfqCreateWizard() {
     }
   }, []);
 
-  const loadFinishOptions = useCallback(async () => {
-    setFinishOptionsLoading(true);
-    setFinishOptionsError(null);
-
-    try {
-      const result = await getFinishOptions();
-      setFinishOptions(result);
-    } catch (error) {
-      console.error('Failed to load finish options:', error);
-      setFinishOptions([]);
-      setFinishOptionsError('Finishes could not be loaded.');
-    } finally {
-      setFinishOptionsLoading(false);
-    }
-  }, []);
-
   const loadSuppliersForMaterial = useCallback(async (materialId: string) => {
     try {
       const result = await getSuppliersForMaterial(materialId);
@@ -386,8 +347,8 @@ export function RfqCreateWizard() {
       return;
     }
 
-    void Promise.all([loadMaterials(), loadProductTypeOptions(), loadFinishOptions()]);
-  }, [open, loadFinishOptions, loadMaterials, loadProductTypeOptions]);
+    void Promise.all([loadMaterials(), loadProductTypeOptions()]);
+  }, [open, loadMaterials, loadProductTypeOptions]);
 
   useEffect(() => {
     if (isTablesType || isTableTopsType || !selectedMaterial) {
@@ -638,7 +599,7 @@ export function RfqCreateWizard() {
     const material = availableMaterialsForType.find((item) => item.id === materialId);
     if (!material) return;
 
-    const materialFinishOptions = buildRequestFinishOptions(material);
+    const materialFinishOptions = normalizeFinishOptions(material.finish_options);
 
     updateData('material_id', materialId);
     updateData('material_name', material.name);
@@ -1250,16 +1211,13 @@ export function RfqCreateWizard() {
                           ))}
                         </SelectContent>
                       </Select>
-                      {finishOptionsError && <p className="text-destructive text-xs">{finishOptionsError}</p>}
                       {errors.finish && <p className="text-destructive text-xs">{errors.finish[0]}</p>}
                     </div>
                   )}
 
                   {selectedMaterial && !isTableTopsType && availableFinishOptions.length === 0 && (
                     <p className="text-muted-foreground text-xs">
-                      {finishOptionsLoading
-                        ? 'Loading finishes…'
-                        : 'No active finishes available. Add finishes under Management > Finishes.'}
+                      No finishes set for this material. Add them under Management &gt; Materials.
                     </p>
                   )}
                 </>
@@ -1755,7 +1713,8 @@ export function RfqCreateWizard() {
 
               {showNotesField && (
                 <div className="space-y-1.5">
-                  <Label htmlFor="notes">Notes {isNotesRequired ? '*' : '(optional)'}</Label>
+                  <Label htmlFor="notes">Internal notes {isNotesRequired ? '*' : '(optional)'}</Label>
+                  <p className="text-muted-foreground text-xs">For Sempre staff only, never shown to the supplier.</p>
                   <Textarea
                     id="notes"
                     rows={3}

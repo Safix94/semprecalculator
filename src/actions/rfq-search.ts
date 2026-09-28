@@ -301,7 +301,7 @@ function rowToResult(row: RfqSearchRow): RfqSearchResult {
 }
 
 export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: RfqSearchResponse } | { error: string }> {
-  await requireRole('sales');
+  const user = await requireRole('sales');
 
   const pageSize = Math.min(parsePositiveInteger(input.pageSize, DEFAULT_PAGE_SIZE), 100);
   const requestedPage = parsePositiveInteger(input.page, 1);
@@ -312,7 +312,10 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
   const finishFilter = normalizeText(input.finish);
   const modelFilter = normalizeText(input.model);
   const shapeFilter = normalizeText(input.shape);
-  const statusFilter = getString(input.status);
+  // 'deleted' is a pseudo-status: soft-deleted RFQs, admins only.
+  const rawStatusFilter = getString(input.status);
+  const showDeleted = rawStatusFilter === 'deleted' && user.role === 'admin';
+  const statusFilter = rawStatusFilter === 'deleted' ? null : rawStatusFilter;
   const createdFrom = getString(input.createdFrom);
   const createdTo = getString(input.createdTo);
   const lengthFilter = parseNumberFilter(input.length);
@@ -341,6 +344,7 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
       if (statusFilter) {
         query = query.eq('status', statusFilter);
       }
+      query = showDeleted ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null);
       if (shapeFilter) {
         query = query.ilike('shape', `%${shapeFilter}%`);
       }
@@ -463,6 +467,7 @@ export async function searchRfqs(input: SearchRfqsInput = {}): Promise<{ data: R
       if (statusFilter) {
         query = query.eq('status', statusFilter);
       }
+      query = showDeleted ? query.not('deleted_at', 'is', null) : query.is('deleted_at', null);
       if (shapeFilter) {
         query = query.ilike('shape', `%${shapeFilter}%`);
       }
@@ -603,6 +608,7 @@ export async function findSimilarRfqs(
       .from('rfqs')
       .select(RFQ_SEARCH_SELECT)
       .order('created_at', { ascending: false })
+      .is('deleted_at', null)
       .limit(SIMILAR_RFQS_CANDIDATE_LIMIT);
 
     if (productTypeFilter) {

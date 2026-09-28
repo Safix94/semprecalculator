@@ -1,5 +1,6 @@
 import { getSupplierTranslations, normalizeSupplierLanguage, SUPPLIER_LANGUAGE_LOCALES } from '@/lib/supplier-language';
 import { formatSupplierInputAmount } from '@/lib/currency';
+import { NATUURSTEEN_VOS_FORMULA_VERSION } from '@/lib/natuursteen-vos-pricing';
 import type { SupplierLanguage, SupplierQuoteView } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -13,6 +14,8 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
   const t = getSupplierTranslations(normalizedLanguage);
   const volumeValue = Number(quote.volume_m3).toFixed(3);
   const isAutomaticQuote = quote.pricing_formula_version === 'sanne_vos_bluestone_v1';
+  // Natuursteen Vos submits a price without shipment dimensions, so there is no volume to show.
+  const showVolume = quote.pricing_formula_version !== NATUURSTEEN_VOS_FORMULA_VERSION;
   const isConvertedQuote = Boolean(
     quote.supplier_input_currency &&
       quote.supplier_input_currency !== 'EUR' &&
@@ -54,10 +57,12 @@ export function SupplierQuoteReadOnly({ quote, language }: SupplierQuoteReadOnly
                   </dd>
                 )}
               </div>
-              <div>
-                <dt className="sempre-info-label">{t.volumeM3}</dt>
-                <dd className="sempre-info-value">{volumeValue}</dd>
-              </div>
+              {showVolume && (
+                <div>
+                  <dt className="sempre-info-label">{t.volumeM3}</dt>
+                  <dd className="sempre-info-value">{volumeValue}</dd>
+                </div>
+              )}
             </>
           )}
           {quote.lead_time_days && (

@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { submitAutomaticSanneVosQuote } from '@/actions/quote';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -15,7 +14,6 @@ interface SupplierAutomaticQuoteFormProps {
   rfqId: string;
   token: string;
   initialValues?: {
-    leadTimeDays: number | null;
     comment: string | null;
   } | null;
   isUpdate?: boolean;
@@ -41,7 +39,6 @@ export function SupplierAutomaticQuoteForm({
 
     const form = new FormData(e.currentTarget);
     const input = {
-      leadTimeDays: form.get('leadTimeDays') ? Number(form.get('leadTimeDays')) : null,
       comment: (form.get('comment') as string) || null,
     };
 
@@ -85,7 +82,7 @@ export function SupplierAutomaticQuoteForm({
       <CardHeader>
         <CardTitle>{isUpdate ? t.updateQuote : t.submitQuote}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Sempre will calculate this Bluestone quote automatically. You only need to add lead time or a comment if relevant.
+          Sempre will calculate this Bluestone quote automatically. You only need to add a comment if relevant.
         </p>
       </CardHeader>
       <CardContent>
@@ -95,20 +92,6 @@ export function SupplierAutomaticQuoteForm({
               No base price or volume is required for this request.
             </AlertDescription>
           </Alert>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="leadTimeDays">{t.leadTimeOptional}</Label>
-            <Input
-              id="leadTimeDays"
-              name="leadTimeDays"
-              type="number"
-              min="1"
-              defaultValue={initialValues?.leadTimeDays ?? ''}
-            />
-            {typeof errors === 'object' && errors?.leadTimeDays && (
-              <p className="text-xs text-destructive">{errors.leadTimeDays[0]}</p>
-            )}
-          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="comment">{t.commentOptional}</Label>

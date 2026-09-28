@@ -42,6 +42,8 @@ interface DashboardRfqTableProps {
   statusFilter: RfqStatus | null;
   statusOptions: RfqStatus[];
   searchQuery: string | null;
+  /** RFQ ids with internal chat messages the current user has not read yet. */
+  unreadInternalRfqIds?: string[];
 }
 
 const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
@@ -97,6 +99,7 @@ export function DashboardRfqTable({
   statusFilter,
   statusOptions,
   searchQuery,
+  unreadInternalRfqIds = [],
 }: DashboardRfqTableProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -104,6 +107,7 @@ export function DashboardRfqTable({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
+  const unreadInternalSet = useMemo(() => new Set(unreadInternalRfqIds), [unreadInternalRfqIds]);
   const selectedProductTypeValue =
     productTypeFilter && productTypes.includes(productTypeFilter) ? productTypeFilter : 'all';
   const selectedSupplierValue = supplierFilter && supplierOptions.some((supplier) => supplier.id === supplierFilter)
@@ -337,7 +341,14 @@ export function DashboardRfqTable({
                   tabIndex={0}
                 >
                   <TableCell title={[rfq.product_type, rfq.model, rfq.shape].filter(Boolean).join(' | ') || '-'}>
-                    <div className="truncate font-semibold">{rfq.product_type || '-'}</div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-semibold">{rfq.product_type || '-'}</span>
+                      {unreadInternalSet.has(rfq.id) && (
+                        <span className="shrink-0 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
+                          New message
+                        </span>
+                      )}
+                    </div>
                     {rfq.model && <div className="truncate text-xs text-muted-foreground">Model: {rfq.model}</div>}
                     <div className="truncate text-xs text-muted-foreground">{rfq.shape}</div>
                   </TableCell>

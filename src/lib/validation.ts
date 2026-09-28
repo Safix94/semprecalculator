@@ -267,6 +267,15 @@ export const submitQuoteSchema = z.object({
   comment: z.string().max(2000).optional().nullable(),
 });
 
+// Natuursteen Vos only quotes a purchase price; no shipment dimensions are needed.
+export const submitPriceOnlyQuoteSchema = z.object({
+  basePrice: z.coerce
+    .number()
+    .positive('Base price must be positive'),
+  leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
+  comment: z.string().max(2000).optional().nullable(),
+});
+
 export const submitAutomaticQuoteSchema = z.object({
   leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
   comment: z.string().max(2000).optional().nullable(),
@@ -284,4 +293,5 @@ type UpdateRfqDetailsSchemaInput = z.infer<typeof updateRfqDetailsSchema>;
 export type UpdateRfqDetailsInput = Omit<UpdateRfqDetailsSchemaInput, 'shape'>;
 export type SubmitQuoteInput = z.infer<typeof submitQuoteSchema>;
 export type SubmitAutomaticQuoteInput = z.infer<typeof submitAutomaticQuoteSchema>;
+export type SubmitPriceOnlyQuoteInput = z.infer<typeof submitPriceOnlyQuoteSchema>;
 export type UpdateRfqNotesInput = z.infer<typeof updateRfqNotesSchema>;

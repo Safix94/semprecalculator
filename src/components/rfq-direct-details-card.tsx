@@ -148,19 +148,12 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
     <div className="space-y-4">
       <RfqDetailsOverview rfq={rfq} invites={invites} />
 
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-3">
+      {editing && canEditRfqDetails ? (
+        <Card>
+          <CardHeader>
             <CardTitle>Edit details</CardTitle>
-            {canEditRfqDetails && !editing && (
-              <Button type="button" variant="outline" size="sm" onClick={startEdit}>
-                Edit
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent>
-          {editing && canEditRfqDetails ? (
+          </CardHeader>
+          <CardContent>
             <div className="rounded-lg border bg-muted/25 p-3">
               <div className={`grid gap-3 ${isRound ? 'md:grid-cols-3' : 'md:grid-cols-4'}`}>
                 {isTablesType && (
@@ -222,13 +215,20 @@ export function RfqDirectDetailsCard({ rfq, userRole, invites = [] }: RfqDirectD
                 </Button>
               </div>
             </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Open edit mode to adjust the model or dimensions before sending the request to suppliers.</p>
-          )}
-
-          {result && <p className="mt-3 text-sm text-chart-2">{result}</p>}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : (
+        (canEditRfqDetails || result) && (
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            {result && <p className="text-sm text-chart-2">{result}</p>}
+            {canEditRfqDetails && (
+              <Button type="button" variant="outline" size="sm" onClick={startEdit}>
+                Edit model / dimensions
+              </Button>
+            )}
+          </div>
+        )
+      )}
     </div>
   );
 }

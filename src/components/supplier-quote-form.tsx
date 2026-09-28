@@ -19,12 +19,13 @@ interface SupplierQuoteFormProps {
   initialValues?: {
     basePrice: number;
     volumeM3: number;
-    leadTimeDays: number | null;
     comment: string | null;
   } | null;
   isUpdate?: boolean;
   language: SupplierLanguage;
   quotePriceCurrency: QuotePriceCurrency;
+  /** Natuursteen Vos: only a purchase price is asked, no shipment dimensions. */
+  priceOnly?: boolean;
   /** Current admin-configured rates; fall back to the pinned defaults. */
   usdPerEurRate?: number;
   idrPerEurRate?: number;
@@ -50,6 +51,7 @@ export function SupplierQuoteForm({
   isUpdate = false,
   language,
   quotePriceCurrency,
+  priceOnly = false,
   usdPerEurRate = USD_PER_EUR_RATE,
   idrPerEurRate = IDR_PER_EUR_RATE,
 }: SupplierQuoteFormProps) {
@@ -95,14 +97,16 @@ export function SupplierQuoteForm({
     setErrors(null);
 
     const form = new FormData(e.currentTarget);
-    const input = {
-      basePrice: Number(form.get('basePrice')),
-      lengthCm: Number(form.get('lengthCm')),
-      widthCm: Number(form.get('widthCm')),
-      heightCm: Number(form.get('heightCm')),
-      leadTimeDays: form.get('leadTimeDays') ? Number(form.get('leadTimeDays')) : null,
-      comment: (form.get('comment') as string) || null,
-    };
+    const comment = (form.get('comment') as string) || null;
+    const input = priceOnly
+      ? { basePrice: Number(form.get('basePrice')), comment }
+      : {
+          basePrice: Number(form.get('basePrice')),
+          lengthCm: Number(form.get('lengthCm')),
+          widthCm: Number(form.get('widthCm')),
+          heightCm: Number(form.get('heightCm')),
+          comment,
+        };
 
     const result = await submitQuote(rfqId, token, input);
 
@@ -145,11 +149,11 @@ export function SupplierQuoteForm({
     <Card>
       <CardHeader>
         <CardTitle>{isUpdate ? t.updateQuote : t.submitQuote}</CardTitle>
-        <p className="text-sm text-muted-foreground">{t.dimensionsHelp}</p>
+        <p className="text-sm text-muted-foreground">{priceOnly ? t.priceOnlyHelp : t.dimensionsHelp}</p>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className={priceOnly ? 'grid gap-4' : 'grid gap-4 sm:grid-cols-2'}>
             <div className="space-y-1.5">
               <Label htmlFor="basePrice" className="sempre-label">{basePriceLabel}</Label>
               <Input
@@ -177,6 +181,7 @@ export function SupplierQuoteForm({
                 <p className="text-destructive text-xs">{errors.basePrice[0]}</p>
               )}
             </div>
+            {!priceOnly && (
             <div className="rounded-lg border bg-muted/30 p-3">
               <div className="sempre-label">{t.calculatedVolumeM3}</div>
               <div className="mt-1 text-xl font-bold tracking-[-0.01em]">
@@ -188,8 +193,10 @@ export function SupplierQuoteForm({
                 </p>
               )}
             </div>
+            )}
           </div>
 
+          {!priceOnly && (
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
               <Label htmlFor="lengthCm" className="sempre-label">{t.lengthCmRequired}</Label>
@@ -243,17 +250,7 @@ export function SupplierQuoteForm({
               )}
             </div>
           </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="leadTimeDays" className="sempre-label">{t.leadTimeOptional}</Label>
-            <Input
-              id="leadTimeDays"
-              name="leadTimeDays"
-              type="number"
-              min="1"
-              defaultValue={initialValues?.leadTimeDays ?? ''}
-            />
-          </div>
+          )}
 
           <div className="space-y-1.5">
             <Label htmlFor="comment" className="sempre-label">{t.commentOptional}</Label>
@@ -272,8 +269,10 @@ export function SupplierQuoteForm({
             </Alert>
           )}
 
-          <div className="flex items-center justify-between gap-4 border-t pt-4">
-            <span className="text-xs text-muted-foreground">{t.calculatedVolumeM3}: {calculatedVolumeM3 === null ? '—' : `${formatVolume(calculatedVolumeM3)} m³`}</span>
+          <div className={priceOnly ? 'flex items-center justify-end gap-4 border-t pt-4' : 'flex items-center justify-between gap-4 border-t pt-4'}>
+            {!priceOnly && (
+              <span className="text-xs text-muted-foreground">{t.calculatedVolumeM3}: {calculatedVolumeM3 === null ? '—' : `${formatVolume(calculatedVolumeM3)} m³`}</span>
+            )}
             <Button type="submit" disabled={loading} className="min-w-[180px]">
               {loading ? t.submitting : isUpdate ? t.updateQuote : t.submitQuote}
             </Button>

@@ -12,7 +12,7 @@ import {
   hashToken,
   isTokenHashingConfigError,
 } from '@/lib/tokens';
-import { INVITE_EXPIRATION_MS } from '@/lib/supplier-invite';
+import { INVITE_EXPIRATION_MS, recordIssuedInviteToken } from '@/lib/supplier-invite';
 import { logAuditEvent } from '@/actions/audit';
 import type { RfqComment, RfqInvite, RfqStatus, Supplier } from '@/types';
 
@@ -131,6 +131,8 @@ async function refreshInviteToken(params: {
       error: `Could not refresh supplier link: ${updateError?.message ?? 'Unknown error'}`,
     };
   }
+
+  await recordIssuedInviteToken({ inviteId: invite.id, tokenHash, expiresAt });
 
   return {
     data: {

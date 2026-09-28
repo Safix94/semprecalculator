@@ -29,7 +29,10 @@ export type AuditAction =
   | 'SUPPLIER_LINK_SENT'
   | 'EMAIL_SENT'
   | 'AUTOMATIC_QUOTE_FAILED'
-  | 'USER_CREATED';
+  | 'USER_CREATED'
+  | 'RFQ_DELETED'
+  | 'RFQ_RESTORED'
+  | 'INTERNAL_CHAT_MESSAGE';
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';
 export type UsageEnvironment = 'Indoor' | 'Outdoor';
@@ -132,6 +135,17 @@ export interface Rfq {
   status: RfqStatus;
   created_at: string;
   sent_at: string | null;
+  deleted_at?: string | null;
+  deleted_by?: string | null;
+}
+
+export interface RfqInternalMessage {
+  id: string;
+  rfq_id: string;
+  author_id: string;
+  author_email: string | null;
+  body: string;
+  created_at: string;
 }
 
 export interface RfqAttachment {
@@ -285,7 +299,6 @@ export type SupplierRfqView = Pick<
   | 'shape'
   | 'model'
   | 'usage_environment'
-  | 'notes'
   | 'status'
 > & { attachments: RfqAttachment[] };
 

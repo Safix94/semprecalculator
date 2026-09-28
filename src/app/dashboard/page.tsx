@@ -28,7 +28,6 @@ const statusOptions: RfqStatus[] = [
   'waiting_for_technical_drawing',
   'quotes_received',
   'sent_to_pricing_crm',
-  'closed',
 ];
 
 function getStringParam(value?: string | string[]) {
@@ -75,6 +74,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     supabase
       .from('rfqs')
       .select('id', { count: 'exact', head: true })
+      .is('deleted_at', null)
       .gte('created_at', startOfMonth.toISOString()),
   ]);
 
@@ -120,6 +120,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       let rfqsQuery = supabase
         .from('rfqs')
         .select('*')
+        .neq('status', 'closed')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .range(from, to);
       if (productTypeFilter) {
@@ -143,7 +145,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       return (rfqsData ?? []) as Rfq[];
     };
 
-    let countQuery = supabase.from('rfqs').select('id', { count: 'exact', head: true });
+    let countQuery = supabase
+      .from('rfqs')
+      .select('id', { count: 'exact', head: true })
+      .neq('status', 'closed')
+      .is('deleted_at', null);
     if (productTypeFilter) {
       countQuery = countQuery.eq('product_type', productTypeFilter);
     }
@@ -180,6 +186,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   const invitesByRfqId: Record<string, DashboardRfqInvite[]> = {};
   const rfqIds = rfqs.map((rfq) => rfq.id);
+  const unreadInternalRfqIds: string[] = [];
 
   // Stage C: both depend only on the fetched RFQ page — run them in parallel.
   await Promise.all([
@@ -209,6 +216,40 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           invitesByRfqId[typedInvite.rfq_id] = [...(invitesByRfqId[typedInvite.rfq_id] ?? []), typedInvite];
         });
       }
+    })(),
+    (async () => {
+      if (rfqIds.length === 0) {
+        return;
+      }
+
+      // Unread = a message from someone else newer than this user's last visit.
+      const [{ data: messageRows, error: messageError }, { data: readRows }] = await Promise.all([
+        supabase
+          .from('rfq_internal_messages')
+          .select('rfq_id, created_at')
+          .in('rfq_id', rfqIds)
+          .neq('author_id', user.id),
+        supabase
+          .from('rfq_internal_message_reads')
+          .select('rfq_id, last_read_at')
+          .in('rfq_id', rfqIds)
+          .eq('user_id', user.id),
+      ]);
+
+      if (messageError) {
+        console.error('Failed to fetch internal messages for badges:', messageError.message);
+        return;
+      }
+
+      const lastReadByRfqId = new Map((readRows ?? []).map((row) => [row.rfq_id, row.last_read_at as string]));
+      const unread = new Set<string>();
+      (messageRows ?? []).forEach((row) => {
+        const lastRead = lastReadByRfqId.get(row.rfq_id);
+        if (!lastRead || new Date(row.created_at) > new Date(lastRead)) {
+          unread.add(row.rfq_id);
+        }
+      });
+      unreadInternalRfqIds.push(...unread);
     })(),
     (async () => {
       if (creatorIds.length === 0) {
@@ -245,13 +286,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       <div className="mb-[18px] flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="sempre-page-title">Price requests</h1>
-          <p className="sempre-page-subtitle">Overview of all RFQs · each request is sent to one supplier</p>
+          <p className="sempre-page-subtitle">Open RFQs · closed requests are in RFQ history</p>
         </div>
         <div className="flex items-end gap-3">
           <div className="text-right">
             <div className="sempre-label">Open</div>
             <div className="text-[19px] font-bold text-[oklch(0.42_0.07_150)]">
-              {rfqs.filter((rfq) => rfq.status !== 'closed').length}
+              {totalCount}
             </div>
           </div>
           <div className="h-8 w-px bg-border" />
@@ -285,6 +326,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             statusFilter={statusFilter}
             statusOptions={statusOptions}
             searchQuery={searchQuery}
+            unreadInternalRfqIds={unreadInternalRfqIds}
           />
         </CardContent>
       </Card>

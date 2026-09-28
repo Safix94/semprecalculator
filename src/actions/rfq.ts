@@ -24,7 +24,7 @@ import {
   sendSupplierRfqClosedEmail,
 } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
-import { INVITE_EXPIRATION_MS } from '@/lib/supplier-invite';
+import { INVITE_EXPIRATION_MS, recordIssuedInviteToken } from '@/lib/supplier-invite';
 import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
 import { autoQuoteSanneVosInvites, runSanneVosAutomaticQuoteForInvite } from '@/lib/sanne-vos-auto-quote';
 import {
@@ -194,17 +194,55 @@ async function replaceRfqInvitesWithServiceRole(
       return inviteSelectionResult;
     }
 
-    const { error: deleteError } = await supabase
+    // Keep invites of suppliers that stay selected so links already emailed keep working.
+    const { data: existingInvites, error: existingError } = await supabase
       .from('rfq_invites')
-      .delete()
+      .select('id, supplier_id, invite_part')
       .eq('rfq_id', rfqId);
 
-    if (deleteError) {
-      return { error: `Failed to replace invites: ${deleteError.message}` };
+    if (existingError) {
+      return { error: `Failed to replace invites: ${existingError.message}` };
+    }
+
+    const selectedRows = new Map(inviteSelectionResult.rows.map((row) => [row.supplier_id, row]));
+    const existingBySupplier = new Map((existingInvites ?? []).map((invite) => [invite.supplier_id, invite]));
+
+    const removedInviteIds = (existingInvites ?? [])
+      .filter((invite) => !selectedRows.has(invite.supplier_id))
+      .map((invite) => invite.id);
+
+    if (removedInviteIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('rfq_invites')
+        .delete()
+        .in('id', removedInviteIds);
+
+      if (deleteError) {
+        return { error: `Failed to replace invites: ${deleteError.message}` };
+      }
+    }
+
+    for (const row of inviteSelectionResult.rows) {
+      const existing = existingBySupplier.get(row.supplier_id);
+      if (!existing || existing.invite_part === row.invite_part) continue;
+
+      const { error: updateError } = await supabase
+        .from('rfq_invites')
+        .update({ invite_part: row.invite_part })
+        .eq('id', existing.id);
+
+      if (updateError) {
+        return { error: `Failed to replace invites: ${updateError.message}` };
+      }
+    }
+
+    const newRows = inviteSelectionResult.rows.filter((row) => !existingBySupplier.has(row.supplier_id));
+    if (newRows.length === 0) {
+      return { data: { created: inviteSelectionResult.rows.length } };
     }
 
     const expiresAt = new Date(Date.now() + INVITE_EXPIRATION_MS).toISOString();
-    const inviteInserts = inviteSelectionResult.rows.map((row) => ({
+    const inviteInserts = newRows.map((row) => ({
       rfq_id: rfqId,
       supplier_id: row.supplier_id,
       invite_part: row.invite_part,
@@ -1097,6 +1135,8 @@ export async function sendRfq(rfqId: string) {
           };
         }
 
+        await recordIssuedInviteToken({ inviteId: invite.id, tokenHash, expiresAt });
+
         await logAuditEvent({
           actorType: user.role,
           actorId: user.id,
@@ -1559,7 +1599,7 @@ export async function closeRfq(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(
-      'id, status, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, notes, attachments:rfq_attachments(file_name)'
+      'id, status, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, attachments:rfq_attachments(file_name)'
     )
     .eq('id', rfqId)
     .single();
@@ -1679,7 +1719,6 @@ export async function closeRfq(rfqId: string) {
                 quantity: Number(rfq.quantity ?? 1),
                 model: rfq.model,
                 usageEnvironment: rfq.usage_environment,
-                notes: rfq.notes,
                 attachmentNames,
               },
               quote: quote
@@ -1782,4 +1821,92 @@ export async function reopenRfq(rfqId: string) {
   revalidatePath('/dashboard');
   revalidatePath(`/dashboard/rfqs/${rfqId}`);
   return { success: true, status: reopenedStatus };
+}
+
+/**
+ * Soft delete: hides the RFQ everywhere but keeps quotes, messages and audit
+ * trail. Allowed for admins and for the sales user who created the request.
+ */
+export async function deleteRfq(rfqId: string) {
+  const user = await requireRole('sales');
+  const supabase = createServiceRoleClient();
+
+  const { data: rfq, error: rfqError } = await supabase
+    .from('rfqs')
+    .select('id, created_by, status, deleted_at')
+    .eq('id', rfqId)
+    .single();
+
+  if (rfqError || !rfq) {
+    return { error: 'RFQ not found' };
+  }
+
+  if (user.role !== 'admin' && rfq.created_by !== user.id) {
+    return { error: 'Only the requester or an admin can delete this request' };
+  }
+
+  if (rfq.deleted_at) {
+    return { success: true };
+  }
+
+  const { error } = await supabase
+    .from('rfqs')
+    .update({ deleted_at: new Date().toISOString(), deleted_by: user.id })
+    .eq('id', rfqId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  // Deleted requests must not stay reachable through supplier links.
+  const { error: revokeError } = await supabase
+    .from('rfq_invites')
+    .update({ revoked_at: new Date().toISOString() })
+    .eq('rfq_id', rfqId)
+    .is('revoked_at', null);
+
+  if (revokeError) {
+    console.error('deleteRfq: failed to revoke invites.', { rfqId, error: revokeError.message });
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_DELETED',
+    entityType: 'rfq',
+    entityId: rfqId,
+    metadata: { status: rfq.status },
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/history');
+  return { success: true };
+}
+
+/** Admin only: bring a soft-deleted RFQ back. Supplier links stay revoked until resent. */
+export async function restoreRfq(rfqId: string) {
+  const user = await requireRole('admin');
+  const supabase = createServiceRoleClient();
+
+  const { error } = await supabase
+    .from('rfqs')
+    .update({ deleted_at: null, deleted_by: null })
+    .eq('id', rfqId);
+
+  if (error) {
+    return { error: error.message };
+  }
+
+  await logAuditEvent({
+    actorType: user.role,
+    actorId: user.id,
+    action: 'RFQ_RESTORED',
+    entityType: 'rfq',
+    entityId: rfqId,
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath('/dashboard/history');
+  revalidatePath(`/dashboard/rfqs/${rfqId}`);
+  return { success: true };
 }

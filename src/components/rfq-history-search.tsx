@@ -43,6 +43,8 @@ interface RfqHistorySearchProps {
   filters: RfqHistoryFilters;
   productTypes: string[];
   suppliers: Pick<Supplier, 'id' | 'name'>[];
+  /** Admins can list soft-deleted requests (status filter "Deleted"). */
+  canViewDeleted?: boolean;
 }
 
 const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
@@ -109,7 +111,13 @@ function sanitizeFilters(filters: RfqHistoryFilters): RfqHistoryFilters {
   ) as RfqHistoryFilters;
 }
 
-export function RfqHistorySearch({ search, filters, productTypes, suppliers }: RfqHistorySearchProps) {
+export function RfqHistorySearch({
+  search,
+  filters,
+  productTypes,
+  suppliers,
+  canViewDeleted = false,
+}: RfqHistorySearchProps) {
   const router = useRouter();
   const [form, setForm] = useState<RfqHistoryFilters>(filters);
 
@@ -265,6 +273,7 @@ export function RfqHistorySearch({ search, filters, productTypes, suppliers }: R
                         {statusLabels[status].label}
                       </SelectItem>
                     ))}
+                    {canViewDeleted && <SelectItem value="deleted">Deleted</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>

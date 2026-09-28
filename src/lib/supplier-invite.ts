@@ -25,6 +25,31 @@ export function maskSupplierToken(token: string): string {
   return `${token.slice(0, 6)}...${token.slice(-4)} (len=${token.length})`;
 }
 
+/**
+ * Remember an issued token so its link keeps working after later resends.
+ * rfq_invites.token_hash only holds the latest token; older ones live here.
+ * Failure is logged, not thrown: the latest token still validates via rfq_invites.
+ */
+export async function recordIssuedInviteToken(params: {
+  inviteId: string;
+  tokenHash: string;
+  expiresAt: string;
+}): Promise<void> {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from('rfq_invite_tokens').insert({
+    invite_id: params.inviteId,
+    token_hash: params.tokenHash,
+    expires_at: params.expiresAt,
+  });
+
+  if (error) {
+    console.error('Failed to record issued supplier invite token:', {
+      inviteId: params.inviteId,
+      reason: error.message,
+    });
+  }
+}
+
 export interface SupplierInviteRecord {
   id: string;
   supplier_id: string;
@@ -176,7 +201,36 @@ export async function resolveSupplierInviteByToken(
     inviteQuery = inviteQuery.is('revoked_at', null);
   }
 
-  const { data: invite, error: inviteError } = await inviteQuery.single();
+  const latestTokenResult = await inviteQuery.single();
+  let invite: unknown = latestTokenResult.data;
+  let inviteError = latestTokenResult.error;
+  let tokenExpiresAt: string | null = null;
+
+  // Not the latest token: links from earlier emails stay valid until their own expiry.
+  if (inviteError || !invite) {
+    const { data: issuedToken } = await supabase
+      .from('rfq_invite_tokens')
+      .select('invite_id, expires_at')
+      .eq('token_hash', tokenHash)
+      .maybeSingle();
+
+    if (issuedToken) {
+      let issuedInviteQuery = supabase
+        .from('rfq_invites')
+        .select(selectColumns)
+        .eq('id', issuedToken.invite_id)
+        .eq('rfq_id', rfqId);
+
+      if (!distinguishRevoked) {
+        issuedInviteQuery = issuedInviteQuery.is('revoked_at', null);
+      }
+
+      const issuedInviteResult = await issuedInviteQuery.single();
+      invite = issuedInviteResult.data;
+      inviteError = issuedInviteResult.error;
+      tokenExpiresAt = issuedToken.expires_at as string;
+    }
+  }
 
   if (inviteError || !invite) {
     const diagnostics = await getInviteLookupDiagnostics(supabase, rfqId, tokenHash);
@@ -201,12 +255,13 @@ export async function resolveSupplierInviteByToken(
     return { error: notFoundMessage, reason: 'revoked', revokedInvite: inviteRecord };
   }
 
-  if (new Date(inviteRecord.expires_at) < new Date()) {
+  const expiresAt = tokenExpiresAt ?? inviteRecord.expires_at;
+  if (new Date(expiresAt) < new Date()) {
     console.info(`${logPrefix}: invite expired.`, {
       rfqId,
       inviteId: inviteRecord.id,
       supplierId: inviteRecord.supplier_id,
-      expiresAt: inviteRecord.expires_at,
+      expiresAt,
       now: new Date().toISOString(),
     });
     return { error: 'This link has expired' };

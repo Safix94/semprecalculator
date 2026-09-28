@@ -4,7 +4,7 @@ import { after } from 'next/server';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { resolveSupplierInviteByToken } from '@/lib/supplier-invite';
-import { submitAutomaticQuoteSchema, submitQuoteSchema } from '@/lib/validation';
+import { submitAutomaticQuoteSchema, submitPriceOnlyQuoteSchema, submitQuoteSchema } from '@/lib/validation';
 import { calculateSupplierPricing, calculateVolumeM3FromCm } from '@/lib/pricing';
 import {
   convertSupplierBasePriceToEur,
@@ -14,9 +14,14 @@ import { getFxRates } from '@/lib/fx-rates';
 import { sendSalesQuoteReceivedEmail, sendSupplierQuoteConfirmationEmail } from '@/lib/mailer';
 import { getSupplierRecipientEmails } from '@/lib/email-recipients';
 import { getEffectiveSupplierPricingProfile } from './supplier-pricing';
-import { generateSanneVosAutomaticQuote } from '@/lib/sanne-vos-auto-quote';
+import { generateSanneVosAutomaticQuote, resolveSanneVosFinishOption } from '@/lib/sanne-vos-auto-quote';
+import {
+  NATUURSTEEN_VOS_FORMULA_VERSION,
+  calculateNatuursteenVosPricing,
+  isNatuursteenVosSupplierName,
+} from '@/lib/natuursteen-vos-pricing';
 import { logAuditEvent } from './audit';
-import type { SubmitAutomaticQuoteInput, SubmitQuoteInput } from '@/lib/validation';
+import type { SubmitAutomaticQuoteInput, SubmitPriceOnlyQuoteInput, SubmitQuoteInput } from '@/lib/validation';
 import type {
   RfqQuote,
   SupplierContactView,
@@ -28,7 +33,7 @@ import type {
 // Supplier-safe projections: never select internal pricing, margins,
 // customer data or token hashes into supplier-facing responses.
 const SUPPLIER_RFQ_COLUMNS =
-  'id, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, notes, status';
+  'id, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, status';
 const SUPPLIER_ATTACHMENT_COLUMNS = 'id, rfq_id, storage_path, file_name, mime_type, created_at';
 const SUPPLIER_QUOTE_COLUMNS =
   'id, base_price, volume_m3, lead_time_days, comment, submitted_at, pricing_formula_version, supplier_input_price, supplier_input_currency';
@@ -135,7 +140,7 @@ export async function validateSupplierToken(rfqId: string, token: string) {
 export async function submitQuote(
   rfqId: string,
   token: string,
-  input: SubmitQuoteInput
+  input: SubmitQuoteInput | SubmitPriceOnlyQuoteInput
 ) {
   const supabase = createServiceRoleClient();
   const normalizedToken = token.trim();
@@ -153,17 +158,38 @@ export async function submitQuote(
   }
 
   const { invite, requestContext } = resolved;
+  const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
+
+  // Natuursteen Vos quotes a purchase price only; it is priced through the Vos
+  // chain (× 1.05 × finish margin × 2.95) instead of the transport-based profile.
+  const isPriceOnlySupplier = isNatuursteenVosSupplierName(inviteSupplier?.name);
 
   // Validate input
-  const parsed = submitQuoteSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.flatten().fieldErrors };
+  let basePrice: number;
+  let leadTimeDays: number | null | undefined;
+  let comment: string | null | undefined;
+  let lengthCm: number | null = null;
+  let widthCm: number | null = null;
+  let heightCm: number | null = null;
+  // Supplier provides dimensions in cm; backend calculates volume in m³ for pricing.
+  // Price-only quotes carry no shipment volume (stored as 0, like Sanne Vos quotes).
+  let volumeM3 = 0;
+
+  if (isPriceOnlySupplier) {
+    const parsed = submitPriceOnlyQuoteSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.flatten().fieldErrors };
+    }
+    ({ basePrice, leadTimeDays, comment } = parsed.data);
+  } else {
+    const parsed = submitQuoteSchema.safeParse(input);
+    if (!parsed.success) {
+      return { error: parsed.error.flatten().fieldErrors };
+    }
+    ({ basePrice, lengthCm, widthCm, heightCm, leadTimeDays, comment } = parsed.data);
+    volumeM3 = calculateVolumeM3FromCm(lengthCm, widthCm, heightCm);
   }
 
-  const { basePrice, lengthCm, widthCm, heightCm, leadTimeDays, comment } = parsed.data;
-  const volumeM3 = calculateVolumeM3FromCm(lengthCm, widthCm, heightCm);
-
-  // Supplier provides dimensions in cm; backend calculates volume in m³ for pricing.
   const { data: rfqForPricing, error: rfqForPricingError } = await supabase
     .from('rfqs')
     .select(`
@@ -187,7 +213,6 @@ export async function submitQuote(
       shape,
       model,
       usage_environment,
-      notes,
       attachments:rfq_attachments(file_name)
     `)
     .eq('id', rfqId)
@@ -196,9 +221,6 @@ export async function submitQuote(
   if (rfqForPricingError || !rfqForPricing) {
     return { error: 'Request not found' };
   }
-
-  // Supplier-level pricing calculation. Supplier dimensions were converted to volumeM3 above.
-  const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
 
   // Closed requests no longer accept quotes, even while the link is valid.
   if (rfqForPricing.status === 'closed') {
@@ -216,42 +238,7 @@ export async function submitQuote(
     return { error: message };
   }
 
-  const pricingProfile = await getEffectiveSupplierPricingProfile(invite.supplier_id);
-  let pricingResult;
-  try {
-    pricingResult = calculateSupplierPricing(convertedBasePrice.basePriceEur, volumeM3, pricingProfile);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
-    console.error('Quote submission blocked: supplier pricing calculation failed.', {
-      rfqId,
-      supplierId: invite.supplier_id,
-      message,
-    });
-    return { error: message };
-  }
-
-  const {
-    shippingCostCalculated,
-    transportCostCalculated,
-    productPriceAfterMargin,
-    costIncludingTransport,
-    transportAdjustedBasePrice,
-    finalPriceCalculated,
-    pricingSettingsSnapshot,
-  } = pricingResult;
-
-  const quotePricingPayload = {
-    shipping_cost_calculated: shippingCostCalculated,
-    transport_cost_calculated: transportCostCalculated,
-    product_price_after_margin: productPriceAfterMargin,
-    cost_including_transport: costIncludingTransport,
-    transport_adjusted_base_price: transportAdjustedBasePrice,
-    truck_multiplier_factor: pricingProfile.transportMode === 'truck' ? pricingProfile.truckMultiplierFactor ?? 1.5 : null,
-    final_price_calculated: finalPriceCalculated,
-    pricing_method: pricingProfile.transportMode,
-    pricing_formula_version: pricingProfile.formulaVersion,
-    retail_multiplier_factor: pricingProfile.retailMultiplierFactor,
-    pricing_settings_snapshot: pricingSettingsSnapshot,
+  const supplierInputPayload = {
     currency: 'EUR',
     supplier_input_price: convertedBasePrice.supplierInputPrice,
     supplier_input_currency: convertedBasePrice.supplierInputCurrency,
@@ -259,6 +246,115 @@ export async function submitQuote(
     supplier_input_exchange_rate_idr_per_eur: convertedBasePrice.supplierInputExchangeRateIdrPerEur,
     supplier_input_converted_at: convertedBasePrice.supplierInputConvertedAt,
   };
+
+  let quotePricingPayload;
+  let shippingCostCalculated = 0;
+  let transportCostCalculated = 0;
+  let productPriceAfterMargin: number;
+  let costIncludingTransport: number;
+  let finalPriceCalculated: number;
+  let pricingAuditMetadata: Record<string, unknown>;
+  // Internal note for sales when a price-only quote had to fall back to the default margin.
+  let pricingInternalNote: string | null = null;
+
+  if (isPriceOnlySupplier) {
+    const finishResolution = await resolveSanneVosFinishOption(supabase, rfqForPricing);
+    const finishResolutionError = 'error' in finishResolution ? finishResolution.error : null;
+    const finishOption = 'finishOption' in finishResolution ? finishResolution.finishOption : null;
+    const finishCode = 'finishCode' in finishResolution ? finishResolution.finishCode : null;
+
+    let pricing;
+    try {
+      pricing = calculateNatuursteenVosPricing({
+        purchasePriceEur: convertedBasePrice.basePriceEur,
+        finishCode,
+        finishName: finishOption?.name ?? rfqForPricing.finish ?? null,
+        finishResolutionError,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
+      console.error('Quote submission blocked: Natuursteen Vos pricing calculation failed.', {
+        rfqId,
+        supplierId: invite.supplier_id,
+        message,
+      });
+      return { error: message };
+    }
+
+    productPriceAfterMargin = pricing.productPriceAfterMargin;
+    costIncludingTransport = pricing.lossAdjustedBasePrice;
+    finalPriceCalculated = pricing.finalPriceCalculated;
+    if (pricing.finishMarginFallback) {
+      pricingInternalNote = `Finish could not be matched to the finish master list (${finishResolutionError}); default margin ${pricing.finishMargin} was applied.`;
+    }
+
+    // Same column usage as Sanne Vos quotes: no transport, loss-adjusted price in
+    // cost_including_transport, retail multiplier 2.95.
+    quotePricingPayload = {
+      shipping_cost_calculated: 0,
+      transport_cost_calculated: 0,
+      product_price_after_margin: pricing.productPriceAfterMargin,
+      cost_including_transport: pricing.lossAdjustedBasePrice,
+      transport_adjusted_base_price: null,
+      truck_multiplier_factor: null,
+      final_price_calculated: pricing.finalPriceCalculated,
+      pricing_method: 'none',
+      pricing_formula_version: NATUURSTEEN_VOS_FORMULA_VERSION,
+      retail_multiplier_factor: pricing.pricingSettingsSnapshot.retailMultiplier as number,
+      pricing_settings_snapshot: pricing.pricingSettingsSnapshot,
+      ...supplierInputPayload,
+    };
+    pricingAuditMetadata = {
+      pricingMethod: 'none',
+      pricingFormulaVersion: NATUURSTEEN_VOS_FORMULA_VERSION,
+      retailMultiplierFactor: pricing.pricingSettingsSnapshot.retailMultiplier,
+      lossAdjustedBasePrice: pricing.lossAdjustedBasePrice,
+      finishCode: pricing.pricingSettingsSnapshot.finishCode,
+      finishMargin: pricing.finishMargin,
+      finishMarginFallback: pricing.finishMarginFallback,
+      finishResolutionError,
+    };
+  } else {
+    const pricingProfile = await getEffectiveSupplierPricingProfile(invite.supplier_id);
+    let pricingResult;
+    try {
+      pricingResult = calculateSupplierPricing(convertedBasePrice.basePriceEur, volumeM3, pricingProfile);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
+      console.error('Quote submission blocked: supplier pricing calculation failed.', {
+        rfqId,
+        supplierId: invite.supplier_id,
+        message,
+      });
+      return { error: message };
+    }
+
+    shippingCostCalculated = pricingResult.shippingCostCalculated;
+    transportCostCalculated = pricingResult.transportCostCalculated;
+    productPriceAfterMargin = pricingResult.productPriceAfterMargin;
+    costIncludingTransport = pricingResult.costIncludingTransport;
+    finalPriceCalculated = pricingResult.finalPriceCalculated;
+
+    quotePricingPayload = {
+      shipping_cost_calculated: pricingResult.shippingCostCalculated,
+      transport_cost_calculated: pricingResult.transportCostCalculated,
+      product_price_after_margin: pricingResult.productPriceAfterMargin,
+      cost_including_transport: pricingResult.costIncludingTransport,
+      transport_adjusted_base_price: pricingResult.transportAdjustedBasePrice,
+      truck_multiplier_factor: pricingProfile.transportMode === 'truck' ? pricingProfile.truckMultiplierFactor ?? 1.5 : null,
+      final_price_calculated: pricingResult.finalPriceCalculated,
+      pricing_method: pricingProfile.transportMode,
+      pricing_formula_version: pricingProfile.formulaVersion,
+      retail_multiplier_factor: pricingProfile.retailMultiplierFactor,
+      pricing_settings_snapshot: pricingResult.pricingSettingsSnapshot,
+      ...supplierInputPayload,
+    };
+    pricingAuditMetadata = {
+      pricingMethod: pricingProfile.transportMode,
+      pricingFormulaVersion: pricingProfile.formulaVersion,
+      retailMultiplierFactor: pricingProfile.retailMultiplierFactor,
+    };
+  }
 
   const { data: existingQuote, error: existingQuoteError } = await supabase
     .from('rfq_quotes')
@@ -338,6 +434,25 @@ export async function submitQuote(
 
   const savedQuote = quote;
 
+  if (pricingInternalNote) {
+    const { error: noteError } = await supabase.from('rfq_comments').insert({
+      rfq_id: rfqId,
+      supplier_id: invite.supplier_id,
+      author_type: 'internal',
+      author_id: invite.supplier_id,
+      author_email: null,
+      body: pricingInternalNote,
+    });
+
+    if (noteError) {
+      console.warn('Failed to record finish-margin fallback as internal note.', {
+        rfqId,
+        quoteId: savedQuote.id,
+        error: noteError.message,
+      });
+    }
+  }
+
   // Mark invite as used
   const { error: markInviteUsedError } = await supabase
     .from('rfq_invites')
@@ -393,9 +508,7 @@ export async function submitQuote(
       productPriceAfterMargin,
       costIncludingTransport,
       finalPriceCalculated,
-      pricingMethod: pricingProfile.transportMode,
-      pricingFormulaVersion: pricingProfile.formulaVersion,
-      retailMultiplierFactor: pricingProfile.retailMultiplierFactor,
+      ...pricingAuditMetadata,
     },
     ip: requestContext.ip,
     userAgent: requestContext.userAgent,
@@ -469,7 +582,6 @@ export async function submitQuote(
             quantity: rfqForPricing.quantity,
             model: rfqForPricing.model,
             usageEnvironment: rfqForPricing.usage_environment,
-            notes: rfqForPricing.notes,
             attachmentNames: attachments
               .map((attachment) => attachment?.file_name)
               .filter((fileName): fileName is string => Boolean(fileName)),
@@ -477,7 +589,7 @@ export async function submitQuote(
           quote: {
             supplierInputPrice: convertedBasePrice.supplierInputPrice,
             supplierInputCurrency: convertedBasePrice.supplierInputCurrency,
-            volumeM3,
+            volumeM3: isPriceOnlySupplier ? null : volumeM3,
             leadTimeDays,
             comment: comment ?? null,
             submittedAt: savedQuote.submitted_at,

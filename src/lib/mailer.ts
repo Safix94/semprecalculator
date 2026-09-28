@@ -10,7 +10,7 @@ import type { SupplierLanguage } from '@/lib/supplier-language';
  */
 
 const BREVO_API_KEY = process.env.BREVO_API_KEY!;
-const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'noreply@sempre.com';
+const BREVO_SENDER_EMAIL = process.env.BREVO_SENDER_EMAIL || 'pricing@sempre.be';
 const BREVO_SENDER_NAME = process.env.BREVO_SENDER_NAME || 'Sempre';
 const FALLBACK_APP_URL = 'http://localhost:3000';
 
@@ -394,13 +394,13 @@ export async function sendSupplierQuoteConfirmationEmail(params: {
     quantity: number;
     model?: string | null;
     usageEnvironment?: 'Indoor' | 'Outdoor' | null;
-    notes?: string | null;
     attachmentNames?: string[];
   };
   quote: {
     supplierInputPrice: number;
     supplierInputCurrency: QuotePriceCurrency;
-    volumeM3: number;
+    /** Null for price-only quotes (Natuursteen Vos), which carry no shipment volume. */
+    volumeM3: number | null;
     leadTimeDays?: number | null;
     comment?: string | null;
     submittedAt: string;
@@ -443,7 +443,6 @@ export async function sendSupplierQuoteConfirmationEmail(params: {
     t.use,
     translateUsageEnvironment(params.rfq.usageEnvironment, language) ?? params.rfq.usageEnvironment
   );
-  addEscapedDetailLine(requestLines, t.notes, params.rfq.notes);
   if (params.rfq.attachmentNames && params.rfq.attachmentNames.length > 0) {
     addEscapedDetailLine(requestLines, t.attachments, params.rfq.attachmentNames.join(', '));
   }
@@ -458,7 +457,9 @@ export async function sendSupplierQuoteConfirmationEmail(params: {
     t.basePrice,
     formatSupplierInputAmount(params.quote.supplierInputPrice, params.quote.supplierInputCurrency)
   );
-  addEscapedDetailLine(quoteLines, t.volumeM3, `${params.quote.volumeM3} m³`);
+  if (params.quote.volumeM3) {
+    addEscapedDetailLine(quoteLines, t.volumeM3, `${params.quote.volumeM3} m³`);
+  }
   if (params.quote.leadTimeDays !== null && params.quote.leadTimeDays !== undefined) {
     addEscapedDetailLine(quoteLines, t.leadTime, `${params.quote.leadTimeDays} ${t.days}`);
   }
@@ -593,7 +594,6 @@ export async function sendSupplierRfqClosedEmail(params: {
     quantity: number;
     model?: string | null;
     usageEnvironment?: 'Indoor' | 'Outdoor' | null;
-    notes?: string | null;
     attachmentNames?: string[];
   };
   quote: {
@@ -640,7 +640,6 @@ export async function sendSupplierRfqClosedEmail(params: {
     t.use,
     translateUsageEnvironment(params.rfq.usageEnvironment, language) ?? params.rfq.usageEnvironment
   );
-  addEscapedDetailLine(requestLines, t.notes, params.rfq.notes);
   if (params.rfq.attachmentNames && params.rfq.attachmentNames.length > 0) {
     addEscapedDetailLine(requestLines, t.attachments, params.rfq.attachmentNames.join(', '));
   }
@@ -656,7 +655,9 @@ export async function sendSupplierRfqClosedEmail(params: {
           ? formatSupplierInputAmount(params.quote.supplierInputPrice, params.quote.supplierInputCurrency)
           : `€${Number(params.quote.basePriceEur).toFixed(2)}`;
       addEscapedDetailLine(quoteLines, t.basePrice, submittedBasePrice);
-      addEscapedDetailLine(quoteLines, t.volumeM3, `${params.quote.volumeM3} m³`);
+      if (params.quote.volumeM3) {
+        addEscapedDetailLine(quoteLines, t.volumeM3, `${params.quote.volumeM3} m³`);
+      }
     }
     if (params.quote.leadTimeDays !== null && params.quote.leadTimeDays !== undefined) {
       addEscapedDetailLine(quoteLines, t.leadTime, `${params.quote.leadTimeDays} ${t.days}`);
@@ -871,6 +872,42 @@ export async function sendInternalSupplierCommentEmail(params: {
           <p><strong>${escapeHtml(params.supplierName)}</strong> posted a new message in the RFQ thread.</p>
           <p><strong>Message:</strong> ${excerpt}</p>
           <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open RFQ thread</a></p>
+        `,
+      });
+
+      return { email, ...emailResult };
+    })
+  );
+
+  return {
+    sent: results.filter((result) => result.success).length,
+    total: results.length,
+    results,
+  };
+}
+
+export async function sendInternalChatMessageEmail(params: {
+  recipients: string[];
+  rfqId: string;
+  rfqTitle: string;
+  authorEmail: string;
+  body: string;
+}) {
+  const link = `${APP_URL}/dashboard/rfqs/${params.rfqId}`;
+  const excerpt = escapeHtml(toExcerpt(params.body));
+  const recipients = dedupeEmails(params.recipients);
+
+  const results = await Promise.all(
+    recipients.map(async (email) => {
+      const emailResult = await sendEmail({
+        to: { email },
+        subject: `Internal message about RFQ-${params.rfqId.slice(0, 8)}`,
+        htmlContent: `
+          <h2>New internal message</h2>
+          <p><strong>${escapeHtml(params.authorEmail)}</strong> wrote about <strong>${escapeHtml(params.rfqTitle)}</strong>:</p>
+          <p>${excerpt}</p>
+          <p style="color:#666;font-size:12px;">Internal chat between sales and pricing, not visible to the supplier.</p>
+          <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">Open request</a></p>
         `,
       });
 

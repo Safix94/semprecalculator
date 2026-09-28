@@ -34,6 +34,9 @@ This is an RFQ (Request for Quotation) platform built with Next.js 16, Supabase,
 - Basis price = `base price × product margin × multiplier`
 - Final price = `basis price + shipping cost`
 - Pricing settings are configurable in `Management → Pricing`; defaults are €7500 container price, 67m³ container volume, 2.1 product margin, 2.4 multiplier
+- Supplier-specific Vos chains (source: Excel "Prijsberekening_nieuwe prijzen_2024_Bel CHD.xlsx", tab "B - vos CHD"): `× 1.05 loss recovery → × finish margin (1.9, or 2.1 when the finish code contains FE/T/V) → × 2.95 retail`, no transport
+  - **Sanne Vos + Bluestone** (`src/lib/sanne-vos-pricing.ts`, `sanne-vos-auto-quote.ts`): fully automatic from m² rates and finish percentages, no supplier input
+  - **Natuursteen Vos**, all materials (`src/lib/natuursteen-vos-pricing.ts`): the supplier enters a purchase price only (no dimensions); that price starts the chain, the finish percentage is not applied; unresolved finish → margin 1.9 + internal note
 
 ### Key Components Structure
 

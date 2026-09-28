@@ -14,6 +14,7 @@ import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvir
 import { normalizeQuotePriceCurrency } from '@/lib/currency';
 import { getFxRates } from '@/lib/fx-rates';
 import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
+import { isNatuursteenVosSupplierName } from '@/lib/natuursteen-vos-pricing';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -102,6 +103,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const isClosed = rfq.status === 'closed';
   const canSubmitOrUpdateQuote = !isClosed && (!invite.used_at || Boolean(existingQuote));
   const isAutomaticSanneVosBluestoneQuote = isSanneVosBluestoneAutoPricingCandidate(supplier?.name, rfq);
+  // Natuursteen Vos quotes a purchase price only; Sempre prices it through the Vos chain.
+  const isPriceOnlyQuote = isNatuursteenVosSupplierName(supplier?.name);
   const initialBasePrice = existingQuote
     ? supplierQuoteCurrency === 'IDR'
       ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
@@ -117,7 +120,6 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
     ? {
         basePrice: initialBasePrice ?? 0,
         volumeM3: Number(existingQuote.volume_m3),
-        leadTimeDays: existingQuote.lead_time_days,
         comment: existingQuote.comment,
       }
     : null;
@@ -219,12 +221,6 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                   <dd className="mt-1 text-sm font-medium">{rfq.thickness} cm</dd>
                 </div>
               )}
-              {rfq.notes && (
-                <div className="sm:col-span-2 lg:col-span-4">
-                  <dt className="sempre-label">{labels.notes}</dt>
-                  <dd className="mt-1 whitespace-pre-wrap text-sm">{rfq.notes}</dd>
-                </div>
-              )}
             </dl>
 
             <SupplierAttachmentList
@@ -254,6 +250,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             isUpdate={Boolean(existingQuote)}
             language={language}
             quotePriceCurrency={supplierQuoteCurrency}
+            priceOnly={isPriceOnlyQuote}
             usdPerEurRate={fxRates.usdPerEur}
             idrPerEurRate={fxRates.idrPerEur}
           />

@@ -39,9 +39,9 @@ function formatEuro(value: number | string | null | undefined) {
   return new Intl.NumberFormat('nl-BE', { style: 'currency', currency: 'EUR' }).format(Number(value));
 }
 
-// Vos-chain quotes (Sanne Vos automatic, Natuursteen Vos price-only) store no supplier volume.
+// Vos-chain, Sanne Juk and no-transport (Jardinico) quotes store no supplier volume (volume_m3 = 0).
 function hasSupplierVolume(quote: RfqQuote | undefined) {
-  return Boolean(quote) && !isVolumelessQuoteFormula(quote?.pricing_formula_version);
+  return Boolean(quote) && !isVolumelessQuoteFormula(quote?.pricing_formula_version) && Number(quote?.volume_m3) > 0;
 }
 
 // Automatic (Sanne Vos) quotes have no supplier input; their base_price is the
@@ -140,6 +140,11 @@ export default async function RfqDetailPage({ params, searchParams }: PageProps)
     bestQuote && hasSupplierVolume(bestQuote) && bestQuote.volume_m3
       ? `${parseFloat(Number(bestQuote.volume_m3).toFixed(3))} m³`
       : null;
+  // Own fabric: the fabric cost Sempre adds to the supplier's price before margin and multiplier.
+  const quoteFabricLabel =
+    bestQuote && bestQuote.fabric_cost_eur && Number(bestQuote.fabric_cost_eur) > 0
+      ? `+ ${formatEuro(bestQuote.fabric_cost_eur)} fabric (${Number(bestQuote.fabric_meters ?? 0).toFixed(2)} m × ${formatEuro(bestQuote.fabric_price_per_meter_eur)}${typedRfq.own_fabric ? `, ${typedRfq.own_fabric}` : ''})`
+      : null;
 
   return (
     <div className="space-y-4">
@@ -208,6 +213,7 @@ export default async function RfqDetailPage({ params, searchParams }: PageProps)
           <div className="mt-1 text-xs text-muted-foreground">
             {bestQuote ? 'Best quote' : 'No quote yet'}
             {quoteVolumeLabel && <> · {quoteVolumeLabel}</>}
+            {quoteFabricLabel && <> · {quoteFabricLabel}</>}
           </div>
         </div>
         <div className="sempre-metric-card">

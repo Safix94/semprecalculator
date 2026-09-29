@@ -50,6 +50,18 @@ function roundTo(value: number, decimals: number): number {
   return Math.round(value * factor) / factor;
 }
 
+/** Added after rounding the retail price to whole euros. */
+export const RETAIL_PRICE_ROUNDING_SURCHARGE_EUR = 1;
+export const RETAIL_PRICE_ROUNDING = 'round_to_euro_plus_1';
+
+/**
+ * Every final (retail) price is rounded to whole euros (below ,50 down, from ,50 up)
+ * and then gets € 1 extra, so quotes show clean prices: 100,48 → 101, 100,51 → 102.
+ */
+export function roundRetailPrice(value: number): number {
+  return Math.round(roundTo(value, 2)) + RETAIL_PRICE_ROUNDING_SURCHARGE_EUR;
+}
+
 function assertPositiveNumber(value: number | null, label: string): asserts value is number {
   if (!Number.isFinite(value) || value === null || value <= 0) {
     throw new Error(`${label} must be a positive number.`);
@@ -62,6 +74,11 @@ export function calculateVolumeM3FromCm(lengthCm: number, widthCm: number, heigh
   assertPositiveNumber(heightCm, 'Height');
 
   return roundTo((lengthCm * widthCm * heightCm) / 1_000_000, 6);
+}
+
+/** Without transport the supplier volume is not used, so no dimensions are asked (e.g. Jardinico). */
+export function isDimensionlessTransportMode(mode: TransportMode): boolean {
+  return mode === 'none';
 }
 
 function baseSnapshot(profile: SupplierPricingProfile) {
@@ -87,7 +104,8 @@ function calculateContainerPricing(
   const transportCostCalculated = roundTo((profile.containerPriceEur / profile.containerVolumeM3) * volumeM3, 3);
   const productPriceAfterMargin = roundTo(basePrice * profile.productMarginFactor, 2);
   const costIncludingTransport = roundTo(productPriceAfterMargin + transportCostCalculated, 2);
-  const finalPriceCalculated = roundTo(costIncludingTransport * profile.retailMultiplierFactor, 2);
+  const unroundedFinalPrice = roundTo(costIncludingTransport * profile.retailMultiplierFactor, 2);
+  const finalPriceCalculated = roundRetailPrice(unroundedFinalPrice);
 
   return {
     shippingCostCalculated: transportCostCalculated,
@@ -96,7 +114,7 @@ function calculateContainerPricing(
     costIncludingTransport,
     transportAdjustedBasePrice: null,
     finalPriceCalculated,
-    pricingSettingsSnapshot: baseSnapshot(profile),
+    pricingSettingsSnapshot: { ...baseSnapshot(profile), unroundedFinalPrice, rounding: RETAIL_PRICE_ROUNDING },
   };
 }
 
@@ -105,7 +123,8 @@ function calculateNoTransportPricing(
   profile: SupplierPricingProfile
 ): SupplierPricingResult {
   const productPriceAfterMargin = roundTo(basePrice * profile.productMarginFactor, 2);
-  const finalPriceCalculated = roundTo(productPriceAfterMargin * profile.retailMultiplierFactor, 2);
+  const unroundedFinalPrice = roundTo(productPriceAfterMargin * profile.retailMultiplierFactor, 2);
+  const finalPriceCalculated = roundRetailPrice(unroundedFinalPrice);
 
   return {
     shippingCostCalculated: 0,
@@ -114,7 +133,7 @@ function calculateNoTransportPricing(
     costIncludingTransport: productPriceAfterMargin,
     transportAdjustedBasePrice: null,
     finalPriceCalculated,
-    pricingSettingsSnapshot: baseSnapshot(profile),
+    pricingSettingsSnapshot: { ...baseSnapshot(profile), unroundedFinalPrice, rounding: RETAIL_PRICE_ROUNDING },
   };
 }
 
@@ -127,7 +146,8 @@ function calculateTruckPricing(
 
   const transportAdjustedBasePrice = roundTo(basePrice * truckMultiplierFactor, 2);
   const productPriceAfterMargin = roundTo(transportAdjustedBasePrice * profile.productMarginFactor, 2);
-  const finalPriceCalculated = roundTo(productPriceAfterMargin * profile.retailMultiplierFactor, 2);
+  const unroundedFinalPrice = roundTo(productPriceAfterMargin * profile.retailMultiplierFactor, 2);
+  const finalPriceCalculated = roundRetailPrice(unroundedFinalPrice);
 
   return {
     shippingCostCalculated: 0,
@@ -139,6 +159,8 @@ function calculateTruckPricing(
     pricingSettingsSnapshot: {
       ...baseSnapshot({ ...profile, truckMultiplierFactor }),
       transportAdjustedBasePrice,
+      unroundedFinalPrice,
+      rounding: RETAIL_PRICE_ROUNDING,
     },
   };
 }
@@ -150,16 +172,16 @@ function calculateTruckPricing(
  * transportCost = (containerPriceEur / containerVolumeM3) * volumeM3
  * productPriceAfterMargin = basePrice * productMarginFactor
  * costIncludingTransport = productPriceAfterMargin + transportCost
- * retailPrice = costIncludingTransport * retailMultiplierFactor
+ * retailPrice = roundRetailPrice(costIncludingTransport * retailMultiplierFactor)
  *
  * Truck formula:
  * transportAdjustedBasePrice = basePrice * truckMultiplierFactor
  * productPriceAfterMargin = transportAdjustedBasePrice * productMarginFactor
- * retailPrice = productPriceAfterMargin * retailMultiplierFactor
+ * retailPrice = roundRetailPrice(productPriceAfterMargin * retailMultiplierFactor)
  *
  * No transport formula:
  * productPriceAfterMargin = basePrice * productMarginFactor
- * retailPrice = productPriceAfterMargin * retailMultiplierFactor
+ * retailPrice = roundRetailPrice(productPriceAfterMargin * retailMultiplierFactor)
  */
 export function calculateSupplierPricing(
   basePrice: number,
@@ -167,9 +189,11 @@ export function calculateSupplierPricing(
   profile: SupplierPricingProfile
 ): SupplierPricingResult {
   assertPositiveNumber(basePrice, 'Supplier base price');
-  assertPositiveNumber(volumeM3, 'Supplier volume');
   assertPositiveNumber(profile.productMarginFactor, 'Product margin');
   assertPositiveNumber(profile.retailMultiplierFactor, 'Retail multiplier');
+  if (!isDimensionlessTransportMode(profile.transportMode)) {
+    assertPositiveNumber(volumeM3, 'Supplier volume');
+  }
 
   if (profile.transportMode === 'container') {
     return calculateContainerPricing(basePrice, volumeM3, profile);

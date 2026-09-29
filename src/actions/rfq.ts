@@ -32,6 +32,7 @@ import {
   isTableTopsProductType,
   isTablesProductType,
 } from '@/lib/rfq-format';
+import { isOwnFabricFinish } from '@/lib/own-fabric-pricing';
 import { findSimilarRfqs } from './rfq-search';
 import { logAuditEvent } from './audit';
 import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
@@ -310,8 +311,27 @@ export async function createRfq(input: CreateRfqInput) {
       supplier_ids_table_top,
       supplier_ids_table_foot,
       allow_duplicate,
+      own_fabric_id: requestedOwnFabricId,
+      own_fabric: _requestedOwnFabricName,
       ...rfqData
     } = parsed.data;
+    void _requestedOwnFabricName;
+
+    let ownFabric: { id: string; name: string } | null = null;
+    if (!isTablesProductType(normalizedProductType) && isOwnFabricFinish(rfqData.finish) && requestedOwnFabricId) {
+      const { data: fabricRow, error: fabricError } = await supabase
+        .from('own_fabrics')
+        .select('id, name')
+        .eq('id', requestedOwnFabricId)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (fabricError || !fabricRow) {
+        return { error: { own_fabric_id: ['Selected fabric was not found'] } };
+      }
+      ownFabric = { id: fabricRow.id as string, name: fabricRow.name as string };
+    }
+
     const normalizedRfqData = {
       ...rfqData,
       product_type: normalizedProductType,
@@ -321,6 +341,11 @@ export async function createRfq(input: CreateRfqInput) {
       finish_top: rfqData.finish_top?.trim() || null,
       finish_edge: rfqData.finish_edge?.trim() || null,
       finish_color: rfqData.finish_color?.trim() || null,
+      // Stain stop only exists for Table tops; anything else is stored as false.
+      stain_stop: isTableTopsProductType(normalizedProductType) && rfqData.stain_stop === true,
+      // The fabric only applies to the finish "Own fabric"; the name is looked up server-side.
+      own_fabric_id: ownFabric?.id ?? null,
+      own_fabric: ownFabric?.name ?? null,
       finish_table_top: rfqData.finish_table_top?.trim() || null,
       finish_table_foot: rfqData.finish_table_foot?.trim() || null,
     };
@@ -411,6 +436,7 @@ export async function createRfq(input: CreateRfqInput) {
         finishColor: rfq.finish_color,
         tableTopFinish: rfq.finish_table_top,
         tableFootFinish: rfq.finish_table_foot,
+        ownFabric: rfq.own_fabric ?? null,
         quantity: rfq.quantity,
         supplierIds: supplier_ids,
         supplierIdsTableTop: supplier_ids_table_top,
@@ -536,8 +562,12 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
   delete parsedUpdateData.supplier_ids_table_foot;
   delete parsedUpdateData.allow_duplicate;
 
+  // The fabric is chosen when the request is created; it is not editable here.
+  const { own_fabric_id: _ownFabricId, own_fabric: _ownFabric, ...parsedUpdateDataWithoutFabric } = parsedUpdateData;
+  void _ownFabricId;
+  void _ownFabric;
   const updateData: Partial<CreateRfqInput> = {
-    ...parsedUpdateData,
+    ...parsedUpdateDataWithoutFabric,
     product_type:
       parsed.data.product_type === undefined
         ? undefined
@@ -566,6 +596,7 @@ export async function updateRfq(rfqId: string, input: Partial<CreateRfqInput>) {
       parsed.data.finish_color === undefined
         ? undefined
         : parsed.data.finish_color?.trim() || null,
+    stain_stop: parsed.data.stain_stop === undefined ? undefined : parsed.data.stain_stop === true,
     finish_table_top:
       parsed.data.finish_table_top === undefined
         ? undefined
@@ -1262,7 +1293,7 @@ export async function sendToPricingTeam(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(
-      'id, material, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+      'id, material, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot, own_fabric'
     )
     .eq('id', rfqId)
     .single();
@@ -1304,6 +1335,7 @@ export async function sendToPricingTeam(rfqId: string) {
     rfq.model ? `Model: ${rfq.model}` : null,
     rfq.usage_environment ? `Use: ${rfq.usage_environment}` : null,
     rfq.finish ? `Finish: ${rfq.finish}` : null,
+    rfq.own_fabric ? `Fabric: ${rfq.own_fabric}` : null,
     `Quantity: ${Number(rfq.quantity ?? 1)}`,
     rfq.customer_name ? `Customer: ${rfq.customer_name}` : null,
   ]
@@ -1376,7 +1408,7 @@ export async function sendToPricingCrm(rfqId: string) {
   const { data: rfq, error: rfqError } = await supabase
     .from('rfqs')
     .select(
-      'id, material, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot'
+      'id, material, shape, model, usage_environment, finish, finish_top, finish_edge, finish_color, quantity, customer_name, product_type, status, material_table_top, material_table_foot, finish_table_top, finish_table_foot, own_fabric'
     )
     .eq('id', rfqId)
     .single();
@@ -1451,6 +1483,7 @@ export async function sendToPricingCrm(rfqId: string) {
     rfq.model ? `Model: ${rfq.model}` : null,
     rfq.usage_environment ? `Use: ${rfq.usage_environment}` : null,
     rfq.finish ? `Finish: ${rfq.finish}` : null,
+    rfq.own_fabric ? `Fabric: ${rfq.own_fabric}` : null,
     `Quantity: ${Number(rfq.quantity ?? 1)}`,
     rfq.customer_name ? `Customer: ${rfq.customer_name}` : null,
   ]

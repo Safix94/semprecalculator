@@ -508,6 +508,7 @@ export type Database = {
           customer_name: string | null
           finish: string | null
           finish_color: string | null
+          stain_stop: boolean
           finish_edge: string | null
           finish_table_foot: string | null
           finish_table_top: string | null
@@ -538,6 +539,7 @@ export type Database = {
           customer_name?: string | null
           finish?: string | null
           finish_color?: string | null
+          stain_stop?: boolean
           finish_edge?: string | null
           finish_table_foot?: string | null
           finish_table_top?: string | null
@@ -568,6 +570,7 @@ export type Database = {
           customer_name?: string | null
           finish?: string | null
           finish_color?: string | null
+          stain_stop?: boolean
           finish_edge?: string | null
           finish_table_foot?: string | null
           finish_table_top?: string | null

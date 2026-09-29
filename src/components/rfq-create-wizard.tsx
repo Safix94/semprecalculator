@@ -28,7 +28,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RfqDuplicateWarning } from '@/components/rfq-duplicate-warning';
 import type { RfqDuplicateWarning as RfqDuplicateWarningData } from '@/lib/rfq-match';
-import type { Material, ProductType, Supplier, UsageEnvironment } from '@/types';
+import type { Material, OwnFabric, ProductType, Supplier, UsageEnvironment } from '@/types';
+import { isOwnFabricFinish } from '@/lib/own-fabric-pricing';
 
 
 interface WizardData {
@@ -40,6 +41,8 @@ interface WizardData {
   finish_top: string;
   finish_edge: string;
   finish_color: string;
+  stain_stop: boolean;
+  own_fabric_id: string;
   material_id_table_top: string;
   material_table_top: string;
   finish_table_top: string;
@@ -70,6 +73,8 @@ const initialData: WizardData = {
   finish_top: '',
   finish_edge: '',
   finish_color: '',
+  stain_stop: false,
+  own_fabric_id: '',
   material_id_table_top: '',
   material_table_top: '',
   finish_table_top: '',
@@ -129,7 +134,12 @@ function normalizeProductTypeName(productTypeName: string | null | undefined): s
   return (productTypeName ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-export function RfqCreateWizard() {
+interface RfqCreateWizardProps {
+  /** Own-fabric master list (Management → Own fabrics) for the finish "Own fabric". */
+  ownFabrics?: OwnFabric[];
+}
+
+export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
   const open = true;
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -258,6 +268,12 @@ export function RfqCreateWizard() {
       return true;
     });
   }, [selectedMaterial]);
+  // Finish "Own fabric": sales pick the Sempre fabric; the supplier later adds the meters needed.
+  const isOwnFabricSelected = !isTablesType && !isTableTopsType && isOwnFabricFinish(data.finish);
+  const selectedOwnFabric = useMemo(
+    () => ownFabrics.find((fabric) => fabric.id === data.own_fabric_id) ?? null,
+    [data.own_fabric_id, ownFabrics]
+  );
   const tableTopFinishOptions = normalizeFinishOptions(selectedTableTopMaterial?.finish_options);
   const tableTopMaterialTopOptions = getMaterialFinishOptionsWithFallback(
     selectedTableTopMaterial,
@@ -349,6 +365,12 @@ export function RfqCreateWizard() {
 
     void Promise.all([loadMaterials(), loadProductTypeOptions()]);
   }, [open, loadMaterials, loadProductTypeOptions]);
+
+  useEffect(() => {
+    if (!isOwnFabricSelected && data.own_fabric_id) {
+      setData((prev) => ({ ...prev, own_fabric_id: '' }));
+    }
+  }, [data.own_fabric_id, isOwnFabricSelected]);
 
   useEffect(() => {
     if (isTablesType || isTableTopsType || !selectedMaterial) {
@@ -579,6 +601,7 @@ export function RfqCreateWizard() {
         updateData('finish_top', '');
         updateData('finish_edge', '');
         updateData('finish_color', '');
+        updateData('stain_stop', false);
       }
       return;
     }
@@ -593,6 +616,7 @@ export function RfqCreateWizard() {
     updateData('finish_top', '');
     updateData('finish_edge', '');
     updateData('finish_color', '');
+    updateData('stain_stop', false);
   };
 
   const handleMaterialChange = (materialId: string) => {
@@ -771,6 +795,9 @@ export function RfqCreateWizard() {
         if (availableFinishOptions.length > 0 && !data.finish) {
           stepErrors.finish = ['Finish is required'];
         }
+        if (isOwnFabricSelected && !data.own_fabric_id) {
+          stepErrors.own_fabric_id = ['Fabric is required for Own fabric'];
+        }
       }
     } else if (currentStep === 1) {
       if (isTablesType) {
@@ -906,6 +933,9 @@ export function RfqCreateWizard() {
       finish_top: isTableTopsType ? data.finish_top || null : null,
       finish_edge: isTableTopsType ? data.finish_edge || null : null,
       finish_color: isTableTopsType ? data.finish_color || null : null,
+      stain_stop: isTableTopsType ? data.stain_stop : false,
+      own_fabric_id: isOwnFabricSelected ? data.own_fabric_id || null : null,
+      own_fabric: isOwnFabricSelected ? selectedOwnFabric?.name ?? null : null,
       finish_table_top: isTablesType
         ? (isTableTopsType ? (finishSummary || null) : data.finish_table_top || null)
         : null,
@@ -926,6 +956,8 @@ export function RfqCreateWizard() {
     };
   }, [
     data,
+    isOwnFabricSelected,
+    selectedOwnFabric,
     isTablesType,
     isTableTopsType,
     showTableFoot,
@@ -1093,6 +1125,7 @@ export function RfqCreateWizard() {
     { label: 'Product type', value: data.product_type || '—' },
     { label: 'Model', value: data.model || '—' },
     { label: 'Material', value: summaryMaterial },
+    ...(isOwnFabricSelected ? [{ label: 'Fabric', value: selectedOwnFabric?.name || '—' }] : []),
     { label: 'Dimensions', value: summaryDimensions },
     { label: 'Quantity', value: data.quantity || '—' },
   ];
@@ -1212,6 +1245,33 @@ export function RfqCreateWizard() {
                         </SelectContent>
                       </Select>
                       {errors.finish && <p className="text-destructive text-xs">{errors.finish[0]}</p>}
+                    </div>
+                  )}
+
+                  {isOwnFabricSelected && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="own-fabric">Fabric *</Label>
+                      <Select value={data.own_fabric_id} onValueChange={(value) => updateData('own_fabric_id', value)}>
+                        <SelectTrigger className="w-full" id="own-fabric" aria-invalid={Boolean(errors.own_fabric_id)}>
+                          <SelectValue placeholder="Select the Sempre fabric" />
+                        </SelectTrigger>
+                        <SelectContent className="z-[70]">
+                          {ownFabrics.map((fabric) => (
+                            <SelectItem key={fabric.id} value={fabric.id}>
+                              {fabric.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-muted-foreground text-xs">
+                        Sempre supplies this fabric. The supplier quotes the piece and the running meters needed; the fabric cost is added automatically.
+                      </p>
+                      {ownFabrics.length === 0 && (
+                        <p className="text-muted-foreground text-xs">
+                          No fabrics set yet. Add them under Management &gt; Own fabrics.
+                        </p>
+                      )}
+                      {errors.own_fabric_id && <p className="text-destructive text-xs">{errors.own_fabric_id[0]}</p>}
                     </div>
                   )}
 
@@ -1355,6 +1415,17 @@ export function RfqCreateWizard() {
                           <p className="text-muted-foreground text-sm">Colour finish: N/A (no options configured)</p>
                         )}
                         {errors.finish_color && <p className="text-destructive text-xs">{errors.finish_color[0]}</p>}
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-1">
+                        <Checkbox
+                          id="stain-stop"
+                          checked={data.stain_stop}
+                          onCheckedChange={(checked) => updateData('stain_stop', checked === true)}
+                        />
+                        <Label htmlFor="stain-stop" className="cursor-pointer font-normal">
+                          Stain stop
+                        </Label>
                       </div>
                     </div>
                   )}

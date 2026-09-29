@@ -67,7 +67,7 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
     const transportCost = (containerPrice / containerVolume) * supplierVolumeM3;
     const productPriceAfterMargin = supplierPrice * productMargin;
     const costIncludingTransport = productPriceAfterMargin + transportCost;
-    const finalPrice = costIncludingTransport * multi;
+    const finalPrice = Math.round(costIncludingTransport * multi) + 1;
 
     return {
       transportCost,
@@ -215,11 +215,11 @@ export function PricingSettingsManagement({ settings }: PricingSettingsManagemen
               <CardContent className="p-4 text-sm text-muted-foreground space-y-2">
                 <p className="font-medium text-foreground">Formula</p>
                 <p>
-                  Retail price = ((supplier price × product margin) + (container price / container m³ × supplier m³)) × retail multiplier
+                  Retail price = ((supplier price × product margin) + (container price / container m³ × supplier m³)) × retail multiplier, rounded to whole euros + €1
                 </p>
                 {preview && (
                   <p>
-                    Example with supplier price €100 and 10 m³: product after margin €{preview.productPriceAfterMargin.toFixed(2)} + transport €{preview.transportCost.toFixed(2)} = cost incl. transport €{preview.costIncludingTransport.toFixed(2)} → retail €{preview.finalPrice.toFixed(2)}
+                    Example with supplier price €100 and 10 m³: product after margin €{preview.productPriceAfterMargin.toFixed(2)} + transport €{preview.transportCost.toFixed(2)} = cost incl. transport €{preview.costIncludingTransport.toFixed(2)} → retail €{preview.finalPrice.toFixed(2)} (rounded + €1)
                   </p>
                 )}
               </CardContent>

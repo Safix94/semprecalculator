@@ -14,7 +14,6 @@ import { getSupplierTranslations, normalizeSupplierLanguage, translateUsageEnvir
 import { normalizeQuotePriceCurrency } from '@/lib/currency';
 import { getFxRates } from '@/lib/fx-rates';
 import { isSanneVosBluestoneAutoPricingCandidate } from '@/lib/sanne-vos-pricing';
-import { isNatuursteenVosSupplierName } from '@/lib/natuursteen-vos-pricing';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
 import type { ReactNode } from 'react';
@@ -85,7 +84,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
     return <SupplierMessageCard title={errorTitle} message={result.error} />;
   }
 
-  const { rfq, supplier, invite, existingQuote } = result.data!;
+  const { rfq, supplier, invite, existingQuote, priceOnly, ownFabric } = result.data!;
   const language = normalizeSupplierLanguage(supplier?.preferred_language);
   const supplierQuoteCurrency = normalizeQuotePriceCurrency(supplier?.quote_price_currency);
   const labels = getSupplierTranslations(language);
@@ -103,8 +102,8 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
   const isClosed = rfq.status === 'closed';
   const canSubmitOrUpdateQuote = !isClosed && (!invite.used_at || Boolean(existingQuote));
   const isAutomaticSanneVosBluestoneQuote = isSanneVosBluestoneAutoPricingCandidate(supplier?.name, rfq);
-  // Natuursteen Vos quotes a purchase price only; Sempre prices it through the Vos chain.
-  const isPriceOnlyQuote = isNatuursteenVosSupplierName(supplier?.name);
+  // Price-only suppliers (Natuursteen Vos, Sanne Juk) and suppliers without transport (Jardinico) enter no dimensions.
+  const isPriceOnlyQuote = priceOnly;
   const initialBasePrice = existingQuote
     ? supplierQuoteCurrency === 'IDR'
       ? existingQuote.supplier_input_currency === 'IDR' && existingQuote.supplier_input_price
@@ -120,6 +119,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
     ? {
         basePrice: initialBasePrice ?? 0,
         volumeM3: Number(existingQuote.volume_m3),
+        fabricMeters: existingQuote.fabric_meters ? Number(existingQuote.fabric_meters) : null,
         comment: existingQuote.comment,
       }
     : null;
@@ -155,6 +155,18 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                   <dd className="mt-1 text-sm font-medium">{rfq.material}</dd>
                 </div>
               )}
+              {!isTablesType && rfq.finish && (
+                <div>
+                  <dt className="sempre-label">{labels.finish}</dt>
+                  <dd className="mt-1 text-sm font-medium">{rfq.finish}</dd>
+                </div>
+              )}
+              {ownFabric && (
+                <div>
+                  <dt className="sempre-label">{labels.ownFabric}</dt>
+                  <dd className="mt-1 text-sm font-medium">{ownFabric}</dd>
+                </div>
+              )}
               {isTableTopsType && (
                 <>
                   <div>
@@ -169,6 +181,12 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
                     <dt className="sempre-label">{labels.colorFinish}</dt>
                     <dd className="mt-1 text-sm font-medium">{rfq.finish_color || labels.na}</dd>
                   </div>
+                  {rfq.stain_stop && (
+                    <div>
+                      <dt className="sempre-label">{labels.stainStop}</dt>
+                      <dd className="mt-1 text-sm font-medium">{labels.yes}</dd>
+                    </div>
+                  )}
                 </>
               )}
               {showTableTop && (
@@ -251,6 +269,7 @@ export default async function SupplierRfqPage({ params, searchParams }: PageProp
             language={language}
             quotePriceCurrency={supplierQuoteCurrency}
             priceOnly={isPriceOnlyQuote}
+            ownFabric={ownFabric}
             usdPerEurRate={fxRates.usdPerEur}
             idrPerEurRate={fxRates.idrPerEur}
           />

@@ -19,6 +19,7 @@ interface SupplierQuoteFormProps {
   initialValues?: {
     basePrice: number;
     volumeM3: number;
+    fabricMeters?: number | null;
     comment: string | null;
   } | null;
   isUpdate?: boolean;
@@ -26,6 +27,8 @@ interface SupplierQuoteFormProps {
   quotePriceCurrency: QuotePriceCurrency;
   /** Natuursteen Vos: only a purchase price is asked, no shipment dimensions. */
   priceOnly?: boolean;
+  /** Finish "Own fabric": name of the Sempre-supplied fabric; the supplier enters the meters needed. */
+  ownFabric?: string | null;
   /** Current admin-configured rates; fall back to the pinned defaults. */
   usdPerEurRate?: number;
   idrPerEurRate?: number;
@@ -52,6 +55,7 @@ export function SupplierQuoteForm({
   language,
   quotePriceCurrency,
   priceOnly = false,
+  ownFabric = null,
   usdPerEurRate = USD_PER_EUR_RATE,
   idrPerEurRate = IDR_PER_EUR_RATE,
 }: SupplierQuoteFormProps) {
@@ -98,13 +102,15 @@ export function SupplierQuoteForm({
 
     const form = new FormData(e.currentTarget);
     const comment = (form.get('comment') as string) || null;
+    const fabricMeters = ownFabric ? Number(form.get('fabricMeters')) : null;
     const input = priceOnly
-      ? { basePrice: Number(form.get('basePrice')), comment }
+      ? { basePrice: Number(form.get('basePrice')), fabricMeters, comment }
       : {
           basePrice: Number(form.get('basePrice')),
           lengthCm: Number(form.get('lengthCm')),
           widthCm: Number(form.get('widthCm')),
           heightCm: Number(form.get('heightCm')),
+          fabricMeters,
           comment,
         };
 
@@ -250,6 +256,29 @@ export function SupplierQuoteForm({
               )}
             </div>
           </div>
+          )}
+
+          {ownFabric && (
+            <div className="space-y-1.5 rounded-lg border bg-muted/30 p-3">
+              <Label htmlFor="fabricMeters" className="sempre-label">{t.fabricMetersRequired}</Label>
+              <Input
+                id="fabricMeters"
+                name="fabricMeters"
+                type="number"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                defaultValue={initialValues?.fabricMeters ?? ''}
+                aria-invalid={Boolean(typeof errors === 'object' && errors?.fabricMeters)}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t.ownFabric}: <span className="font-medium text-foreground">{ownFabric}</span>. {t.fabricMetersHelp}
+              </p>
+              {typeof errors === 'object' && errors?.fabricMeters && (
+                <p className="text-destructive text-xs">{errors.fabricMeters[0]}</p>
+              )}
+            </div>
           )}
 
           <div className="space-y-1.5">

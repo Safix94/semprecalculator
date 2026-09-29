@@ -102,9 +102,11 @@ export function RfqDetailsOverview({ rfq, invites = [], status, showDates = true
             <>
               <InfoItem label="Material" value={rfq.material || '-'} />
               <InfoItem label="Finish" value={rfq.finish || '-'} />
+              {rfq.own_fabric && <InfoItem label="Fabric" value={rfq.own_fabric} />}
               {rfq.finish_top && <InfoItem label="Top finish" value={rfq.finish_top} />}
               {rfq.finish_edge && <InfoItem label="Edge finish" value={rfq.finish_edge} />}
               {rfq.finish_color && <InfoItem label="Colour finish" value={rfq.finish_color} />}
+              {isTableTopsType && rfq.stain_stop && <InfoItem label="Stain stop" value="Yes" />}
             </>
           )}
           <InfoItem label="Shape" value={rfq.shape || '-'} />

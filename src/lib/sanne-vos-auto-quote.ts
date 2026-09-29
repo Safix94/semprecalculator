@@ -38,7 +38,7 @@ type SanneVosFinishResolution =
 const FINISH_OPTION_COLUMNS = 'name, abbreviation, formula_percentage';
 
 const RFQ_PRICING_COLUMNS =
-  'id, created_by, customer_name, status, product_type, material, finish, finish_top, finish_edge, finish_color, length, width, thickness, quantity, shape';
+  'id, created_by, customer_name, status, product_type, material, finish, finish_top, finish_edge, finish_color, stain_stop, length, width, thickness, quantity, shape';
 
 interface RfqForPricing {
   id: string;
@@ -51,6 +51,7 @@ interface RfqForPricing {
   finish_top: string | null;
   finish_edge: string | null;
   finish_color: string | null;
+  stain_stop: boolean | null;
   length: number | string | null;
   width: number | string | null;
   thickness: number | string | null;

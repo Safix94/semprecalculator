@@ -32,7 +32,10 @@ export type AuditAction =
   | 'USER_CREATED'
   | 'RFQ_DELETED'
   | 'RFQ_RESTORED'
-  | 'INTERNAL_CHAT_MESSAGE';
+  | 'INTERNAL_CHAT_MESSAGE'
+  | 'OWN_FABRIC_CREATED'
+  | 'OWN_FABRIC_UPDATED'
+  | 'OWN_FABRIC_DELETED';
 
 export type ActorType = 'sales' | 'admin' | 'supplier_link' | 'system';
 export type UsageEnvironment = 'Indoor' | 'Outdoor';
@@ -106,6 +109,16 @@ export interface FinishOption {
   updated_at: string;
 }
 
+/** Sempre fabric the cushion supplier does not stock; priced per running meter (finish "Own fabric"). */
+export interface OwnFabric {
+  id: string;
+  name: string;
+  price_per_meter_eur: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Rfq {
   id: string;
   created_by: string;
@@ -121,6 +134,11 @@ export interface Rfq {
   finish_top: string | null;
   finish_edge: string | null;
   finish_color: string | null;
+  /** Table tops only: stain stop treatment requested (fixed surcharge in the Vos pricing chains). */
+  stain_stop: boolean;
+  /** Finish "Own fabric" only: chosen fabric from the own-fabric master list. */
+  own_fabric_id?: string | null;
+  own_fabric?: string | null;
   finish_table_top: string | null;
   finish_table_foot: string | null;
   length: number;
@@ -193,6 +211,10 @@ export interface RfqQuote {
   truck_multiplier_factor?: number | null;
   retail_multiplier_factor?: number | null;
   pricing_settings_snapshot?: Record<string, unknown> | null;
+  /** Own fabric: meters entered by the supplier and the fabric cost added to the purchase price. */
+  fabric_meters?: number | null;
+  fabric_price_per_meter_eur?: number | null;
+  fabric_cost_eur?: number | null;
   currency: string;
   lead_time_days: number | null;
   comment: string | null;
@@ -289,6 +311,8 @@ export type SupplierRfqView = Pick<
   | 'finish_top'
   | 'finish_edge'
   | 'finish_color'
+  | 'stain_stop'
+  | 'own_fabric'
   | 'finish_table_top'
   | 'finish_table_foot'
   | 'length'
@@ -313,6 +337,7 @@ export type SupplierQuoteView = Pick<
   | 'pricing_formula_version'
   | 'supplier_input_price'
   | 'supplier_input_currency'
+  | 'fabric_meters'
 >;
 
 export type SupplierInviteView = Pick<RfqInvite, 'id' | 'invite_part' | 'used_at'>;

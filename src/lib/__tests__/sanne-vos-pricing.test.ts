@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  STAIN_STOP_SURCHARGE_EUR,
   calculateSanneVosAreaM2,
   calculateSanneVosBluestonePricing,
   composeSanneVosFinishCodes,
@@ -139,7 +140,7 @@ describe('calculateSanneVosBluestonePricing', () => {
     expect(result.lossAdjustedBasePrice).toBe(115.5);
     expect(result.finishMargin).toBe(1.9);
     expect(result.productPriceAfterMargin).toBe(219.45);
-    expect(result.finalPriceCalculated).toBe(647.38);
+    expect(result.finalPriceCalculated).toBe(648);
   });
 
   it('matches the real Table tops case: 550x130x5 Regular / Regular / Leathered', () => {
@@ -176,7 +177,7 @@ describe('calculateSanneVosBluestonePricing', () => {
     expect(result.lossAdjustedBasePrice).toBe(1657.08);
     expect(result.finishMargin).toBe(1.9);
     expect(result.productPriceAfterMargin).toBe(3148.45);
-    expect(result.finalPriceCalculated).toBe(9287.93);
+    expect(result.finalPriceCalculated).toBe(9289);
     expect(result.pricingSettingsSnapshot.finishCode).toBe('L');
     expect(result.pricingSettingsSnapshot.finishParts).toEqual({
       top: 'Regular',
@@ -244,7 +245,55 @@ describe('golden rows from the Sanne Vos price sheet ("B - vos CHD")', () => {
       finish: { name: r.code || 'Regular', abbreviation: r.code || null, formula_percentage: r.pct },
     });
 
-    const diffInCents = Math.round(Math.abs(result.finalPriceCalculated - r.expected) * 100);
+    // The sheet has no whole-euro rounding; compare the price before it, then check the rounding.
+    const unroundedFinalPrice = result.pricingSettingsSnapshot.unroundedFinalPrice as number;
+    const diffInCents = Math.round(Math.abs(unroundedFinalPrice - r.expected) * 100);
     expect(diffInCents).toBeLessThanOrEqual(5);
+    expect(result.finalPriceCalculated).toBe(Math.round(unroundedFinalPrice) + 1);
+  });
+});
+
+describe('stain stop surcharge', () => {
+  const stainStopRfq = {
+    material: 'Bluestone',
+    finish: 'Antique',
+    length: 100,
+    width: 50,
+    thickness: 3,
+    quantity: 2,
+    shape: 'Rectangular',
+  };
+  const antique = { name: 'Antique', abbreviation: 'A', formula_percentage: 10 };
+
+  it('adds € 60 per piece after the finish margin and before the retail multiplier', () => {
+    const result = calculateSanneVosBluestonePricing({
+      rfq: { ...stainStopRfq, stain_stop: true },
+      rate: supportedRate,
+      finish: antique,
+    });
+
+    expect(STAIN_STOP_SURCHARGE_EUR).toBe(60);
+    expect(result.productPriceAfterMargin).toBe(219.45);
+    expect(result.stainStopSurcharge).toBe(120);
+    // (219.45 + 120) × 2.95 = 1001.38 → 1001 + 1
+    expect(result.finalPriceCalculated).toBe(1002);
+    expect(result.pricingSettingsSnapshot).toMatchObject({
+      stainStop: true,
+      stainStopUnitEur: 60,
+      stainStopSurchargeEur: 120,
+      formula:
+        '(totalAreaM2 * netPricePerM2Eur * finishPercentageMultiplier * lossRecoveryMultiplier * finishMargin + stainStopSurchargeEur) * retailMultiplier',
+    });
+  });
+
+  it('charges nothing when stain stop is off or missing', () => {
+    const off = calculateSanneVosBluestonePricing({ rfq: { ...stainStopRfq, stain_stop: false }, rate: supportedRate, finish: antique });
+    const missing = calculateSanneVosBluestonePricing({ rfq: stainStopRfq, rate: supportedRate, finish: antique });
+
+    expect(off.stainStopSurcharge).toBe(0);
+    expect(off.finalPriceCalculated).toBe(648);
+    expect(missing.stainStopSurcharge).toBe(0);
+    expect(missing.finalPriceCalculated).toBe(648);
+    expect(off.pricingSettingsSnapshot).toMatchObject({ stainStop: false, stainStopSurchargeEur: 0 });
   });
 });

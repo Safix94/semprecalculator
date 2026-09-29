@@ -5,7 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { getSupplierTranslations, normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { resolveSupplierInviteByToken } from '@/lib/supplier-invite';
 import { submitAutomaticQuoteSchema, submitPriceOnlyQuoteSchema, submitQuoteSchema } from '@/lib/validation';
-import { calculateSupplierPricing, calculateVolumeM3FromCm } from '@/lib/pricing';
+import { calculateSupplierPricing, calculateVolumeM3FromCm, isDimensionlessTransportMode } from '@/lib/pricing';
 import {
   convertSupplierBasePriceToEur,
   normalizeQuotePriceCurrency,
@@ -18,8 +18,10 @@ import { generateSanneVosAutomaticQuote, resolveSanneVosFinishOption } from '@/l
 import {
   NATUURSTEEN_VOS_FORMULA_VERSION,
   calculateNatuursteenVosPricing,
-  isNatuursteenVosSupplierName,
+  isPriceOnlySupplierName,
 } from '@/lib/natuursteen-vos-pricing';
+import { SANNE_JUK_FORMULA_VERSION, calculateSanneJukPricing, isSanneJukSupplierName } from '@/lib/sanne-juk-pricing';
+import { calculateSupplierPricingWithOwnFabric, isOwnFabricFinish } from '@/lib/own-fabric-pricing';
 import { logAuditEvent } from './audit';
 import type { SubmitAutomaticQuoteInput, SubmitPriceOnlyQuoteInput, SubmitQuoteInput } from '@/lib/validation';
 import type {
@@ -33,10 +35,10 @@ import type {
 // Supplier-safe projections: never select internal pricing, margins,
 // customer data or token hashes into supplier-facing responses.
 const SUPPLIER_RFQ_COLUMNS =
-  'id, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, status';
+  'id, product_type, material, material_table_top, material_table_foot, finish, finish_top, finish_edge, finish_color, stain_stop, own_fabric, finish_table_top, finish_table_foot, length, width, height, thickness, quantity, shape, model, usage_environment, status';
 const SUPPLIER_ATTACHMENT_COLUMNS = 'id, rfq_id, storage_path, file_name, mime_type, created_at';
 const SUPPLIER_QUOTE_COLUMNS =
-  'id, base_price, volume_m3, lead_time_days, comment, submitted_at, pricing_formula_version, supplier_input_price, supplier_input_currency';
+  'id, base_price, volume_m3, lead_time_days, comment, submitted_at, pricing_formula_version, supplier_input_price, supplier_input_currency, fabric_meters';
 
 /**
  * Validate a supplier token and return the invite + RFQ data.
@@ -73,8 +75,8 @@ export async function validateSupplierToken(rfqId: string, token: string) {
     | SupplierContactView
     | null;
 
-  // RFQ and existing quote only depend on the invite — fetch them in parallel.
-  const [{ data: rfq, error: rfqError }, { data: existingQuote }] = await Promise.all([
+  // RFQ, existing quote and pricing profile only depend on the invite — fetch them in parallel.
+  const [{ data: rfq, error: rfqError }, { data: existingQuote }, pricingProfile] = await Promise.all([
     supabase
       .from('rfqs')
       .select(`${SUPPLIER_RFQ_COLUMNS}, attachments:rfq_attachments(${SUPPLIER_ATTACHMENT_COLUMNS})`)
@@ -86,6 +88,7 @@ export async function validateSupplierToken(rfqId: string, token: string) {
       .eq('rfq_id', rfqId)
       .eq('supplier_id', invite.supplier_id)
       .maybeSingle(),
+    getEffectiveSupplierPricingProfile(invite.supplier_id),
   ]);
 
   if (rfqError || !rfq) {
@@ -130,6 +133,13 @@ export async function validateSupplierToken(rfqId: string, token: string) {
       rfq: rfq as unknown as SupplierRfqView,
       supplier,
       existingQuote: (existingQuote as SupplierQuoteView | null) ?? null,
+      // Only whether dimensions are asked; the pricing profile itself stays server-side.
+      priceOnly:
+        isPriceOnlySupplierName(supplier?.name) || isDimensionlessTransportMode(pricingProfile.transportMode),
+      // Finish "Own fabric": Sempre supplies the fabric, the supplier enters the running meters needed.
+      ownFabric: isOwnFabricFinish((rfq as { finish?: string | null }).finish) && (rfq as { own_fabric?: string | null }).own_fabric
+        ? (rfq as { own_fabric: string }).own_fabric
+        : null,
     },
   };
 }
@@ -160,33 +170,40 @@ export async function submitQuote(
   const { invite, requestContext } = resolved;
   const inviteSupplier = Array.isArray(invite.supplier) ? invite.supplier[0] : invite.supplier;
 
-  // Natuursteen Vos quotes a purchase price only; it is priced through the Vos
-  // chain (× 1.05 × finish margin × 2.95) instead of the transport-based profile.
-  const isPriceOnlySupplier = isNatuursteenVosSupplierName(inviteSupplier?.name);
+  // Natuursteen Vos and Sanne Juk quote a purchase price only. Natuursteen Vos is
+  // priced through the Vos chain (× 1.05 × finish margin × 2.95), Sanne Juk via
+  // × 2.1 × 2.4 rounded to whole euros + 1, instead of the transport-based profile.
+  const isPriceOnlySupplier = isPriceOnlySupplierName(inviteSupplier?.name);
+  const isSanneJukSupplier = isSanneJukSupplierName(inviteSupplier?.name);
+  const pricingProfile = isPriceOnlySupplier ? null : await getEffectiveSupplierPricingProfile(invite.supplier_id);
+  // Suppliers without transport (e.g. Jardinico) are not asked for dimensions either.
+  const isDimensionlessQuote =
+    isPriceOnlySupplier || (pricingProfile !== null && isDimensionlessTransportMode(pricingProfile.transportMode));
 
   // Validate input
   let basePrice: number;
+  let fabricMeters: number | null | undefined;
   let leadTimeDays: number | null | undefined;
   let comment: string | null | undefined;
   let lengthCm: number | null = null;
   let widthCm: number | null = null;
   let heightCm: number | null = null;
   // Supplier provides dimensions in cm; backend calculates volume in m³ for pricing.
-  // Price-only quotes carry no shipment volume (stored as 0, like Sanne Vos quotes).
+  // Quotes without dimensions carry no shipment volume (stored as 0, like Sanne Vos quotes).
   let volumeM3 = 0;
 
-  if (isPriceOnlySupplier) {
+  if (isDimensionlessQuote) {
     const parsed = submitPriceOnlyQuoteSchema.safeParse(input);
     if (!parsed.success) {
       return { error: parsed.error.flatten().fieldErrors };
     }
-    ({ basePrice, leadTimeDays, comment } = parsed.data);
+    ({ basePrice, fabricMeters, leadTimeDays, comment } = parsed.data);
   } else {
     const parsed = submitQuoteSchema.safeParse(input);
     if (!parsed.success) {
       return { error: parsed.error.flatten().fieldErrors };
     }
-    ({ basePrice, lengthCm, widthCm, heightCm, leadTimeDays, comment } = parsed.data);
+    ({ basePrice, lengthCm, widthCm, heightCm, fabricMeters, leadTimeDays, comment } = parsed.data);
     volumeM3 = calculateVolumeM3FromCm(lengthCm, widthCm, heightCm);
   }
 
@@ -204,6 +221,9 @@ export async function submitQuote(
       finish_top,
       finish_edge,
       finish_color,
+      stain_stop,
+      own_fabric_id,
+      own_fabric,
       finish_table_top,
       finish_table_foot,
       length,
@@ -227,6 +247,37 @@ export async function submitQuote(
   if (rfqForPricing.status === 'closed') {
     const labels = getSupplierTranslations(normalizeSupplierLanguage(inviteSupplier?.preferred_language));
     return { error: labels.requestClosedSubmitError };
+  }
+
+  // Finish "Own fabric": Sempre supplies the fabric. The supplier enters the running
+  // meters needed; the fabric cost (meters × current price per meter) is added to the
+  // purchase price before the supplier's margin and multiplier.
+  let ownFabricPricingInput: { fabricName: string; meters: number; pricePerMeterEur: number } | null = null;
+  if (isOwnFabricFinish(rfqForPricing.finish) && rfqForPricing.own_fabric_id) {
+    if (!fabricMeters || fabricMeters <= 0) {
+      return { error: { fabricMeters: ['Fabric meters are required for this request'] } };
+    }
+
+    const { data: fabricRow, error: fabricError } = await supabase
+      .from('own_fabrics')
+      .select('id, name, price_per_meter_eur')
+      .eq('id', rfqForPricing.own_fabric_id)
+      .maybeSingle();
+
+    if (fabricError || !fabricRow) {
+      console.error('Quote submission blocked: own fabric not found.', {
+        rfqId,
+        ownFabricId: rfqForPricing.own_fabric_id,
+        error: fabricError?.message ?? null,
+      });
+      return { error: 'The fabric for this request is no longer available. Please contact Sempre.' };
+    }
+
+    ownFabricPricingInput = {
+      fabricName: (fabricRow.name as string) || rfqForPricing.own_fabric || 'Own fabric',
+      meters: fabricMeters,
+      pricePerMeterEur: Number(fabricRow.price_per_meter_eur),
+    };
   }
 
   const quotePriceCurrency = normalizeQuotePriceCurrency(inviteSupplier?.quote_price_currency);
@@ -258,7 +309,45 @@ export async function submitQuote(
   // Internal note for sales when a price-only quote had to fall back to the default margin.
   let pricingInternalNote: string | null = null;
 
-  if (isPriceOnlySupplier) {
+  if (isSanneJukSupplier) {
+    let pricing;
+    try {
+      pricing = calculateSanneJukPricing({ purchasePriceEur: convertedBasePrice.basePriceEur });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
+      console.error('Quote submission blocked: Sanne Juk pricing calculation failed.', {
+        rfqId,
+        supplierId: invite.supplier_id,
+        message,
+      });
+      return { error: message };
+    }
+
+    productPriceAfterMargin = pricing.productPriceAfterMargin;
+    costIncludingTransport = pricing.productPriceAfterMargin;
+    finalPriceCalculated = pricing.finalPriceCalculated;
+
+    quotePricingPayload = {
+      shipping_cost_calculated: 0,
+      transport_cost_calculated: 0,
+      product_price_after_margin: pricing.productPriceAfterMargin,
+      cost_including_transport: pricing.productPriceAfterMargin,
+      transport_adjusted_base_price: null,
+      truck_multiplier_factor: null,
+      final_price_calculated: pricing.finalPriceCalculated,
+      pricing_method: 'none',
+      pricing_formula_version: SANNE_JUK_FORMULA_VERSION,
+      retail_multiplier_factor: pricing.pricingSettingsSnapshot.retailMultiplier as number,
+      pricing_settings_snapshot: pricing.pricingSettingsSnapshot,
+      ...supplierInputPayload,
+    };
+    pricingAuditMetadata = {
+      pricingMethod: 'none',
+      pricingFormulaVersion: SANNE_JUK_FORMULA_VERSION,
+      retailMultiplierFactor: pricing.pricingSettingsSnapshot.retailMultiplier,
+      unroundedFinalPrice: pricing.unroundedFinalPrice,
+    };
+  } else if (isPriceOnlySupplier) {
     const finishResolution = await resolveSanneVosFinishOption(supabase, rfqForPricing);
     const finishResolutionError = 'error' in finishResolution ? finishResolution.error : null;
     const finishOption = 'finishOption' in finishResolution ? finishResolution.finishOption : null;
@@ -271,6 +360,8 @@ export async function submitQuote(
         finishCode,
         finishName: finishOption?.name ?? rfqForPricing.finish ?? null,
         finishResolutionError,
+        stainStop: rfqForPricing.stain_stop === true,
+        quantity: Number(rfqForPricing.quantity) || 1,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
@@ -316,10 +407,13 @@ export async function submitQuote(
       finishResolutionError,
     };
   } else {
-    const pricingProfile = await getEffectiveSupplierPricingProfile(invite.supplier_id);
+    // Already loaded above for every supplier that is not price-only.
+    const profile = pricingProfile ?? (await getEffectiveSupplierPricingProfile(invite.supplier_id));
     let pricingResult;
     try {
-      pricingResult = calculateSupplierPricing(convertedBasePrice.basePriceEur, volumeM3, pricingProfile);
+      pricingResult = ownFabricPricingInput
+        ? calculateSupplierPricingWithOwnFabric(convertedBasePrice.basePriceEur, volumeM3, profile, ownFabricPricingInput)
+        : calculateSupplierPricing(convertedBasePrice.basePriceEur, volumeM3, profile);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Pricing could not be calculated.';
       console.error('Quote submission blocked: supplier pricing calculation failed.', {
@@ -342,18 +436,29 @@ export async function submitQuote(
       product_price_after_margin: pricingResult.productPriceAfterMargin,
       cost_including_transport: pricingResult.costIncludingTransport,
       transport_adjusted_base_price: pricingResult.transportAdjustedBasePrice,
-      truck_multiplier_factor: pricingProfile.transportMode === 'truck' ? pricingProfile.truckMultiplierFactor ?? 1.5 : null,
+      truck_multiplier_factor: profile.transportMode === 'truck' ? profile.truckMultiplierFactor ?? 1.5 : null,
       final_price_calculated: pricingResult.finalPriceCalculated,
-      pricing_method: pricingProfile.transportMode,
-      pricing_formula_version: pricingProfile.formulaVersion,
-      retail_multiplier_factor: pricingProfile.retailMultiplierFactor,
+      pricing_method: profile.transportMode,
+      pricing_formula_version: profile.formulaVersion,
+      retail_multiplier_factor: profile.retailMultiplierFactor,
       pricing_settings_snapshot: pricingResult.pricingSettingsSnapshot,
+      fabric_meters: ownFabricPricingInput?.meters ?? null,
+      fabric_price_per_meter_eur: ownFabricPricingInput?.pricePerMeterEur ?? null,
+      fabric_cost_eur: 'fabricCostEur' in pricingResult ? pricingResult.fabricCostEur : null,
       ...supplierInputPayload,
     };
     pricingAuditMetadata = {
-      pricingMethod: pricingProfile.transportMode,
-      pricingFormulaVersion: pricingProfile.formulaVersion,
-      retailMultiplierFactor: pricingProfile.retailMultiplierFactor,
+      pricingMethod: profile.transportMode,
+      pricingFormulaVersion: profile.formulaVersion,
+      retailMultiplierFactor: profile.retailMultiplierFactor,
+      ownFabric: ownFabricPricingInput
+        ? {
+            fabricName: ownFabricPricingInput.fabricName,
+            meters: ownFabricPricingInput.meters,
+            pricePerMeterEur: ownFabricPricingInput.pricePerMeterEur,
+            fabricCostEur: 'fabricCostEur' in pricingResult ? pricingResult.fabricCostEur : null,
+          }
+        : null,
     };
   }
 
@@ -591,7 +696,7 @@ export async function submitQuote(
           quote: {
             supplierInputPrice: convertedBasePrice.supplierInputPrice,
             supplierInputCurrency: convertedBasePrice.supplierInputCurrency,
-            volumeM3: isPriceOnlySupplier ? null : volumeM3,
+            volumeM3: isDimensionlessQuote ? null : volumeM3,
             leadTimeDays,
             comment: comment ?? null,
             submittedAt: savedQuote.submitted_at,

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
+import { isOwnFabricFinish } from '@/lib/own-fabric-pricing';
 
 const usageEnvironmentSchema = z.enum(['Indoor', 'Outdoor']);
 
@@ -16,6 +17,10 @@ const rfqSchemaBase = z.object({
   finish_top: z.string().optional().nullable(),
   finish_edge: z.string().optional().nullable(),
   finish_color: z.string().optional().nullable(),
+  stain_stop: z.boolean().optional().nullable(),
+  // Finish "Own fabric": the fabric from the own-fabric master list (id) and its display name.
+  own_fabric_id: z.string().uuid('Invalid fabric ID').optional().nullable(),
+  own_fabric: z.string().optional().nullable(),
   finish_table_top: z.string().optional().nullable(),
   finish_table_foot: z.string().optional().nullable(),
   length: z.coerce.number().positive('Length must be positive'),
@@ -207,12 +212,31 @@ const validateTableTopsFinishes = (
   }
 };
 
+// The finish "Own fabric" needs a fabric so the supplier quote can add the fabric cost.
+const validateOwnFabric = (
+  data: { product_type?: string | null; finish?: string | null; own_fabric_id?: string | null },
+  ctx: z.RefinementCtx
+) => {
+  if (isTablesProductType(data.product_type) || !isOwnFabricFinish(data.finish)) {
+    return;
+  }
+
+  if (!data.own_fabric_id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['own_fabric_id'],
+      message: 'Fabric is required for Own fabric',
+    });
+  }
+};
+
 export const createRfqSchema = rfqSchemaBase.superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);
   validateTableMaterials(data, ctx);
   validateTableSuppliers(data, ctx, { requireForCreate: true });
   validateTableTopsFinishes(data, ctx);
   validateHeightForProductType(data, ctx);
+  validateOwnFabric(data, ctx);
 });
 
 export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) => {
@@ -250,6 +274,14 @@ export const updateRfqDetailsSchema = z
     validateShapeThickness(data, ctx);
   });
 
+// Own fabric requests: running meters of fabric the supplier needs for one piece.
+// Optional in the schema; the server requires it when the request has the finish "Own fabric".
+const fabricMetersSchema = z.coerce
+  .number()
+  .positive('Fabric meters must be positive')
+  .optional()
+  .nullable();
+
 export const submitQuoteSchema = z.object({
   basePrice: z.coerce
     .number()
@@ -263,6 +295,7 @@ export const submitQuoteSchema = z.object({
   heightCm: z.coerce
     .number()
     .positive('Height must be positive'),
+  fabricMeters: fabricMetersSchema,
   leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
   comment: z.string().max(2000).optional().nullable(),
 });
@@ -272,6 +305,7 @@ export const submitPriceOnlyQuoteSchema = z.object({
   basePrice: z.coerce
     .number()
     .positive('Base price must be positive'),
+  fabricMeters: fabricMetersSchema,
   leadTimeDays: z.coerce.number().int().positive().optional().nullable(),
   comment: z.string().max(2000).optional().nullable(),
 });

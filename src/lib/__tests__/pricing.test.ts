@@ -3,6 +3,7 @@ import {
   calculateVolumeM3FromCm,
   calculateSupplierPricing,
   DEFAULT_TRUCK_MULTIPLIER_FACTOR,
+  isDimensionlessTransportMode,
   type SupplierPricingProfile,
 } from '@/lib/pricing';
 
@@ -34,7 +35,7 @@ describe('calculateSupplierPricing', () => {
     expect(result.shippingCostCalculated).toBe(223.881);
     expect(result.productPriceAfterMargin).toBe(210);
     expect(result.costIncludingTransport).toBe(433.88);
-    expect(result.finalPriceCalculated).toBe(1041.31);
+    expect(result.finalPriceCalculated).toBe(1042);
     expect(result.transportAdjustedBasePrice).toBeNull();
   });
 
@@ -44,7 +45,7 @@ describe('calculateSupplierPricing', () => {
     expect(result.transportCostCalculated).toBe(0);
     expect(result.productPriceAfterMargin).toBe(210);
     expect(result.costIncludingTransport).toBe(210);
-    expect(result.finalPriceCalculated).toBe(504);
+    expect(result.finalPriceCalculated).toBe(505);
   });
 
   it('truck mode: truck multiplier applied to base price first', () => {
@@ -56,7 +57,7 @@ describe('calculateSupplierPricing', () => {
 
     expect(result.transportAdjustedBasePrice).toBe(150);
     expect(result.productPriceAfterMargin).toBe(315);
-    expect(result.finalPriceCalculated).toBe(756);
+    expect(result.finalPriceCalculated).toBe(757);
   });
 
   it('truck mode falls back to the default truck multiplier', () => {
@@ -73,6 +74,15 @@ describe('calculateSupplierPricing', () => {
     expect(() => calculateSupplierPricing(0, 2, profile())).toThrow();
     expect(() => calculateSupplierPricing(100, 0, profile())).toThrow();
     expect(() => calculateSupplierPricing(-5, 2, profile())).toThrow();
+  });
+
+  it('no-transport mode prices without dimensions (volume 0)', () => {
+    const result = calculateSupplierPricing(100, 0, profile({ transportMode: 'none', productMarginFactor: 2, retailMultiplierFactor: 2.5 }));
+    expect(result.finalPriceCalculated).toBe(501);
+    expect(isDimensionlessTransportMode('none')).toBe(true);
+    expect(isDimensionlessTransportMode('container')).toBe(false);
+    expect(isDimensionlessTransportMode('truck')).toBe(false);
+    expect(() => calculateSupplierPricing(100, 0, profile({ transportMode: 'truck' }))).toThrow();
   });
 
   it('container mode requires container price and volume', () => {

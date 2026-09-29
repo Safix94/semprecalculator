@@ -30,13 +30,18 @@ This is an RFQ (Request for Quotation) platform built with Next.js 16, Supabase,
 **Pricing System**:
 - Server-side pricing calculations only (not exposed to client)
 - Suppliers enter base price + volume in m³ directly; do not derive pricing volume from RFQ thickness
+- Suppliers whose pricing profile has transport mode `none` (e.g. Jardinico) get no dimension fields; their quote is stored with volume 0
 - Shipping cost = `(container price / container volume m³) × supplier volume m³`
 - Basis price = `base price × product margin × multiplier`
 - Final price = `basis price + shipping cost`
+- Every final (retail) price, for all suppliers and formulas, is rounded to whole euros (below ,50 down, from ,50 up) and gets € 1 extra: `roundRetailPrice` in `src/lib/pricing.ts`; the unrounded price is kept in `pricing_settings_snapshot.unroundedFinalPrice`
 - Pricing settings are configurable in `Management → Pricing`; defaults are €7500 container price, 67m³ container volume, 2.1 product margin, 2.4 multiplier
 - Supplier-specific Vos chains (source: Excel "Prijsberekening_nieuwe prijzen_2024_Bel CHD.xlsx", tab "B - vos CHD"): `× 1.05 loss recovery → × finish margin (1.9, or 2.1 when the finish code contains FE/T/V) → × 2.95 retail`, no transport
   - **Sanne Vos + Bluestone** (`src/lib/sanne-vos-pricing.ts`, `sanne-vos-auto-quote.ts`): fully automatic from m² rates and finish percentages, no supplier input
   - **Natuursteen Vos**, all materials (`src/lib/natuursteen-vos-pricing.ts`): the supplier enters a purchase price only (no dimensions); that price starts the chain, the finish percentage is not applied; unresolved finish → margin 1.9 + internal note
+- **Stain stop** (Table tops checkbox in the RFQ wizard, `rfqs.stain_stop`): both Vos chains add a fixed €60 per piece (`STAIN_STOP_SURCHARGE_EUR`) after the finish margin and before the × 2.95 retail step, i.e. `(… × finish margin + 60 × quantity) × 2.95`. Not applied for Sanne Juk or standard suppliers.
+- **Sanne Juk** (`src/lib/sanne-juk-pricing.ts`): price-only supplier (no dimensions, no transport); price × 2.1 × 2.4 (then the general whole-euro rounding + 1); the factors are fixed, not taken from the pricing settings
+- **Own fabric** (`src/lib/own-fabric-pricing.ts`, source: Excel tab "B - jardinico CHD (2025)"): when a request has the finish "Own fabric" (material Fabric, cushions via Jardinico), sales pick the Sempre fabric on the request (`rfqs.own_fabric_id`/`own_fabric`, master list `own_fabrics` managed in `Management → Own fabrics`, price per running meter). The supplier quotes its price without fabric plus the running meters needed (`rfq_quotes.fabric_meters`); fabric cost = meters × price per meter is added to the supplier base price **before** the supplier's normal margin/multiplier (Jardinico profile: transport none, 2.0 × 2.5, then whole-euro rounding + 1). Stored in `fabric_cost_eur` and `pricing_settings_snapshot.ownFabric`. Applies on the generic supplier-profile path for any supplier, not on the Vos/Sanne Juk paths.
 
 ### Key Components Structure
 

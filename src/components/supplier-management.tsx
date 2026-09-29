@@ -765,20 +765,20 @@ export function SupplierManagement({ suppliers: initialSuppliers, materials }: S
                     <p className="font-medium text-foreground">Container formula</p>
                     <p>Transport cost = (container price / container volume) × supplier volume</p>
                     <p>Cost incl. transport = supplier base price × product margin + transport cost</p>
-                    <p>Retail price = cost incl. transport × retail multiplier</p>
+                    <p>Retail price = cost incl. transport × retail multiplier, rounded to whole euros + €1</p>
                   </>
                 )}
                 {formData.pricing_profile.transport_mode === 'truck' && (
                   <>
                     <p className="font-medium text-foreground">Truck formula</p>
                     <p>Transport-adjusted base price = supplier base price × truck multiplier</p>
-                    <p>Retail price = transport-adjusted base price × product margin × retail multiplier</p>
+                    <p>Retail price = transport-adjusted base price × product margin × retail multiplier, rounded to whole euros + €1</p>
                   </>
                 )}
                 {formData.pricing_profile.transport_mode === 'none' && (
                   <>
                     <p className="font-medium text-foreground">No transport formula</p>
-                    <p>Retail price = supplier base price × product margin × retail multiplier</p>
+                    <p>Retail price = supplier base price × product margin × retail multiplier, rounded to whole euros + €1</p>
                   </>
                 )}
               </div>

@@ -1,10 +1,15 @@
 import { isRoundShape } from '@/lib/rfq-format';
+import { RETAIL_PRICE_ROUNDING, roundRetailPrice } from '@/lib/pricing';
 
 export const SANNE_VOS_BLUESTONE_FORMULA_VERSION = 'sanne_vos_bluestone_v1';
 export const SANNE_VOS_SUPPLIER_NAME = 'Sanne Vos';
 export const SANNE_VOS_MATERIAL_NAME = 'Bluestone';
 export const SANNE_VOS_LOSS_RECOVERY_MULTIPLIER = 1.05;
 export const SANNE_VOS_RETAIL_MULTIPLIER = 2.95;
+// Stain stop (Table tops): fixed surcharge per piece, added after the finish
+// margin and before the retail multiplier (sheet "B - vos CHD", column Q "EXTRA").
+// Agreed 2026-09 as a flat € 60 instead of the sheet's per-row amounts.
+export const STAIN_STOP_SURCHARGE_EUR = 60;
 
 export type SanneVosShapeKind = 'straight' | 'round';
 export type SanneVosSurfaceType = 'sanded' | 'saw_cut';
@@ -16,6 +21,8 @@ export interface SanneVosRfqInput {
   finish_top?: string | null;
   finish_edge?: string | null;
   finish_color?: string | null;
+  /** Table tops: stain stop treatment requested. */
+  stain_stop?: boolean | null;
   length: number | string | null;
   width: number | string | null;
   thickness: number | string | null;
@@ -47,6 +54,8 @@ export interface SanneVosBluestonePricingResult {
   basePriceBeforeLoss: number;
   lossAdjustedBasePrice: number;
   productPriceAfterMargin: number;
+  /** Total stain stop surcharge (per piece × quantity); 0 when not requested. */
+  stainStopSurcharge: number;
   finalPriceCalculated: number;
   finishPercentageMultiplier: number;
   finishMargin: number;
@@ -216,7 +225,11 @@ export function calculateSanneVosBluestonePricing({
   const basePriceBeforeLoss = roundTo(totalAreaM2 * netPricePerM2 * finishPercentageMultiplier, 2);
   const lossAdjustedBasePrice = roundTo(basePriceBeforeLoss * SANNE_VOS_LOSS_RECOVERY_MULTIPLIER, 2);
   const productPriceAfterMargin = roundTo(lossAdjustedBasePrice * finishMargin, 2);
-  const finalPriceCalculated = roundTo(productPriceAfterMargin * SANNE_VOS_RETAIL_MULTIPLIER, 2);
+  const stainStop = rfq.stain_stop === true;
+  const stainStopSurcharge = stainStop ? roundTo(STAIN_STOP_SURCHARGE_EUR * quantity, 2) : 0;
+  const basisPrice = roundTo(productPriceAfterMargin + stainStopSurcharge, 2);
+  const unroundedFinalPrice = roundTo(basisPrice * SANNE_VOS_RETAIL_MULTIPLIER, 2);
+  const finalPriceCalculated = roundRetailPrice(unroundedFinalPrice);
 
   return {
     areaM2PerPiece,
@@ -225,6 +238,7 @@ export function calculateSanneVosBluestonePricing({
     basePriceBeforeLoss,
     lossAdjustedBasePrice,
     productPriceAfterMargin,
+    stainStopSurcharge,
     finalPriceCalculated,
     finishPercentageMultiplier,
     finishMargin,
@@ -256,8 +270,14 @@ export function calculateSanneVosBluestonePricing({
       finishPercentageMultiplier,
       lossRecoveryMultiplier: SANNE_VOS_LOSS_RECOVERY_MULTIPLIER,
       finishMargin,
+      stainStop,
+      stainStopUnitEur: STAIN_STOP_SURCHARGE_EUR,
+      stainStopSurchargeEur: stainStopSurcharge,
       retailMultiplier: SANNE_VOS_RETAIL_MULTIPLIER,
-      formula: 'totalAreaM2 * netPricePerM2Eur * finishPercentageMultiplier * lossRecoveryMultiplier * finishMargin * retailMultiplier',
+      unroundedFinalPrice,
+      rounding: RETAIL_PRICE_ROUNDING,
+      formula:
+        '(totalAreaM2 * netPricePerM2Eur * finishPercentageMultiplier * lossRecoveryMultiplier * finishMargin + stainStopSurchargeEur) * retailMultiplier',
     },
   };
 }

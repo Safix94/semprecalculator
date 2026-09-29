@@ -1,12 +1,14 @@
 import { requireRole } from '@/lib/auth';
 import { getFinishOptions } from '@/actions/finish-options';
 import { getMaterials } from '@/actions/materials';
+import { getAllOwnFabrics } from '@/actions/own-fabrics';
 import { getProductTypes } from '@/actions/product-types';
 import { getPricingSettings } from '@/actions/pricing-settings';
 import { getSuppliers } from '@/actions/suppliers';
 import { listUsersWithRoles } from '@/actions/users';
 import { FinishOptionManagement } from '@/components/finish-option-management';
 import { MaterialManagement } from '@/components/material-management';
+import { OwnFabricManagement } from '@/components/own-fabric-management';
 import { PricingSettingsManagement } from '@/components/pricing-settings-management';
 import { ProductTypeManagement } from '@/components/product-type-management';
 import { SupplierManagement } from '@/components/supplier-management';
@@ -16,12 +18,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 export default async function ManagementPage() {
   const currentUser = await requireRole('sales');
 
-  const [materials, suppliers, productTypesResult, pricingSettings, finishOptions, users] = await Promise.all([
+  const [materials, suppliers, productTypesResult, pricingSettings, finishOptions, ownFabrics, users] = await Promise.all([
     getMaterials(),
     getSuppliers(),
     getProductTypes(),
     getPricingSettings(),
     getFinishOptions(),
+    getAllOwnFabrics(),
     currentUser.role === 'admin' ? listUsersWithRoles() : Promise.resolve([]),
   ]);
   const productTypes = 'data' in productTypesResult ? productTypesResult.data : [];
@@ -31,7 +34,7 @@ export default async function ManagementPage() {
       <div className="mb-[18px]">
         <h1 className="sempre-page-title">Management</h1>
         <p className="sempre-page-subtitle">
-          Manage pricing, materials, finishes, suppliers, product types, and user roles.
+          Manage pricing, materials, finishes, own fabrics, suppliers, product types, and user roles.
         </p>
       </div>
 
@@ -40,6 +43,7 @@ export default async function ManagementPage() {
           <TabsTrigger value="pricing">Pricing</TabsTrigger>
           <TabsTrigger value="materials">Materials</TabsTrigger>
           <TabsTrigger value="finishes">Finishes</TabsTrigger>
+          <TabsTrigger value="own-fabrics">Own fabrics</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="product-types">Product types</TabsTrigger>
           {currentUser.role === 'admin' && <TabsTrigger value="users">Users</TabsTrigger>}
@@ -57,6 +61,9 @@ export default async function ManagementPage() {
         </TabsContent>
         <TabsContent value="finishes">
           <FinishOptionManagement finishOptions={finishOptions} />
+        </TabsContent>
+        <TabsContent value="own-fabrics">
+          <OwnFabricManagement fabrics={ownFabrics} />
         </TabsContent>
         <TabsContent value="suppliers">
           <SupplierManagement suppliers={suppliers} materials={materials} />

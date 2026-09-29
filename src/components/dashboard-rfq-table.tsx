@@ -174,7 +174,11 @@ export function DashboardRfqTable({
   };
 
   const openRfq = (rfqId: string) => {
-    router.push(`/dashboard/rfqs/${rfqId}`);
+    // Remember the current filters so "Back to requests" can restore them.
+    const params = new URLSearchParams(searchParamsString);
+    params.delete('rfq');
+    const query = params.toString();
+    router.push(query ? `/dashboard/rfqs/${rfqId}?from=${encodeURIComponent(query)}` : `/dashboard/rfqs/${rfqId}`);
   };
 
   const goToPage = (page: number) => {

@@ -715,15 +715,20 @@ export async function sendSalesQuoteReceivedEmail(params: {
   rfqId: string;
   supplierName: string;
   finalPrice: number;
+  customerName?: string | null;
 }) {
   const link = `${APP_URL}/dashboard/rfqs/${params.rfqId}`;
+  const customerName = params.customerName?.trim() || null;
 
   return sendEmail({
     to: { email: params.salesEmail },
-    subject: `Quote received from ${params.supplierName}`,
+    subject: customerName
+      ? `Quote received from ${params.supplierName} for ${customerName}`
+      : `Quote received from ${params.supplierName}`,
     htmlContent: `
       <h2>New quote received</h2>
-      <p>Supplier <strong>${params.supplierName}</strong> has submitted a quote.</p>
+      <p>Supplier <strong>${escapeHtml(params.supplierName)}</strong> has submitted a quote.</p>
+      ${customerName ? `<p>Customer: <strong>${escapeHtml(customerName)}</strong></p>` : ''}
       <p>Calculated final price: <strong>€${params.finalPrice.toFixed(2)}</strong></p>
       <p><a href="${link}" style="${EMAIL_BUTTON_STYLE}">View quotes</a></p>
     `,

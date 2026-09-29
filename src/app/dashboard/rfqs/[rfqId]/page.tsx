@@ -16,9 +16,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatSupplierInputAmount } from '@/lib/currency';
 import { isVolumelessQuoteFormula } from '@/lib/natuursteen-vos-pricing';
+import { buildDashboardBackHref } from '@/lib/dashboard-back-link';
 
 interface PageProps {
   params: Promise<{ rfqId: string }>;
+  searchParams?: Promise<{ from?: string | string[] }>;
 }
 
 const statusLabels: Record<RfqStatus, { label: string; color: string }> = {
@@ -52,9 +54,10 @@ function supplierBasePriceLabel(quote: RfqQuote | undefined) {
   return formatEuro(quote.base_price);
 }
 
-export default async function RfqDetailPage({ params }: PageProps) {
+export default async function RfqDetailPage({ params, searchParams }: PageProps) {
   const user = await requireAuth();
   const { rfqId } = await params;
+  const backHref = buildDashboardBackHref((await searchParams)?.from);
   const supabase = await createClient();
 
   const { data: rfq, error } = await supabase
@@ -141,7 +144,7 @@ export default async function RfqDetailPage({ params }: PageProps) {
   return (
     <div className="space-y-4">
       <Link
-        href="/dashboard"
+        href={backHref}
         className="inline-flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronLeft className="size-4" />

@@ -194,6 +194,7 @@ export async function submitQuote(
     .from('rfqs')
     .select(`
       created_by,
+      customer_name,
       status,
       product_type,
       material,
@@ -532,6 +533,7 @@ export async function submitQuote(
           rfqId,
           supplierName: supplier.name,
           finalPrice: finalPriceCalculated,
+          customerName: rfqForPricing.customer_name,
         });
 
         await logAuditEvent({
@@ -727,6 +729,7 @@ export async function submitAutomaticSanneVosQuote(
         rfqId,
         supplierName: inviteSupplier.name,
         finalPrice: automaticPricing.finalPriceCalculated,
+        customerName: result.data.customerName,
       });
 
       await logAuditEvent({

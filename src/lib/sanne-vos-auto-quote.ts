@@ -38,11 +38,12 @@ type SanneVosFinishResolution =
 const FINISH_OPTION_COLUMNS = 'name, abbreviation, formula_percentage';
 
 const RFQ_PRICING_COLUMNS =
-  'id, created_by, status, product_type, material, finish, finish_top, finish_edge, finish_color, length, width, thickness, quantity, shape';
+  'id, created_by, customer_name, status, product_type, material, finish, finish_top, finish_edge, finish_color, length, width, thickness, quantity, shape';
 
 interface RfqForPricing {
   id: string;
   created_by: string | null;
+  customer_name: string | null;
   status: string;
   product_type: string | null;
   material: string | null;
@@ -84,6 +85,7 @@ export type SanneVosAutomaticQuoteResult =
         isUpdate: boolean;
         rfqStatus: string;
         createdBy: string | null;
+        customerName: string | null;
       };
     }
   | { error: string; code?: 'closed' | 'not_candidate' };
@@ -420,7 +422,14 @@ export async function generateSanneVosAutomaticQuote(
   });
 
   return {
-    data: { quote, pricing, isUpdate, rfqStatus, createdBy: rfqForPricing.created_by },
+    data: {
+      quote,
+      pricing,
+      isUpdate,
+      rfqStatus,
+      createdBy: rfqForPricing.created_by,
+      customerName: rfqForPricing.customer_name,
+    },
   };
 }
 

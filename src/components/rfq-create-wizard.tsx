@@ -1263,9 +1263,6 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-muted-foreground text-xs">
-                        Sempre supplies this fabric. The supplier quotes the piece and the running meters needed; the fabric cost is added automatically.
-                      </p>
                       {ownFabrics.length === 0 && (
                         <p className="text-muted-foreground text-xs">
                           No fabrics set yet. Add them under Management &gt; Own fabrics.

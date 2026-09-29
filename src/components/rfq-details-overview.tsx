@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FormattedDate } from '@/components/formatted-date';
 import {
   formatRfqDimensionsWithOptions,
+  getTableTopFinishParts,
   isRoundShape,
   isTableTopsProductType,
   isTablesProductType,
@@ -64,6 +65,7 @@ export function RfqDetailsOverview({ rfq, invites = [], status, showDates = true
   const isTablesType = isTablesProductType(rfq.product_type);
   const isTableTopsType = isTableTopsProductType(rfq.product_type);
   const suppliers = supplierLabels(invites, isTablesType);
+  const tableTopFinish = getTableTopFinishParts(rfq);
 
   return (
     <Card>
@@ -78,18 +80,23 @@ export function RfqDetailsOverview({ rfq, invites = [], status, showDates = true
           {rfq.model && <InfoItem label="Model" value={rfq.model} />}
           <InfoItem label="Product type" value={rfq.product_type || '-'} />
           <InfoItem label="Customer" value={rfq.customer_name || '-'} />
-          {isTablesType ? (
+          {isTableTopsType ? (
+            <>
+              <InfoItem label="Table top" value={rfq.material_table_top || '-'} />
+              <InfoItem label="Top finish" value={tableTopFinish.top || '-'} />
+              <InfoItem label="Edge finish" value={tableTopFinish.edge || '-'} />
+              <InfoItem label="Colour finish" value={tableTopFinish.color || '-'} />
+            </>
+          ) : isTablesType ? (
             <>
               <InfoItem
-                label={isTableTopsType ? 'Table top' : 'Table top'}
+                label="Table top"
                 value={[rfq.material_table_top, rfq.finish_table_top].filter(Boolean).join(' — ') || '-'}
               />
-              {!isTableTopsType && (
-                <InfoItem
-                  label="Table base"
-                  value={[rfq.material_table_foot, rfq.finish_table_foot].filter(Boolean).join(' — ') || '-'}
-                />
-              )}
+              <InfoItem
+                label="Table base"
+                value={[rfq.material_table_foot, rfq.finish_table_foot].filter(Boolean).join(' — ') || '-'}
+              />
             </>
           ) : (
             <>
@@ -98,6 +105,7 @@ export function RfqDetailsOverview({ rfq, invites = [], status, showDates = true
               {rfq.finish_top && <InfoItem label="Top finish" value={rfq.finish_top} />}
               {rfq.finish_edge && <InfoItem label="Edge finish" value={rfq.finish_edge} />}
               {rfq.finish_color && <InfoItem label="Colour finish" value={rfq.finish_color} />}
+              {isTableTopsType && rfq.stain_stop && <InfoItem label="Stain stop" value="Yes" />}
             </>
           )}
           <InfoItem label="Shape" value={rfq.shape || '-'} />

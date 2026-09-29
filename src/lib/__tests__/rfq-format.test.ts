@@ -2,10 +2,52 @@ import { describe, expect, it } from 'vitest';
 import {
   formatRfqDimensions,
   formatRfqDimensionsWithOptions,
+  getTableTopFinishParts,
   isRoundShape,
   isTablesProductType,
   isTableTopsProductType,
 } from '@/lib/rfq-format';
+
+describe('getTableTopFinishParts', () => {
+  it('prefers the separately stored finishes', () => {
+    expect(
+      getTableTopFinishParts({
+        finish_top: 'Regular',
+        finish_edge: 'Regular',
+        finish_color: 'Fumé',
+        finish_table_top: 'Regular / Regular / Fumé',
+      })
+    ).toEqual({ top: 'Regular', edge: 'Regular', color: 'Fumé' });
+  });
+
+  it('falls back to splitting the combined summary for older requests', () => {
+    expect(
+      getTableTopFinishParts({
+        finish_top: null,
+        finish_edge: null,
+        finish_color: null,
+        finish_table_top: 'Regular / Bevelled / Fumé',
+      })
+    ).toEqual({ top: 'Regular', edge: 'Bevelled', color: 'Fumé' });
+  });
+
+  it('keeps an unsplittable summary as top finish only', () => {
+    expect(
+      getTableTopFinishParts({
+        finish_top: null,
+        finish_edge: null,
+        finish_color: null,
+        finish_table_top: 'N.v.t.',
+      })
+    ).toEqual({ top: 'N.v.t.', edge: null, color: null });
+  });
+
+  it('returns nulls when nothing is stored', () => {
+    expect(
+      getTableTopFinishParts({ finish_top: null, finish_edge: null, finish_color: null, finish_table_top: null })
+    ).toEqual({ top: null, edge: null, color: null });
+  });
+});
 
 describe('product type helpers', () => {
   it('detects tables product types loosely', () => {

@@ -1,4 +1,4 @@
-const DASHBOARD_QUERY_KEYS = ['search', 'product_type', 'supplier', 'status', 'page'] as const;
+const DASHBOARD_QUERY_KEYS = ['search', 'code', 'product_type', 'supplier', 'status', 'page'] as const;
 
 /**
  * Builds the "Back to requests" link from the `from` query the dashboard table

@@ -11,6 +11,10 @@ describe('buildDashboardBackHref', () => {
     expect(buildDashboardBackHref('status=sent_to_supplier&page=2')).toBe('/dashboard?status=sent_to_supplier&page=2');
   });
 
+  it('keeps the RFQ code filter', () => {
+    expect(buildDashboardBackHref('code=RFQ-1a2b3c4d&status=draft')).toBe('/dashboard?code=RFQ-1a2b3c4d&status=draft');
+  });
+
   it('accepts the first value when the param is repeated', () => {
     expect(buildDashboardBackHref(['status=draft', 'status=closed'])).toBe('/dashboard?status=draft');
   });

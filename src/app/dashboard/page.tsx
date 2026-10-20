@@ -5,6 +5,7 @@ import { DashboardRfqTable, type DashboardRfqInvite } from '@/components/dashboa
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
 import { getProductTypes } from '@/actions/product-types';
+import { parseRfqCodeFilter } from '@/lib/rfq-code';
 import type { Rfq, RfqStatus, Supplier } from '@/types';
 
 interface DashboardPageProps {
@@ -15,6 +16,7 @@ interface DashboardPageProps {
     supplier?: string | string[];
     status?: string | string[];
     search?: string | string[];
+    code?: string | string[];
     admin_required?: string | string[];
   }>;
 }
@@ -24,10 +26,7 @@ const statusOptions: RfqStatus[] = [
   'draft',
   'sent_to_pricing',
   'sent_to_supplier',
-  'supplier_replied',
-  'waiting_for_technical_drawing',
   'quotes_received',
-  'sent_to_pricing_crm',
 ];
 
 function getStringParam(value?: string | string[]) {
@@ -52,6 +51,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const rawStatusFilter = getStringParam(params.status)?.trim() || null;
   const statusFilter = isRfqStatus(rawStatusFilter) ? rawStatusFilter : null;
   const searchQuery = getStringParam(params.search)?.trim() ?? null;
+  const codeQuery = getStringParam(params.code)?.trim() || null;
+  const codeFilter = parseRfqCodeFilter(codeQuery);
   const parsedPage = Number.parseInt(pageParam, 10);
   const requestedPage = Number.isNaN(parsedPage) ? 1 : Math.max(parsedPage, 1);
   const supabase = await createClient();
@@ -107,12 +108,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   }
 
   const hasNoSupplierMatches = Boolean(supplierFilter && supplierRfqIds && supplierRfqIds.length === 0);
+  // A code that cannot be an RFQ code (e.g. non-hex characters) matches nothing; skip the queries.
+  const hasNoMatches = hasNoSupplierMatches || codeFilter?.kind === 'no-match';
 
   let totalCount = 0;
   let currentPage = 1;
   let rfqs: Rfq[] = [];
 
-  if (!hasNoSupplierMatches) {
+  if (!hasNoMatches) {
     const fetchRfqPage = async (page: number): Promise<Rfq[]> => {
       const from = (page - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
@@ -132,6 +135,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       }
       if (searchQuery) {
         rfqsQuery = rfqsQuery.ilike('customer_name', `%${searchQuery}%`);
+      }
+      if (codeFilter?.kind === 'match') {
+        rfqsQuery = rfqsQuery.gte('id', codeFilter.lower).lte('id', codeFilter.upper);
       }
       if (supplierRfqIds) {
         rfqsQuery = rfqsQuery.in('id', supplierRfqIds);
@@ -158,6 +164,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     }
     if (searchQuery) {
       countQuery = countQuery.ilike('customer_name', `%${searchQuery}%`);
+    }
+    if (codeFilter?.kind === 'match') {
+      countQuery = countQuery.gte('id', codeFilter.lower).lte('id', codeFilter.upper);
     }
     if (supplierRfqIds) {
       countQuery = countQuery.in('id', supplierRfqIds);
@@ -326,6 +335,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             statusFilter={statusFilter}
             statusOptions={statusOptions}
             searchQuery={searchQuery}
+            codeQuery={codeQuery}
             unreadInternalRfqIds={unreadInternalRfqIds}
           />
         </CardContent>

@@ -42,6 +42,8 @@ interface DashboardRfqTableProps {
   statusFilter: RfqStatus | null;
   statusOptions: RfqStatus[];
   searchQuery: string | null;
+  /** Raw value of the RFQ code search field (`code` query param). */
+  codeQuery: string | null;
   /** RFQ ids with internal chat messages the current user has not read yet. */
   unreadInternalRfqIds?: string[];
 }
@@ -99,12 +101,14 @@ export function DashboardRfqTable({
   statusFilter,
   statusOptions,
   searchQuery,
+  codeQuery,
   unreadInternalRfqIds = [],
 }: DashboardRfqTableProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
 
   const searchParamsString = useMemo(() => searchParams.toString(), [searchParams]);
   const unreadInternalSet = useMemo(() => new Set(unreadInternalRfqIds), [unreadInternalRfqIds]);
@@ -135,7 +139,7 @@ export function DashboardRfqTable({
 
   const resetFilters = () => {
     const params = new URLSearchParams(searchParamsString);
-    ['search', 'product_type', 'supplier', 'status', 'page', 'rfq'].forEach((key) => params.delete(key));
+    ['search', 'code', 'product_type', 'supplier', 'status', 'page', 'rfq'].forEach((key) => params.delete(key));
     pushParams(params);
   };
 
@@ -160,13 +164,21 @@ export function DashboardRfqTable({
 
   const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const value = searchInputRef.current?.value?.trim() ?? '';
     const params = new URLSearchParams(searchParamsString);
-    if (value) {
-      params.set('search', value);
+    const fields: Array<[key: string, value: string]> = [
+      ['search', searchInputRef.current?.value?.trim() ?? ''],
+      ['code', codeInputRef.current?.value?.trim() ?? ''],
+    ];
+    fields.forEach(([key, value]) => {
+      if (value) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    });
+    if (fields.some(([, value]) => value)) {
       params.set('page', '1');
     } else {
-      params.delete('search');
       params.delete('page');
     }
     params.delete('rfq');
@@ -204,6 +216,25 @@ export function DashboardRfqTable({
                 placeholder="Search by customer…"
                 className="w-[190px]"
                 aria-label="Search by customer"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="rfq-code-search" className="sempre-label">
+                RFQ code
+              </Label>
+              <Input
+                key={`code-${codeQuery ?? ''}`}
+                id="rfq-code-search"
+                ref={codeInputRef}
+                type="search"
+                name="code"
+                defaultValue={codeQuery ?? ''}
+                placeholder="RFQ-…"
+                className="w-[140px] font-mono"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                aria-label="Search by RFQ code"
               />
             </div>
             <Button type="submit" variant="secondary" size="sm">
@@ -309,7 +340,9 @@ export function DashboardRfqTable({
           {rfqs.length === 0 ? (
             <TableRow>
               <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                No requests match the current filters.
+                {codeQuery
+                  ? `No open requests match ${codeQuery}. Closed requests are in RFQ history.`
+                  : 'No requests match the current filters.'}
               </TableCell>
             </TableRow>
           ) : (

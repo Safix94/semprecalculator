@@ -6,6 +6,7 @@ import { requireRole } from '@/lib/auth';
 import { logAuditEvent } from './audit';
 import { normalizeSupplierLanguage } from '@/lib/supplier-language';
 import { validateSupplierAdditionalEmails } from '@/lib/email-recipients';
+import { describeSupplierWriteError } from '@/lib/supplier-email-conflict';
 import { DEFAULT_PRICING_SETTINGS, DEFAULT_TRUCK_MULTIPLIER_FACTOR } from '@/lib/pricing';
 import { normalizeQuotePriceCurrency, type QuotePriceCurrency } from '@/lib/currency';
 import type { Material, Supplier, SupplierPricingProfile, SupplierWithMaterials, TransportMode } from '@/types';
@@ -300,7 +301,7 @@ export async function createSupplier(input: CreateSupplierInput) {
   }
 
   if (error) {
-    return { error: { _form: [error.message] } };
+    return { error: { _form: [describeSupplierWriteError(error)] } };
   }
 
   const pricingProfileResult = await upsertSupplierPricingProfile(
@@ -472,7 +473,7 @@ export async function updateSupplier(supplierId: string, input: UpdateSupplierIn
     }
 
     if (error) {
-      return { error: { _form: [error.message] } };
+      return { error: { _form: [describeSupplierWriteError(error)] } };
     }
 
     supplier = updatedSupplier as Supplier;

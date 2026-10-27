@@ -7,6 +7,7 @@ import { getProductTypes } from '@/actions/product-types';
 import { findSimilarRfqs } from '@/actions/rfq-search';
 import { createRfq, uploadAttachment } from '@/actions/rfq';
 import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
+import { getGeneralFinishOptions, normalizeFinishOptions } from '@/lib/material-finishes';
 import {
   isDetailFieldEnabled,
   isDetailFieldRequired,
@@ -104,10 +105,6 @@ function isAllowedAttachment(file: File): boolean {
     return false;
   }
   return attachmentExtensions.has(extension);
-}
-
-function normalizeFinishOptions(options: string[] | null | undefined): string[] {
-  return (options ?? []).map((finish) => finish.trim()).filter((finish) => finish.length > 0);
 }
 
 function isGlassMaterialName(materialName: string | null | undefined): boolean {
@@ -261,7 +258,7 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
   // Only the finishes configured on the material (Management → Materials) are offered.
   const availableFinishOptions = useMemo(() => {
     const seen = new Set<string>();
-    return normalizeFinishOptions(selectedMaterial?.finish_options).filter((finish) => {
+    return getGeneralFinishOptions(selectedMaterial).filter((finish) => {
       const key = finish.toLowerCase();
       if (seen.has(key)) return false;
       seen.add(key);
@@ -274,7 +271,7 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
     () => ownFabrics.find((fabric) => fabric.id === data.own_fabric_id) ?? null,
     [data.own_fabric_id, ownFabrics]
   );
-  const tableTopFinishOptions = normalizeFinishOptions(selectedTableTopMaterial?.finish_options);
+  const tableTopFinishOptions = getGeneralFinishOptions(selectedTableTopMaterial);
   const tableTopMaterialTopOptions = getMaterialFinishOptionsWithFallback(
     selectedTableTopMaterial,
     'finish_options_top'
@@ -287,7 +284,7 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
     selectedTableTopMaterial,
     'finish_options_color'
   );
-  const tableFootFinishOptions = normalizeFinishOptions(selectedTableFootMaterial?.finish_options);
+  const tableFootFinishOptions = getGeneralFinishOptions(selectedTableFootMaterial);
 
   const loadMaterials = useCallback(async () => {
     setMaterialsLoading(true);
@@ -623,7 +620,7 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
     const material = availableMaterialsForType.find((item) => item.id === materialId);
     if (!material) return;
 
-    const materialFinishOptions = normalizeFinishOptions(material.finish_options);
+    const materialFinishOptions = getGeneralFinishOptions(material);
 
     updateData('material_id', materialId);
     updateData('material_name', material.name);
@@ -645,9 +642,7 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
     const material = availableMaterialsForType.find((item) => item.id === materialId);
     if (!material) return;
 
-    const finishOptions = material.finish_options
-      .map((finish) => finish.trim())
-      .filter((finish) => finish.length > 0);
+    const finishOptions = getGeneralFinishOptions(material);
 
     updateData('material_id_table_top', materialId);
     updateData('material_table_top', material.name);
@@ -671,9 +666,7 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
     const material = availableMaterialsForType.find((item) => item.id === materialId);
     if (!material) return;
 
-    const finishOptions = material.finish_options
-      .map((finish) => finish.trim())
-      .filter((finish) => finish.length > 0);
+    const finishOptions = getGeneralFinishOptions(material);
 
     updateData('material_id_table_foot', materialId);
     updateData('material_table_foot', material.name);

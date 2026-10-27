@@ -1,6 +1,11 @@
 import { z } from 'zod';
-import { isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
+import { isRoundShape, isTableTopsProductType, isTablesProductType } from '@/lib/rfq-format';
 import { isOwnFabricFinish } from '@/lib/own-fabric-pricing';
+import {
+  isDetailFieldRequired,
+  normalizeDetailFieldSettings,
+  type ProductTypeDetailFieldSetting,
+} from '@/lib/product-type-detail-fields';
 
 const usageEnvironmentSchema = z.enum(['Indoor', 'Outdoor']);
 
@@ -230,14 +235,48 @@ const validateOwnFabric = (
   }
 };
 
-export const createRfqSchema = rfqSchemaBase.superRefine((data, ctx) => {
-  validateShapeThickness(data, ctx);
-  validateTableMaterials(data, ctx);
-  validateTableSuppliers(data, ctx, { requireForCreate: true });
-  validateTableTopsFinishes(data, ctx);
-  validateHeightForProductType(data, ctx);
-  validateOwnFabric(data, ctx);
-});
+export function getCreateRfqSchema(detailFields?: ProductTypeDetailFieldSetting[]) {
+  return rfqSchemaBase.extend({
+    // The wizard represents blank dimensions as 0; RFQ columns are non-nullable.
+    // Whether a positive value is required comes from the saved product settings.
+    length: z.coerce.number().min(0, 'Length must be zero or positive').default(0),
+    width: z.coerce.number().min(0, 'Width must be zero or positive').default(0),
+    height: rfqSchemaBase.shape.height.default(0),
+    thickness: rfqSchemaBase.shape.thickness.default(0),
+    shape: z.string().default(''),
+  }).superRefine((data, ctx) => {
+    const settings = normalizeDetailFieldSettings(detailFields, data.product_type);
+    const round = isRoundShape(data.shape);
+    const dimensions = [
+      { key: 'length', requiredKey: round ? 'diameter' : 'length', label: round ? 'Diameter' : 'Length' },
+      { key: 'width', requiredKey: round ? 'diameter' : 'width', label: round ? 'Diameter' : 'Width' },
+      { key: 'height', requiredKey: 'height', label: 'Height' },
+      { key: 'thickness', requiredKey: 'thickness', label: 'Thickness top' },
+    ] as const;
+
+    for (const { key, requiredKey, label } of dimensions) {
+      const optionalRoundThickness = key === 'thickness' && round && !isTableTopsProductType(data.product_type);
+      if (isDetailFieldRequired(settings, requiredKey) && !optionalRoundThickness && data[key] <= 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [requiredKey],
+          message: `${label} must be positive`,
+        });
+      }
+    }
+
+    if (isDetailFieldRequired(settings, 'shape') && !data.shape.trim()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['shape'], message: 'Shape is required' });
+    }
+
+    validateTableMaterials(data, ctx);
+    validateTableSuppliers(data, ctx, { requireForCreate: true });
+    validateTableTopsFinishes(data, ctx);
+    validateOwnFabric(data, ctx);
+  });
+}
+
+export const createRfqSchema = getCreateRfqSchema();
 
 export const updateRfqSchema = rfqSchemaBase.partial().superRefine((data, ctx) => {
   validateShapeThickness(data, ctx);

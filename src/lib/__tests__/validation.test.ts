@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createRfqSchema, submitPriceOnlyQuoteSchema, submitQuoteSchema } from '@/lib/validation';
+import { createRfqSchema, getCreateRfqSchema, submitPriceOnlyQuoteSchema, submitQuoteSchema } from '@/lib/validation';
+import { normalizeDetailFieldSettings } from '@/lib/product-type-detail-fields';
 
 const baseRfq = {
   product_type: 'Cushions',
@@ -13,6 +14,73 @@ const baseRfq = {
   quantity: 1,
   shape: 'Rectangular',
 };
+
+describe('createRfqSchema product detail settings', () => {
+  const optionalFields = normalizeDetailFieldSettings(
+    ['length', 'width', 'diameter', 'height', 'thickness', 'shape', 'quantity'].map((key) => ({
+      key, enabled: true, required: false,
+    })),
+    'Cushions'
+  );
+  const optionalSchema = getCreateRfqSchema(optionalFields);
+
+  it('accepts the cushion wizard payload with empty optional dimensions', () => {
+    const result = optionalSchema.safeParse({ ...baseRfq, length: 0, width: 0, height: 0, thickness: 0 });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toMatchObject({ length: 0, width: 0, height: 0, thickness: 0 });
+    }
+  });
+
+  it('accepts omitted optional dimensions and shape and defaults quantity to one', () => {
+    const result = optionalSchema.safeParse({
+      ...baseRfq, length: undefined, width: undefined, height: undefined,
+      thickness: undefined, shape: undefined, quantity: undefined,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.quantity).toBe(1);
+  });
+
+  it('accepts a mix of supplied and empty optional fields', () => {
+    expect(optionalSchema.safeParse({ ...baseRfq, width: 0, thickness: 0, shape: '' }).success).toBe(true);
+  });
+
+  it.each(['length', 'width', 'height', 'thickness'] as const)('still requires %s with default settings', (key) => {
+    const result = createRfqSchema.safeParse({ ...baseRfq, [key]: 0 });
+    expect(result.success).toBe(false);
+    if (!result.success) expect(result.error.flatten().fieldErrors[key]).toBeDefined();
+  });
+
+  it.each([-1, 'invalid', Infinity])('rejects invalid optional dimensions: %s', (value) => {
+    for (const key of ['length', 'width', 'height', 'thickness']) {
+      expect(optionalSchema.safeParse({ ...baseRfq, [key]: value }).success).toBe(false);
+    }
+  });
+
+  it('uses diameter settings for round requests instead of length and width settings', () => {
+    const schema = getCreateRfqSchema(normalizeDetailFieldSettings([
+      { key: 'diameter', enabled: true, required: false },
+    ], 'Cushions'));
+    expect(schema.safeParse({ ...baseRfq, shape: 'Round', length: 0, width: 0, thickness: 0 }).success).toBe(true);
+
+    const requiredResult = createRfqSchema.safeParse({ ...baseRfq, shape: 'Round', length: 0, width: 0 });
+    expect(requiredResult.success).toBe(false);
+    if (!requiredResult.success) expect(requiredResult.error.issues.some((issue) => issue.path[0] === 'diameter')).toBe(true);
+  });
+
+  it('does not require disabled fields even if their saved required flag is true', () => {
+    const schema = getCreateRfqSchema(normalizeDetailFieldSettings([
+      { key: 'height', enabled: false, required: true },
+      { key: 'thickness', enabled: false, required: true },
+      { key: 'shape', enabled: false, required: true },
+    ], 'Cushions'));
+    expect(schema.safeParse({ ...baseRfq, height: 0, thickness: 0, shape: '' }).success).toBe(true);
+  });
+
+  it('still requires shape by default', () => {
+    expect(createRfqSchema.safeParse({ ...baseRfq, shape: '' }).success).toBe(false);
+  });
+});
 
 describe('createRfqSchema own fabric', () => {
   it('requires a fabric when the finish is "Own fabric"', () => {

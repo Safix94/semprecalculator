@@ -5,7 +5,7 @@ import { after } from 'next/server';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { requireAuth, requireRole } from '@/lib/auth';
 import {
-  createRfqSchema,
+  getCreateRfqSchema,
   updateRfqSchema,
   updateRfqDetailsSchema,
   updateRfqNotesSchema,
@@ -35,6 +35,7 @@ import {
 import { isOwnFabricFinish } from '@/lib/own-fabric-pricing';
 import { findSimilarRfqs } from './rfq-search';
 import { logAuditEvent } from './audit';
+import { getProductTypes } from './product-types';
 import type { CreateRfqInput, UpdateRfqDetailsInput } from '@/lib/validation';
 import type { Rfq, RfqAttachment, RfqComment, RfqInvite, RfqQuote, RfqStatus, Supplier } from '@/types';
 
@@ -273,17 +274,24 @@ export async function createRfq(input: CreateRfqInput) {
   const user = await requireAuth();
   const supabase = await createClient();
 
-  const parsed = createRfqSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: parsed.error.flatten().fieldErrors };
-  }
-
-  const normalizedProductType = parsed.data.product_type?.trim() || null;
+  const normalizedProductType = typeof input.product_type === 'string' ? input.product_type.trim() || null : null;
+  let detailFields;
   if (normalizedProductType) {
-    const isAllowedProductType = await productTypeExists(supabase, normalizedProductType);
-    if (!isAllowedProductType) {
+    // Use the same settings loader as the wizard, including its legacy storage fallback.
+    const productTypes = await getProductTypes();
+    if ('error' in productTypes) {
+      return { error: { product_type: [productTypes.error] } };
+    }
+    const productType = productTypes.data.find((type) => type.name === normalizedProductType);
+    if (!productType) {
       return { error: { product_type: ['Invalid product type'] } };
     }
+    detailFields = productType.detail_fields;
+  }
+
+  const parsed = getCreateRfqSchema(detailFields).safeParse(input);
+  if (!parsed.success) {
+    return { error: parsed.error.flatten().fieldErrors };
   }
 
   const hasSelectedSuppliers = isTablesProductType(normalizedProductType)

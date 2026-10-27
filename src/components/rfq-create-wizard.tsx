@@ -807,14 +807,14 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
     } else if (currentStep === detailsStepIndex) {
       const validatePositiveNumber = (field: keyof WizardData, label: string) => {
         const value = data[field];
-        if (typeof value !== 'string' || value.trim() === '' || Number(value) <= 0) {
+        if (typeof value !== 'string' || value.trim() === '' || !Number.isFinite(Number(value)) || Number(value) <= 0) {
           stepErrors[field] = [`${label} must be greater than 0`];
         }
       };
 
       const validateOptionalNonNegativeNumber = (field: keyof WizardData, label: string) => {
         const value = data[field];
-        if (typeof value === 'string' && value.trim() !== '' && Number(value) < 0) {
+        if (typeof value === 'string' && value.trim() !== '' && (!Number.isFinite(Number(value)) || Number(value) < 0)) {
           stepErrors[field] = [`${label} must be 0 or greater`];
         }
       };
@@ -831,16 +831,16 @@ export function RfqCreateWizard({ ownFabrics = [] }: RfqCreateWizardProps) {
         stepErrors.usage_environment = ['Usage is required'];
       }
 
-      if (showDiameterField && isDiameterRequired) {
+      if (showDiameterField && (isDiameterRequired || data.diameter.trim() !== '')) {
         validatePositiveNumber('diameter', 'Diameter');
       }
-      if (showLengthField && isLengthRequired) {
+      if (showLengthField && (isLengthRequired || data.length.trim() !== '')) {
         validatePositiveNumber('length', 'Length');
       }
-      if (showWidthField && isWidthRequired) {
+      if (showWidthField && (isWidthRequired || data.width.trim() !== '')) {
         validatePositiveNumber('width', 'Width');
       }
-      if (showHeightField && isHeightRequired) {
+      if (showHeightField && (isHeightRequired || data.height.trim() !== '')) {
         validatePositiveNumber('height', 'Height');
       }
       if (showThicknessField && isThicknessRequired) {
